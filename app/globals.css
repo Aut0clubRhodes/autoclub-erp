@@ -24,3 +24,39 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.add-car-btn {
+  background: #16a34a;
+  color: white;
+  border: 1px solid #22c55e;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+
+.add-car-btn:hover {
+  background: #22c55e;
+  border-color: #4ade80;
+}
+
+.service-history-btn {
+  background: #1e293b;
+  color: #e5e7eb;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.service-history-btn:hover {
+  background: #334155;
+  color: #f1f5f9;
+  border-color: #475569;
+}
