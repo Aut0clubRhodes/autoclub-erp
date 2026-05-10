@@ -11,25 +11,21 @@ export default function Home() {
   const [activeWindow, setActiveWindow] = useState<WindowType>(null);
   const [showAddCar, setShowAddCar] = useState(false);
   const [vehicles, setVehicles] = useState([
-    { plate: 'PKA1815', brand: 'Peugeot', model: '108', year: '2019', km: '85,240', price: '€18,500' },
-    { plate: 'PKA4421', brand: 'Fiat', model: 'Panda', year: '2020', km: '62,100', price: '€14,200' },
-    { plate: 'PKA7712', brand: 'Toyota', model: 'Aygo', year: '2021', km: '41,650', price: '€16,800' },
+    { plate: 'PKA1815', category: 'A', brand: 'Peugeot', model: '108', year: '2019', km: '85,240', price: '€18,500' },
+    { plate: 'PKA4421', category: 'B', brand: 'Fiat', model: 'Panda', year: '2020', km: '62,100', price: '€14,200' },
+    { plate: 'PKA7712', category: 'A', brand: 'Toyota', model: 'Aygo', year: '2021', km: '41,650', price: '€16,800' },
   ]);
   const [newVehicle, setNewVehicle] = useState({
     plate: '',
+    category: '',
     brand: '',
     model: '',
     year: '',
     km: '',
     price: '',
-    vin: '',
-    displacement: '',
-    fuel: '',
-    licenseDate: '',
-    inspectionExpiry: '',
-    insuranceExpiry: '',
-    taxExpiry: '',
   });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingPlate, setEditingPlate] = useState<string | null>(null);
 
   const handleWindowOpen = (windowId: string) => {
     setActiveWindow(windowId as WindowType);
@@ -42,26 +38,28 @@ export default function Home() {
   };
 
   const openAddCarModal = () => {
+    setEditingPlate(null);
+    setNewVehicle({ plate: '', category: '', brand: '', model: '', year: '', km: '', price: '' });
     setShowAddCar(true);
+  };
+
+  const openEditCarModal = (plate: string) => {
+    const vehicle = vehicles.find((item) => item.plate === plate);
+    if (!vehicle) return;
+    setNewVehicle(vehicle);
+    setEditingPlate(plate);
+    setShowAddCar(true);
+  };
+
+  const deleteVehicle = (plate: string) => {
+    if (!window.confirm('Σίγουρα θέλετε να διαγράψετε αυτό το όχημα;')) return;
+    setVehicles((current) => current.filter((vehicle) => vehicle.plate !== plate));
   };
 
   const closeAddCarModal = () => {
     setShowAddCar(false);
-    setNewVehicle({
-      plate: '',
-      brand: '',
-      model: '',
-      year: '',
-      km: '',
-      price: '',
-      vin: '',
-      displacement: '',
-      fuel: '',
-      licenseDate: '',
-      inspectionExpiry: '',
-      insuranceExpiry: '',
-      taxExpiry: '',
-    });
+    setEditingPlate(null);
+    setNewVehicle({ plate: '', category: '', brand: '', model: '', year: '', km: '', price: '' });
   };
 
   const saveNewVehicle = (event: FormEvent<HTMLFormElement>) => {
@@ -69,29 +67,48 @@ export default function Home() {
     if (!newVehicle.plate || !newVehicle.brand || !newVehicle.model) {
       return;
     }
-    setVehicles((current) => [...current, newVehicle]);
+    if (editingPlate) {
+      setVehicles((current) =>
+        current.map((vehicle) => (vehicle.plate === editingPlate ? newVehicle : vehicle))
+      );
+    } else {
+      setVehicles((current) => [...current, newVehicle]);
+    }
     setShowAddCar(false);
-    setNewVehicle({
-      plate: '',
-      brand: '',
-      model: '',
-      year: '',
-      km: '',
-      price: '',
-      vin: '',
-      displacement: '',
-      fuel: '',
-      licenseDate: '',
-      inspectionExpiry: '',
-      insuranceExpiry: '',
-      taxExpiry: '',
-    });
+    setEditingPlate(null);
+    setNewVehicle({ plate: '', category: '', brand: '', model: '', year: '', km: '', price: '' });
   };
+
+  const filteredVehicles = vehicles.filter((vehicle) => {
+    const query = searchTerm.toLowerCase();
+    return (
+      vehicle.plate.toLowerCase().includes(query) ||
+      vehicle.category.toLowerCase().includes(query) ||
+      vehicle.brand.toLowerCase().includes(query) ||
+      vehicle.model.toLowerCase().includes(query)
+    );
+  });
 
   const renderWindowContent = () => {
     switch (activeWindow) {
       case 'Αυτοκίνητα':
-        return <VehiclesTable vehicles={vehicles} />;
+        return (
+          <div className="space-y-4">
+            <div className="w-full max-w-3xl">
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Αναζήτηση με πινακίδα, μάρκα, μοντέλο ή κατηγορία"
+                className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+              />
+            </div>
+            <VehiclesTable
+              vehicles={filteredVehicles}
+              onEdit={openEditCarModal}
+              onDelete={deleteVehicle}
+            />
+          </div>
+        );
       case 'Ταμείο':
         return (
           <div className="flex items-center justify-center h-full">
@@ -172,7 +189,9 @@ export default function Home() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
             <div className="w-full max-w-2xl rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl shadow-black/30 overflow-hidden">
               <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-800">
-                <h3 className="text-lg font-semibold text-white">Νέο Αυτοκίνητο</h3>
+                <h3 className="text-lg font-semibold text-white">
+                  {editingPlate ? 'Επεξεργασία Αυτοκινήτου' : 'Νέο Αυτοκίνητο'}
+                </h3>
                 <button
                   type="button"
                   onClick={closeAddCarModal}
@@ -190,6 +209,30 @@ export default function Home() {
                       onChange={(event) => setNewVehicle({ ...newVehicle, plate: event.target.value })}
                       className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
                     />
+                  </label>
+                  <label className="space-y-2 text-sm text-zinc-300">
+                    <span>Κατηγορία</span>
+                    <select
+                      value={newVehicle.category}
+                      onChange={(event) => setNewVehicle({ ...newVehicle, category: event.target.value })}
+                      className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+                    >
+                      <option value="">Επιλέξτε</option>
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="C">C</option>
+                      <option value="D">D</option>
+                      <option value="E">E</option>
+                      <option value="H">H</option>
+                      <option value="H1">H1</option>
+                      <option value="H2">H2</option>
+                      <option value="H3">H3</option>
+                      <option value="H4">H4</option>
+                      <option value="H5">H5</option>
+                      <option value="K">K</option>
+                      <option value="K1">K1</option>
+                      <option value="K2">K2</option>
+                    </select>
                   </label>
                   <label className="space-y-2 text-sm text-zinc-300">
                     <span>Μάρκα</span>
@@ -231,62 +274,6 @@ export default function Home() {
                       className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
                     />
                   </label>
-                  <label className="space-y-2 text-sm text-zinc-300">
-                    <span>Αριθμός Πλαισίου / VIN</span>
-                    <input
-                      value={newVehicle.vin}
-                      onChange={(event) => setNewVehicle({ ...newVehicle, vin: event.target.value })}
-                      className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                    />
-                  </label>
-                  <label className="space-y-2 text-sm text-zinc-300">
-                    <span>Κυβικά</span>
-                    <input
-                      value={newVehicle.displacement}
-                      onChange={(event) => setNewVehicle({ ...newVehicle, displacement: event.target.value })}
-                      className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                    />
-                  </label>
-                  <label className="space-y-2 text-sm text-zinc-300">
-                    <span>Καύσιμο</span>
-                    <input
-                      value={newVehicle.fuel}
-                      onChange={(event) => setNewVehicle({ ...newVehicle, fuel: event.target.value })}
-                      className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                    />
-                  </label>
-                  <label className="space-y-2 text-sm text-zinc-300">
-                    <span>1η Άδεια</span>
-                    <input
-                      value={newVehicle.licenseDate}
-                      onChange={(event) => setNewVehicle({ ...newVehicle, licenseDate: event.target.value })}
-                      className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                    />
-                  </label>
-                  <label className="space-y-2 text-sm text-zinc-300">
-                    <span>ΚΤΕΟ Λήξη</span>
-                    <input
-                      value={newVehicle.inspectionExpiry}
-                      onChange={(event) => setNewVehicle({ ...newVehicle, inspectionExpiry: event.target.value })}
-                      className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                    />
-                  </label>
-                  <label className="space-y-2 text-sm text-zinc-300">
-                    <span>Ασφάλεια Λήξη</span>
-                    <input
-                      value={newVehicle.insuranceExpiry}
-                      onChange={(event) => setNewVehicle({ ...newVehicle, insuranceExpiry: event.target.value })}
-                      className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                    />
-                  </label>
-                  <label className="space-y-2 text-sm text-zinc-300">
-                    <span>Τέλη Κυκλοφορίας</span>
-                    <input
-                      value={newVehicle.taxExpiry}
-                      onChange={(event) => setNewVehicle({ ...newVehicle, taxExpiry: event.target.value })}
-                      className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                    />
-                  </label>
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                   <button
@@ -309,7 +296,15 @@ export default function Home() {
   );
 }
 
-function VehiclesTable({ vehicles }: { vehicles: { plate: string; brand: string; model: string; year: string; km: string; price: string; }[] }) {
+function VehiclesTable({
+  vehicles,
+  onEdit,
+  onDelete,
+}: {
+  vehicles: { plate: string; category: string; brand: string; model: string; year: string; km: string; price: string; }[];
+  onEdit: (plate: string) => void;
+  onDelete: (plate: string) => void;
+}) {
   return (
     <div className="w-full">
       <div className="overflow-x-auto">
@@ -317,6 +312,7 @@ function VehiclesTable({ vehicles }: { vehicles: { plate: string; brand: string;
           <thead>
             <tr className="border-b border-zinc-700">
               <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">Πινακίδα</th>
+              <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">Κατηγορία</th>
               <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">Μάρκα</th>
               <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">Μοντέλο</th>
               <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">Έτος</th>
@@ -329,15 +325,32 @@ function VehiclesTable({ vehicles }: { vehicles: { plate: string; brand: string;
             {vehicles.map((vehicle) => (
               <tr key={vehicle.plate} className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors">
                 <td className="py-4 px-4 text-sm text-zinc-200 font-mono">{vehicle.plate}</td>
+                <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.category}</td>
                 <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.brand}</td>
                 <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.model}</td>
                 <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.year}</td>
                 <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.km}</td>
                 <td className="py-4 px-4 text-sm text-zinc-200 font-medium">{vehicle.price}</td>
                 <td className="py-4 px-4 text-sm">
-                  <button className="service-history-btn">
-                    Ιστορικό Service
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button className="service-history-btn">
+                      Ιστορικό Service
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onEdit(vehicle.plate)}
+                      className="rounded-2xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-white transition hover:bg-zinc-800"
+                    >
+                      Επεξεργασία
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(vehicle.plate)}
+                      className="rounded-2xl border border-rose-600 bg-zinc-900 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/10"
+                    >
+                      Διαγραφή
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
