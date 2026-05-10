@@ -26,6 +26,7 @@ export default function Home() {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [editingPlate, setEditingPlate] = useState<string | null>(null);
+  const [viewingPlate, setViewingPlate] = useState<string | null>(null);
 
   const handleWindowOpen = (windowId: string) => {
     setActiveWindow(windowId as WindowType);
@@ -39,6 +40,7 @@ export default function Home() {
 
   const openAddCarModal = () => {
     setEditingPlate(null);
+    setViewingPlate(null);
     setNewVehicle({ plate: '', category: '', brand: '', model: '', year: '', km: '', price: '' });
     setShowAddCar(true);
   };
@@ -48,7 +50,16 @@ export default function Home() {
     if (!vehicle) return;
     setNewVehicle(vehicle);
     setEditingPlate(plate);
+    setViewingPlate(null);
     setShowAddCar(true);
+  };
+
+  const openViewCarModal = (plate: string) => {
+    setViewingPlate(plate);
+  };
+
+  const closeViewCarModal = () => {
+    setViewingPlate(null);
   };
 
   const deleteVehicle = (plate: string) => {
@@ -104,6 +115,7 @@ export default function Home() {
             </div>
             <VehiclesTable
               vehicles={filteredVehicles}
+              onView={openViewCarModal}
               onEdit={openEditCarModal}
               onDelete={deleteVehicle}
             />
@@ -291,6 +303,13 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {viewingPlate && (
+          <VehicleViewModal
+            vehicle={vehicles.find((v) => v.plate === viewingPlate)!}
+            onClose={closeViewCarModal}
+          />
+        )}
       </main>
     </>
   );
@@ -298,10 +317,12 @@ export default function Home() {
 
 function VehiclesTable({
   vehicles,
+  onView,
   onEdit,
   onDelete,
 }: {
   vehicles: { plate: string; category: string; brand: string; model: string; year: string; km: string; price: string; }[];
+  onView: (plate: string) => void;
   onEdit: (plate: string) => void;
   onDelete: (plate: string) => void;
 }) {
@@ -333,8 +354,12 @@ function VehiclesTable({
                 <td className="py-4 px-4 text-sm text-zinc-200 font-medium">{vehicle.price}</td>
                 <td className="py-4 px-4 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
-                    <button className="service-history-btn">
-                      Ιστορικό Service
+                    <button
+                      type="button"
+                      onClick={() => onView(vehicle.plate)}
+                      className="rounded-2xl border border-sky-600 bg-zinc-900 px-3 py-2 text-xs text-sky-300 transition hover:bg-sky-500/10"
+                    >
+                      Προβολή
                     </button>
                     <button
                       type="button"
@@ -356,6 +381,106 @@ function VehiclesTable({
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function VehicleViewModal({
+  vehicle,
+  onClose,
+}: {
+  vehicle: { plate: string; category: string; brand: string; model: string; year: string; km: string; price: string; };
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-4xl rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl shadow-black/30 overflow-hidden max-h-[70vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+          <h3 className="text-lg font-semibold text-white">Φάκελος Αυτοκινήτου</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-zinc-400 hover:text-white transition-colors p-2 rounded-lg"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1">
+          <div className="p-5 space-y-6">
+            {/* Βασικά Στοιχεία Section */}
+            <div>
+              <h4 className="text-sm font-semibold text-white mb-3">Βασικά Στοιχεία</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-zinc-900 rounded-2xl p-3 border border-zinc-800">
+                <div>
+                  <p className="text-xs text-zinc-400 mb-1">Πινακίδα</p>
+                  <p className="text-xs font-mono text-white">{vehicle.plate}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-400 mb-1">Κατηγορία</p>
+                  <p className="text-xs text-white">{vehicle.category}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-400 mb-1">Μάρκα</p>
+                  <p className="text-xs text-white">{vehicle.brand}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-400 mb-1">Μοντέλο</p>
+                  <p className="text-xs text-white">{vehicle.model}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-400 mb-1">Έτος</p>
+                  <p className="text-xs text-white">{vehicle.year}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-400 mb-1">Χλμ</p>
+                  <p className="text-xs text-white">{vehicle.km}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-400 mb-1">Τιμή Αγοράς</p>
+                  <p className="text-xs text-white">{vehicle.price}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-400 mb-1">VIN</p>
+                  <p className="text-xs text-zinc-400">-</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-400 mb-1">Κυβικά</p>
+                  <p className="text-xs text-zinc-400">-</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-400 mb-1">Καύσιμο</p>
+                  <p className="text-xs text-zinc-400">-</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Έγγραφα Section */}
+            <div>
+              <h4 className="text-sm font-semibold text-white mb-3">Έγγραφα</h4>
+              <div className="space-y-2 bg-zinc-900 rounded-2xl p-3 border border-zinc-800">
+                <button className="w-full rounded-2xl border border-zinc-700 bg-zinc-850 px-3 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800">
+                  Άδεια Κυκλοφορίας
+                </button>
+                <button className="w-full rounded-2xl border border-zinc-700 bg-zinc-850 px-3 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800">
+                  ΚΤΕΟ
+                </button>
+                <div className="pt-2 border-t border-zinc-700">
+                  <p className="text-xs text-zinc-400 mb-1">ΚΤΕΟ Λήξη</p>
+                  <p className="text-xs text-zinc-400">-</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Ιστορικό Service Section */}
+            <div>
+              <h4 className="text-sm font-semibold text-white mb-3">Ιστορικό Service</h4>
+              <div className="bg-zinc-900 rounded-2xl p-3 border border-zinc-800">
+                <p className="text-xs text-zinc-400">Δεν υπάρχουν ακόμα καταχωρήσεις service για αυτό το όχημα.</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
