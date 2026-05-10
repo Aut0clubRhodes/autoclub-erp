@@ -7,15 +7,80 @@ import Window from '@/components/Window';
 
 type WindowType = 'Αυτοκίνητα' | 'Ταμείο' | 'Προμηθευτές' | null;
 
+type Vehicle = {
+  id: string;
+  plate: string;
+  category: string;
+  brand: string;
+  model: string;
+  year: string;
+  km: string;
+  price: string;
+  vin?: string;
+  fuel?: string;
+  engine_cc?: string;
+  kteo_expiry?: string;
+  insurance_expiry?: string;
+  road_tax_expiry?: string;
+};
+
+const initialVehicles: Vehicle[] = [
+  {
+    id: '1',
+    plate: 'PKA1815',
+    category: 'A',
+    brand: 'Peugeot',
+    model: '108',
+    year: '2019',
+    km: '85,240',
+    price: '€18,500',
+    vin: '',
+    fuel: '',
+    engine_cc: '',
+    kteo_expiry: '',
+    insurance_expiry: '',
+    road_tax_expiry: '',
+  },
+  {
+    id: '2',
+    plate: 'PKA4421',
+    category: 'B',
+    brand: 'Fiat',
+    model: 'Panda',
+    year: '2020',
+    km: '62,100',
+    price: '€14,200',
+    vin: '',
+    fuel: '',
+    engine_cc: '',
+    kteo_expiry: '',
+    insurance_expiry: '',
+    road_tax_expiry: '',
+  },
+  {
+    id: '3',
+    plate: 'PKA7712',
+    category: 'A',
+    brand: 'Toyota',
+    model: 'Aygo',
+    year: '2021',
+    km: '41,650',
+    price: '€16,800',
+    vin: '',
+    fuel: '',
+    engine_cc: '',
+    kteo_expiry: '',
+    insurance_expiry: '',
+    road_tax_expiry: '',
+  },
+];
+
 export default function Home() {
   const [activeWindow, setActiveWindow] = useState<WindowType>(null);
   const [showAddCar, setShowAddCar] = useState(false);
-  const [vehicles, setVehicles] = useState([
-    { plate: 'PKA1815', category: 'A', brand: 'Peugeot', model: '108', year: '2019', km: '85,240', price: '€18,500' },
-    { plate: 'PKA4421', category: 'B', brand: 'Fiat', model: 'Panda', year: '2020', km: '62,100', price: '€14,200' },
-    { plate: 'PKA7712', category: 'A', brand: 'Toyota', model: 'Aygo', year: '2021', km: '41,650', price: '€16,800' },
-  ]);
-  const [newVehicle, setNewVehicle] = useState({
+  const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
+  const [newVehicle, setNewVehicle] = useState<Vehicle>({
+    id: '',
     plate: '',
     category: '',
     brand: '',
@@ -23,6 +88,12 @@ export default function Home() {
     year: '',
     km: '',
     price: '',
+    vin: '',
+    fuel: '',
+    engine_cc: '',
+    kteo_expiry: '',
+    insurance_expiry: '',
+    road_tax_expiry: '',
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [editingPlate, setEditingPlate] = useState<string | null>(null);
@@ -41,7 +112,22 @@ export default function Home() {
   const openAddCarModal = () => {
     setEditingPlate(null);
     setViewingPlate(null);
-    setNewVehicle({ plate: '', category: '', brand: '', model: '', year: '', km: '', price: '' });
+    setNewVehicle({
+      id: '',
+      plate: '',
+      category: '',
+      brand: '',
+      model: '',
+      year: '',
+      km: '',
+      price: '',
+      vin: '',
+      fuel: '',
+      engine_cc: '',
+      kteo_expiry: '',
+      insurance_expiry: '',
+      road_tax_expiry: '',
+    });
     setShowAddCar(true);
   };
 
@@ -70,7 +156,22 @@ export default function Home() {
   const closeAddCarModal = () => {
     setShowAddCar(false);
     setEditingPlate(null);
-    setNewVehicle({ plate: '', category: '', brand: '', model: '', year: '', km: '', price: '' });
+    setNewVehicle({
+      id: '',
+      plate: '',
+      category: '',
+      brand: '',
+      model: '',
+      year: '',
+      km: '',
+      price: '',
+      vin: '',
+      fuel: '',
+      engine_cc: '',
+      kteo_expiry: '',
+      insurance_expiry: '',
+      road_tax_expiry: '',
+    });
   };
 
   const saveNewVehicle = (event: FormEvent<HTMLFormElement>) => {
@@ -83,11 +184,27 @@ export default function Home() {
         current.map((vehicle) => (vehicle.plate === editingPlate ? newVehicle : vehicle))
       );
     } else {
-      setVehicles((current) => [...current, newVehicle]);
+      const maxId = Math.max(...vehicles.map((v) => parseInt(v.id || '0')), 0);
+      setVehicles((current) => [...current, { ...newVehicle, id: String(maxId + 1) }]);
     }
     setShowAddCar(false);
     setEditingPlate(null);
-    setNewVehicle({ plate: '', category: '', brand: '', model: '', year: '', km: '', price: '' });
+    setNewVehicle({
+      id: '',
+      plate: '',
+      category: '',
+      brand: '',
+      model: '',
+      year: '',
+      km: '',
+      price: '',
+      vin: '',
+      fuel: '',
+      engine_cc: '',
+      kteo_expiry: '',
+      insurance_expiry: '',
+      road_tax_expiry: '',
+    });
   };
 
   const filteredVehicles = vehicles.filter((vehicle) => {
@@ -321,7 +438,7 @@ function VehiclesTable({
   onEdit,
   onDelete,
 }: {
-  vehicles: { plate: string; category: string; brand: string; model: string; year: string; km: string; price: string; }[];
+  vehicles: Vehicle[];
   onView: (plate: string) => void;
   onEdit: (plate: string) => void;
   onDelete: (plate: string) => void;
@@ -390,7 +507,7 @@ function VehicleViewModal({
   vehicle,
   onClose,
 }: {
-  vehicle: { plate: string; category: string; brand: string; model: string; year: string; km: string; price: string; };
+  vehicle: Vehicle;
   onClose: () => void;
 }) {
   return (
