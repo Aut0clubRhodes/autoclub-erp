@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import Image from 'next/image';
 import Sidebar from '@/components/Sidebar';
 import Window from '@/components/Window';
+import { fetchCars } from '@/lib/carsApi';
 
 type WindowType = 'Αυτοκίνητα' | 'Ταμείο' | 'Προμηθευτές' | null;
 
@@ -98,6 +99,32 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingPlate, setEditingPlate] = useState<string | null>(null);
   const [viewingPlate, setViewingPlate] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeWindow === 'Αυτοκίνητα') {
+      const loadCars = async () => {
+        const cars = await fetchCars();
+        const mappedCars = cars.map((car: any) => ({
+          id: String(car.id),
+          plate: car.plate || '',
+          category: car.category || '',
+          brand: car.brand || '',
+          model: car.model || '',
+          year: String(car.year || '0'),
+          km: String(car.current_km || '0'),
+          price: String(car.purchase_price || '€0'),
+          vin: car.vin || '',
+          fuel: car.fuel || '',
+          engine_cc: car.engine_cc || '',
+          kteo_expiry: car.kteo_expiry || '',
+          insurance_expiry: car.insurance_expiry || '',
+          road_tax_expiry: car.road_tax_expiry || '',
+        }));
+        setVehicles(mappedCars);
+      };
+      loadCars();
+    }
+  }, [activeWindow]);
 
   const handleWindowOpen = (windowId: string) => {
     setActiveWindow(windowId as WindowType);
