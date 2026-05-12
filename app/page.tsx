@@ -229,27 +229,28 @@ road_tax_expiry: newVehicle.road_tax_expiry || null,
   });
 console.log('INSERTED CAR:', insertedCar);
   if (insertedCar) {
-    setVehicles((current) => [
-      ...current,
-      {
-        id: String(insertedCar.id),
-        plate: insertedCar.plate || '',
-        category: insertedCar.category || '',
-        brand: insertedCar.brand || '',
-        model: insertedCar.model || '',
-        year: String(insertedCar.year || ''),
-        km: String(insertedCar.current_km || ''),
-        price: String(insertedCar.purchase_price || ''),
-        vin: insertedCar.vin || '',
-        fuel: insertedCar.fuel || '',
-        engine_cc: insertedCar.engine_cc || '',
-        kteo_expiry: insertedCar.kteo_expiry || '',
-        insurance_expiry: insertedCar.insurance_expiry || '',
-        road_tax_expiry: insertedCar.road_tax_expiry || '',
-      },
-    ]);
+  const updatedCars = await fetchCars();
+
+  setVehicles(
+    updatedCars.map((car: any) => ({
+      id: String(car.id),
+      plate: car.plate || '',
+      category: car.category || '',
+      brand: car.brand || '',
+      model: car.model || '',
+      year: String(car.year || ''),
+      km: String(car.current_km || ''),
+      price: String(car.purchase_price || ''),
+      vin: car.vin || '',
+      fuel: car.fuel || '',
+      engine_cc: car.engine_cc || '',
+      kteo_expiry: car.kteo_expiry || '',
+      insurance_expiry: car.insurance_expiry || '',
+      road_tax_expiry: car.road_tax_expiry || '',
+    }))
+  );
+}  
   }
-}
     setShowAddCar(false);
     setEditingPlate(null);
     setNewVehicle({
