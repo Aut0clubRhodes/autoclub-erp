@@ -11,7 +11,8 @@ export async function fetchCars() {
   }
 
   return data || [];
-}export async function addCar(car: {
+}
+export async function addCar(car: {
   plate: string;
   category: string;
   brand: string;
@@ -38,4 +39,17 @@ road_tax_expiry?: string;
   }
 
   return data;
+} 
+export async function deleteCar(id: string) {
+  const { error } = await supabase
+    .from('cars')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.log(error);
+    return false;
+  }
+
+  return true;
 }

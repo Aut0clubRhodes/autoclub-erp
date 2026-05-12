@@ -4,7 +4,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import Image from 'next/image';
 import Sidebar from '@/components/Sidebar';
 import Window from '@/components/Window';
-import { fetchCars, addCar } from '@/lib/carsApi';
+import { fetchCars, addCar, deleteCar } from '@/lib/carsApi';
 
 type WindowType = 'Αυτοκίνητα' | 'Ταμείο' | 'Προμηθευτές' | null;
 
@@ -175,11 +175,34 @@ export default function Home() {
     setViewingPlate(null);
   };
 
-  const deleteVehicle = (plate: string) => {
-    if (!window.confirm('Σίγουρα θέλετε να διαγράψετε αυτό το όχημα;')) return;
-    setVehicles((current) => current.filter((vehicle) => vehicle.plate !== plate));
-  };
+  const deleteVehicle = async (id: string) => {
+  if (!window.confirm('Σίγουρα θέλετε να διαγράψετε αυτό το όχημα;')) return;
 
+  const deleted = await deleteCar(id);
+
+  if (deleted) {
+    const updatedCars = await fetchCars();
+
+    setVehicles(
+      updatedCars.map((car: any) => ({
+        id: String(car.id),
+        plate: car.plate || '',
+        category: car.category || '',
+        brand: car.brand || '',
+        model: car.model || '',
+        year: String(car.year || ''),
+        km: String(car.current_km || ''),
+        price: String(car.purchase_price || ''),
+        vin: car.vin || '',
+        fuel: car.fuel || '',
+        engine_cc: car.engine_cc || '',
+        kteo_expiry: car.kteo_expiry || '',
+        insurance_expiry: car.insurance_expiry || '',
+        road_tax_expiry: car.road_tax_expiry || '',
+    }))
+  );
+  }
+};
   const closeAddCarModal = () => {
     setShowAddCar(false);
     setEditingPlate(null);
@@ -557,7 +580,7 @@ function VehiclesTable({
                     </button>
                     <button
                       type="button"
-                      onClick={() => onDelete(vehicle.plate)}
+                      onClick={() => onDelete(vehicle.id)}
                       className="rounded-2xl border border-rose-600 bg-zinc-900 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/10"
                     >
                       Διαγραφή
