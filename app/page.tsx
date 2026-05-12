@@ -137,7 +137,6 @@ export default function Home() {
   };
 
   const openAddCarModal = () => {
-    console.log('OPEN ADD CAR CLICKED');
     setEditingPlate(null);
     setViewingPlate(null);
     setNewVehicle({
@@ -227,7 +226,6 @@ export default function Home() {
 insurance_expiry: newVehicle.insurance_expiry || null,
 road_tax_expiry: newVehicle.road_tax_expiry || null,
   });
-console.log('INSERTED CAR:', insertedCar);
   if (insertedCar) {
   const updatedCars = await fetchCars();
 
