@@ -4,7 +4,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import Image from 'next/image';
 import Sidebar from '@/components/Sidebar';
 import Window from '@/components/Window';
-import { fetchCars } from '@/lib/carsApi';
+import { fetchCars, addCar } from '@/lib/carsApi';
 
 type WindowType = 'Αυτοκίνητα' | 'Ταμείο' | 'Προμηθευτές' | null;
 
@@ -137,6 +137,7 @@ export default function Home() {
   };
 
   const openAddCarModal = () => {
+    console.log('OPEN ADD CAR CLICKED');
     setEditingPlate(null);
     setViewingPlate(null);
     setNewVehicle({
@@ -201,7 +202,7 @@ export default function Home() {
     });
   };
 
-  const saveNewVehicle = (event: FormEvent<HTMLFormElement>) => {
+  const saveNewVehicle = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!newVehicle.plate || !newVehicle.brand || !newVehicle.model) {
       return;
@@ -211,9 +212,44 @@ export default function Home() {
         current.map((vehicle) => (vehicle.plate === editingPlate ? newVehicle : vehicle))
       );
     } else {
-      const maxId = Math.max(...vehicles.map((v) => parseInt(v.id || '0')), 0);
-      setVehicles((current) => [...current, { ...newVehicle, id: String(maxId + 1) }]);
-    }
+  const insertedCar = await addCar({
+    plate: newVehicle.plate,
+    category: newVehicle.category,
+    brand: newVehicle.brand,
+    model: newVehicle.model,
+    year: Number(newVehicle.year || 0),
+    current_km: Number(newVehicle.km || 0),
+    purchase_price: Number(String(newVehicle.price).replace(/[^\d]/g, '')),
+    vin: newVehicle.vin,
+    fuel: newVehicle.fuel,
+    engine_cc: newVehicle.engine_cc,
+  kteo_expiry: newVehicle.kteo_expiry || null,
+insurance_expiry: newVehicle.insurance_expiry || null,
+road_tax_expiry: newVehicle.road_tax_expiry || null,
+  });
+console.log('INSERTED CAR:', insertedCar);
+  if (insertedCar) {
+    setVehicles((current) => [
+      ...current,
+      {
+        id: String(insertedCar.id),
+        plate: insertedCar.plate || '',
+        category: insertedCar.category || '',
+        brand: insertedCar.brand || '',
+        model: insertedCar.model || '',
+        year: String(insertedCar.year || ''),
+        km: String(insertedCar.current_km || ''),
+        price: String(insertedCar.purchase_price || ''),
+        vin: insertedCar.vin || '',
+        fuel: insertedCar.fuel || '',
+        engine_cc: insertedCar.engine_cc || '',
+        kteo_expiry: insertedCar.kteo_expiry || '',
+        insurance_expiry: insertedCar.insurance_expiry || '',
+        road_tax_expiry: insertedCar.road_tax_expiry || '',
+      },
+    ]);
+  }
+}
     setShowAddCar(false);
     setEditingPlate(null);
     setNewVehicle({
