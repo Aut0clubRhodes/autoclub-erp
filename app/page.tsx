@@ -458,7 +458,15 @@ export default function Home() {
     </>
   );
 }
+function formatEuro(value: string) {
+  const numericValue = Number(String(value).replace(/[^\d.]/g, ''));
 
+  if (!numericValue) {
+    return '€0';
+  }
+
+  return `€${numericValue.toLocaleString()}`;
+}
 function VehiclesTable({
   vehicles,
   onView,
@@ -495,7 +503,7 @@ function VehiclesTable({
                 <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.model}</td>
                 <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.year}</td>
                 <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.km}</td>
-                <td className="py-4 px-4 text-sm text-zinc-200 font-medium">{vehicle.price}</td>
+                <td className="py-4 px-4 text-sm text-zinc-200 font-medium">{formatEuro(vehicle.price)}</td>
                 <td className="py-4 px-4 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -582,7 +590,7 @@ function VehicleViewModal({
                 </div>
                 <div>
                   <p className="text-xs text-zinc-400 mb-1">Τιμή Αγοράς</p>
-                  <p className="text-xs text-white">{vehicle.price}</p>
+                  <p className="text-xs text-white">{formatEuro(vehicle.price)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-zinc-400 mb-1">VIN</p>
