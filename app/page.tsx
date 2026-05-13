@@ -4,7 +4,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import Image from 'next/image';
 import Sidebar from '@/components/Sidebar';
 import Window from '@/components/Window';
-import { fetchCars, addCar, deleteCar } from '@/lib/carsApi';
+import { fetchCars, addCar, deleteCar, updateCar } from '@/lib/carsApi';
 
 type WindowType = 'Αυτοκίνητα' | 'Ταμείο' | 'Προμηθευτές' | null;
 
@@ -229,10 +229,45 @@ export default function Home() {
     if (!newVehicle.plate || !newVehicle.brand || !newVehicle.model) {
       return;
     }
-    if (editingPlate) {
-      setVehicles((current) =>
-        current.map((vehicle) => (vehicle.plate === editingPlate ? newVehicle : vehicle))
-      );
+ if (editingPlate) {
+  const updatedCar = await updateCar(newVehicle.id, {
+    plate: newVehicle.plate,
+    category: newVehicle.category,
+    brand: newVehicle.brand,
+    model: newVehicle.model,
+    year: Number(newVehicle.year || 0),
+    current_km: Number(newVehicle.km || 0),
+    purchase_price: Number(String(newVehicle.price).replace(/[^\d]/g, '')),
+    vin: newVehicle.vin,
+    fuel: newVehicle.fuel,
+    engine_cc: newVehicle.engine_cc,
+    kteo_expiry: newVehicle.kteo_expiry || null,
+    insurance_expiry: newVehicle.insurance_expiry || null,
+    road_tax_expiry: newVehicle.road_tax_expiry || null,
+  });
+
+  if (updatedCar) {
+    const updatedCars = await fetchCars();
+
+    setVehicles(
+      updatedCars.map((car: any) => ({
+        id: String(car.id),
+        plate: car.plate || '',
+        category: car.category || '',
+        brand: car.brand || '',
+        model: car.model || '',
+        year: String(car.year || ''),
+        km: String(car.current_km || ''),
+        price: String(car.purchase_price || ''),
+        vin: car.vin || '',
+        fuel: car.fuel || '',
+        engine_cc: car.engine_cc || '',
+        kteo_expiry: car.kteo_expiry || '',
+        insurance_expiry: car.insurance_expiry || '',
+        road_tax_expiry: car.road_tax_expiry || '',
+      }))
+    );
+  }
     } else {
   const insertedCar = await addCar({
     plate: newVehicle.plate,
