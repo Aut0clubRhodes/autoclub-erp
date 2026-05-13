@@ -1,0 +1,82 @@
+'use client';
+
+type FinanceTransaction = {
+  id: string;
+  date: string;
+  amount: number;
+  payment_method: string;
+  car_id: string;
+  supplier: string;
+  category: string;
+  notes: string;
+};
+
+interface FinanceExpensesProps {
+  expenseTransactions: FinanceTransaction[];
+}
+
+export default function FinanceExpenses({ expenseTransactions }: FinanceExpensesProps) {
+  const formatMoney = (value: number) =>
+    `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const formatDate = (value: string) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('el-GR');
+  };
+
+  const formatRelatedValue = (label: string, id: string) =>
+    id ? `${label} #${id}` : '-';
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-white">Έξοδα</h2>
+          <p className="mt-1 text-sm text-zinc-500">Πλήρης λίστα εξόδων και πληρωμών προμηθευτών.</p>
+        </div>
+        <button
+          type="button"
+          className="rounded-2xl border border-rose-600 bg-rose-600/10 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-600/20"
+        >
+          + Καταχώρηση Εξόδου
+        </button>
+      </div>
+
+      <div className="overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
+        <table className="min-w-[980px] w-full text-left">
+          <thead>
+            <tr className="border-b border-zinc-800 bg-zinc-900/80">
+              <th className="px-4 py-3 text-sm text-zinc-400">Ημερομηνία</th>
+              <th className="px-4 py-3 text-sm text-zinc-400">Ποσό</th>
+              <th className="px-4 py-3 text-sm text-zinc-400">Τρόπος Πληρωμής</th>
+              <th className="px-4 py-3 text-sm text-zinc-400">Προμηθευτής</th>
+              <th className="px-4 py-3 text-sm text-zinc-400">Αυτοκίνητο</th>
+              <th className="px-4 py-3 text-sm text-zinc-400">Κατηγορία</th>
+              <th className="px-4 py-3 text-sm text-zinc-400">Σημειώσεις</th>
+            </tr>
+          </thead>
+          <tbody>
+            {expenseTransactions.map((transaction) => (
+              <tr key={transaction.id} className="border-b border-zinc-800 hover:bg-zinc-900/60">
+                <td className="px-4 py-4 text-sm text-zinc-200">{formatDate(transaction.date)}</td>
+                <td className="px-4 py-4 text-sm text-white">{formatMoney(transaction.amount)}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.payment_method || '-'}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.supplier || '-'}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">{formatRelatedValue('Αυτοκίνητο', transaction.car_id)}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.category || '-'}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.notes || '-'}</td>
+              </tr>
+            ))}
+            {expenseTransactions.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-6 text-center text-sm text-zinc-400">
+                  Δεν βρέθηκαν συναλλαγές.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

@@ -16,6 +16,7 @@ interface NavSection {
 
 interface SidebarProps {
   onWindowOpen?: (windowId: string) => void;
+  activeWindow?: string | null;
 }
 
 const NAV_SECTIONS: NavSection[] = [
@@ -32,6 +33,8 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'ΟΙΚΟΝΟΜΙΚΑ',
     items: [
       { label: 'Ταμείο', href: '/finance', icon: '💰' },
+      { label: 'Έσοδα', href: '/finance/income', icon: '🧾' },
+      { label: 'Έξοδα', href: '/finance/expenses', icon: '📤' },
       { label: 'Προμηθευτές', href: '/suppliers', icon: '🏢' },
       { label: 'Αναφορές', href: '/reports', icon: '📈' },
     ],
@@ -42,9 +45,9 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-const WINDOW_ITEMS = ['Αυτοκίνητα', 'Ταμείο', 'Προμηθευτές'];
+const WINDOW_ITEMS = ['Αυτοκίνητα', 'Ταμείο', 'Έσοδα', 'Έξοδα', 'Προμηθευτές', 'Αναφορές'];
 
-export default function Sidebar({ onWindowOpen }: SidebarProps) {
+export default function Sidebar({ onWindowOpen, activeWindow }: SidebarProps) {
   const pathname = usePathname();
 
   const handleItemClick = (item: NavItem) => {
@@ -68,8 +71,11 @@ export default function Sidebar({ onWindowOpen }: SidebarProps) {
             </div>
             <div className="space-y-1">
               {section.items.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
                 const isWindowItem = WINDOW_ITEMS.includes(item.label);
+                const isActive =
+                  isWindowItem
+                    ? activeWindow === item.label
+                    : pathname === item.href || pathname.startsWith(item.href + '/');
 
                 if (isWindowItem) {
                   return (

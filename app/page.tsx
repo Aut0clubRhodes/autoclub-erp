@@ -4,9 +4,12 @@ import { useState, useEffect, type FormEvent } from 'react';
 import Image from 'next/image';
 import Sidebar from '@/components/Sidebar';
 import Window from '@/components/Window';
+import FinanceOverview from '@/components/FinanceOverview';
+import FinanceIncome from '@/components/FinanceIncome';
+import FinanceExpenses from '@/components/FinanceExpenses';
 import { fetchCars, addCar, deleteCar, updateCar } from '@/lib/carsApi';
-
-type WindowType = 'Αυτοκίνητα' | 'Ταμείο' | 'Προμηθευτές' | null;
+import { fetchTransactions } from '@/lib/financeApi';
+type WindowType = 'Αυτοκίνητα' | 'Ταμείο' | 'Έσοδα' | 'Έξοδα' | 'Προμηθευτές' | 'Αναφορές' | null;
 
 type Vehicle = {
   id: string;
@@ -23,6 +26,20 @@ type Vehicle = {
   kteo_expiry?: string;
   insurance_expiry?: string;
   road_tax_expiry?: string;
+};
+
+type Transaction = {
+  id: string;
+  date: string;
+  amount: number;
+  payment_method: string;
+  type: string;
+  car_id: string;
+  agency_id: string;
+  representative_id: string;
+  supplier: string;
+  category: string;
+  notes: string;
 };
 
 const initialVehicles: Vehicle[] = [
@@ -97,6 +114,9 @@ export default function Home() {
     road_tax_expiry: '',
   });
   const [searchTerm, setSearchTerm] = useState('');
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [editingPlate, setEditingPlate] = useState<string | null>(null);
   const [viewingPlate, setViewingPlate] = useState<string | null>(null);
 
@@ -124,6 +144,33 @@ export default function Home() {
       };
       loadCars();
     }
+  }, [activeWindow]);
+
+  useEffect(() => {
+    if (activeWindow !== 'Ταμείο') {
+      return;
+    }
+
+    const loadFinanceTransactions = async () => {
+      const transactionRows = await fetchTransactions();
+      setTransactions(
+        (transactionRows || []).map((transaction: any) => ({
+          id: String(transaction.id ?? ''),
+          date: transaction.date ?? '',
+          amount: Number(transaction.amount) || 0,
+          payment_method: String(transaction.payment_method ?? ''),
+          type: String(transaction.type ?? ''),
+          car_id: transaction.car_id ? String(transaction.car_id) : '',
+          agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
+          representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
+          supplier: String(transaction.supplier ?? ''),
+          category: String(transaction.category ?? ''),
+          notes: String(transaction.notes ?? ''),
+        }))
+      );
+    };
+
+    loadFinanceTransactions();
   }, [activeWindow]);
 
   const handleWindowOpen = (windowId: string) => {
@@ -241,9 +288,9 @@ export default function Home() {
     vin: newVehicle.vin,
     fuel: newVehicle.fuel,
     engine_cc: newVehicle.engine_cc,
-    kteo_expiry: newVehicle.kteo_expiry || null,
-    insurance_expiry: newVehicle.insurance_expiry || null,
-    road_tax_expiry: newVehicle.road_tax_expiry || null,
+    kteo_expiry: newVehicle.kteo_expiry || undefined,
+    insurance_expiry: newVehicle.insurance_expiry || undefined,
+    road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   });
 
   if (updatedCar) {
@@ -280,9 +327,9 @@ export default function Home() {
     vin: newVehicle.vin,
     fuel: newVehicle.fuel,
     engine_cc: newVehicle.engine_cc,
-  kteo_expiry: newVehicle.kteo_expiry || null,
-insurance_expiry: newVehicle.insurance_expiry || null,
-road_tax_expiry: newVehicle.road_tax_expiry || null,
+  kteo_expiry: newVehicle.kteo_expiry || undefined,
+insurance_expiry: newVehicle.insurance_expiry || undefined,
+road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   });
   if (insertedCar) {
   const updatedCars = await fetchCars();
@@ -337,6 +384,56 @@ road_tax_expiry: newVehicle.road_tax_expiry || null,
     );
   });
 
+  const financeTransactions = transactions.filter((transaction) => {
+    const transactionDate = new Date(transaction.date);
+    if (fromDate) {
+      const from = new Date(fromDate);
+      if (transactionDate < from) {
+        return false;
+      }
+    }
+    if (toDate) {
+      const to = new Date(toDate);
+      to.setHours(23, 59, 59, 999);
+      if (transactionDate > to) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const incomeTransactions = financeTransactions.filter((transaction) => transaction.type === 'income');
+  const expenseTransactions = financeTransactions.filter((transaction) => transaction.type === 'expense' || transaction.type === 'supplier_payment');
+  const paidExpenseTransactions = financeTransactions.filter((transaction) => transaction.type === 'expense');
+  const supplierCreditTransactions = financeTransactions.filter((transaction) => transaction.type === 'supplier_payment');
+
+  const sumAmount = (items: Transaction[]) => items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const sumMethod = (items: Transaction[], method: string) =>
+    sumAmount(items.filter((transaction) => String(transaction.payment_method).toLowerCase() === method));
+
+  const totalIncomeCash = sumMethod(incomeTransactions, 'cash');
+  const totalIncomeCard = sumMethod(incomeTransactions, 'card');
+  const totalIncomeBank = sumMethod(incomeTransactions, 'bank');
+  const totalExpensesCash = sumMethod(expenseTransactions, 'cash');
+  const totalExpensesCard = sumMethod(expenseTransactions, 'card');
+  const totalExpensesBank = sumMethod(expenseTransactions, 'bank');
+  const totalExpensesCredit = sumMethod(expenseTransactions, 'credit');
+  const totalIncome = sumAmount(incomeTransactions);
+  const totalExpenses = sumAmount(expenseTransactions);
+  const totalPaidExpenses = sumAmount(paidExpenseTransactions);
+  const totalSupplierCredits = sumAmount(supplierCreditTransactions);
+  const netTotal = totalIncome - totalPaidExpenses;
+
+  const formatMoney = (value: number) =>
+    `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formatDate = (value: string) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('el-GR');
+  };
+
+  const formatRelatedValue = (label: string, id: string) =>
+    id ? `${label} #${id}` : '-';
+
   const renderWindowContent = () => {
     switch (activeWindow) {
       case 'Αυτοκίνητα':
@@ -360,17 +457,34 @@ road_tax_expiry: newVehicle.road_tax_expiry || null,
         );
       case 'Ταμείο':
         return (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <p className="text-zinc-400 text-lg">Τα οικονομικά δεδομένα θα εμφανίζονται εδώ</p>
-            </div>
-          </div>
+          <FinanceOverview
+            fromDate={fromDate}
+            toDate={toDate}
+            setFromDate={setFromDate}
+            setToDate={setToDate}
+            totalIncome={totalIncome}
+            totalPaidExpenses={totalPaidExpenses}
+            totalSupplierCredits={totalSupplierCredits}
+            netTotal={netTotal}
+          />
         );
+      case 'Έσοδα':
+        return <FinanceIncome incomeTransactions={incomeTransactions} />;
+      case 'Έξοδα':
+        return <FinanceExpenses expenseTransactions={expenseTransactions} />;
       case 'Προμηθευτές':
         return (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <p className="text-zinc-400 text-lg">Οι προμηθευτές θα εμφανίζονται εδώ</p>
+            </div>
+          </div>
+        );
+      case 'Αναφορές':
+        return (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <p className="text-zinc-400 text-lg">Οι αναφορές θα εμφανίζονται εδώ</p>
             </div>
           </div>
         );
@@ -385,8 +499,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || null,
         return 'Διαχείριση Αυτοκινήτων';
       case 'Ταμείο':
         return 'Ταμείο';
+      case 'Έσοδα':
+        return 'Έσοδα';
+      case 'Έξοδα':
+        return 'Έξοδα';
       case 'Προμηθευτές':
         return 'Προμηθευτές';
+      case 'Αναφορές':
+        return 'Αναφορές';
       default:
         return '';
     }
@@ -405,7 +525,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || null,
 
   return (
     <>
-      <Sidebar onWindowOpen={handleWindowOpen} />
+      <Sidebar onWindowOpen={handleWindowOpen} activeWindow={activeWindow} />
       <main className="flex-1 relative bg-zinc-950">
         {/* Homepage with centered logo */}
         {!activeWindow && (
