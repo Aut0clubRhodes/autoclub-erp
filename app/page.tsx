@@ -13,6 +13,7 @@ import {
   addIncomeEntry,
   updateIncomeTransactionLink,
 } from '@/lib/incomeApi';
+import { addBooking } from '@/lib/bookingsApi';
 type WindowType = 'Αυτοκίνητα' | 'Ταμείο' | 'Έσοδα' | 'Έξοδα' | 'Προμηθευτές' | 'Αναφορές' | null;
 
 type Vehicle = {
@@ -144,7 +145,18 @@ const handleAddIncome = async () => {
     return;
   }
 if (incomeForm.income_type === 'rental') {
-  console.log('Rental income selected - next step: create booking + transaction');
+
+  const booking = await addBooking({
+    car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
+    amount: Number(incomeForm.amount),
+    payment_method: incomeForm.payment_method,
+    agency: incomeForm.agency || null,
+    representative: incomeForm.representative || null,
+    contract_number: incomeForm.contract_number || null,
+    income_type: 'rental',
+  });
+
+  console.log('BOOKING CREATED:', booking);
 }
 
 if (incomeForm.income_type === 'car_sale') {
