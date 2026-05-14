@@ -41,7 +41,6 @@ export default function FinanceIncome({ incomeTransactions }: FinanceIncomeProps
 
   const formatRelatedValue = (label: string, id: string) =>
     id ? `${label} #${id}` : '-';
-console.log('INCOME TRANSACTIONS:', incomeTransactions);
   return (
     <div className="space-y-5">
       <div>

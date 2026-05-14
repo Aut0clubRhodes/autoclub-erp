@@ -143,7 +143,17 @@ const handleAddIncome = async () => {
     console.warn('Amount is required');
     return;
   }
+if (incomeForm.income_type === 'rental') {
+  console.log('Rental income selected - next step: create booking + transaction');
+}
 
+if (incomeForm.income_type === 'car_sale') {
+  console.log('Car sale selected - create income entry + transaction');
+}
+
+if (incomeForm.income_type === 'other_income') {
+  console.log('Other income selected - create income entry + transaction');
+}
   try {
     const incomeEntry = await addIncomeEntry({
   income_type: incomeForm.income_type,
