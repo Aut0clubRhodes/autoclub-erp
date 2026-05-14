@@ -8,7 +8,7 @@ import FinanceOverview from '@/components/FinanceOverview';
 import FinanceIncome from '@/components/FinanceIncome';
 import FinanceExpenses from '@/components/FinanceExpenses';
 import { fetchCars, addCar, deleteCar, updateCar } from '@/lib/carsApi';
-import { fetchTransactions } from '@/lib/financeApi';
+import { fetchTransactions, addTransaction } from '@/lib/financeApi';
 type WindowType = 'Αυτοκίνητα' | 'Ταμείο' | 'Έσοδα' | 'Έξοδα' | 'Προμηθευτές' | 'Αναφορές' | null;
 
 type Vehicle = {
@@ -40,6 +40,9 @@ type Transaction = {
   supplier: string;
   category: string;
   notes: string;
+  contract_number?: string;
+  agency?: string;
+  representative?: string;
 };
 
 const initialVehicles: Vehicle[] = [
@@ -96,6 +99,16 @@ const initialVehicles: Vehicle[] = [
 export default function Home() {
   const [activeWindow, setActiveWindow] = useState<WindowType>(null);
   const [showAddCar, setShowAddCar] = useState(false);
+  const [showIncomeModal, setShowIncomeModal] = useState(false);
+  const [incomeForm, setIncomeForm] = useState({
+    amount: '',
+    payment_method: 'cash',
+    car_id: '',
+    agency: '',
+    representative: '',
+    contract_number: '',
+    notes: '',
+  });
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
   const [newVehicle, setNewVehicle] = useState<Vehicle>({
     id: '',
@@ -119,7 +132,68 @@ export default function Home() {
   const [toDate, setToDate] = useState('');
   const [editingPlate, setEditingPlate] = useState<string | null>(null);
   const [viewingPlate, setViewingPlate] = useState<string | null>(null);
+const handleAddIncome = async () => {
+  if (!incomeForm.amount) {
+    console.warn('Amount is required');
+    return;
+  }
 
+  try {
+    const newTransaction = await addTransaction({
+      type: 'income',
+      source: 'manual_income',
+      amount: Number(incomeForm.amount),
+      date: new Date().toISOString().split('T')[0],
+      payment_method: incomeForm.payment_method,
+      car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
+      agency: incomeForm.agency || null,
+      representative: incomeForm.representative || null,
+      contract_number: incomeForm.contract_number || null,
+      notes: incomeForm.notes || null,
+    });
+
+    // Success if we get data back or if we get true (insert succeeded but no data returned)
+    if (newTransaction) {
+      console.log('Transaction saved successfully:', newTransaction);
+      
+      const updatedTransactions = await fetchTransactions();
+      setTransactions(
+        (updatedTransactions || []).map((transaction: any) => ({
+          id: String(transaction.id ?? ''),
+          date: transaction.date ?? '',
+          amount: Number(transaction.amount) || 0,
+          payment_method: String(transaction.payment_method ?? ''),
+          type: String(transaction.type ?? ''),
+          car_id: transaction.car_id ? String(transaction.car_id) : '',
+          agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
+          representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
+          supplier: String(transaction.supplier ?? ''),
+          category: String(transaction.category ?? ''),
+          notes: String(transaction.notes ?? ''),
+          contract_number: String(transaction.contract_number ?? ''),
+          agency: transaction.agency ? String(transaction.agency) : undefined,
+          representative: transaction.representative ? String(transaction.representative) : undefined,
+        }))
+      );
+
+      setIncomeForm({
+        amount: '',
+        payment_method: 'cash',
+        car_id: '',
+        agency: '',
+        representative: '',
+        contract_number: '',
+        notes: '',
+      });
+
+      setShowIncomeModal(false);
+    } else {
+      console.error('Failed to add transaction - Supabase returned error or no response');
+    }
+  } catch (error) {
+    console.error('Error adding income:', error);
+  }
+};
   useEffect(() => {
     if (activeWindow === 'Αυτοκίνητα') {
       const loadCars = async () => {
@@ -166,6 +240,9 @@ export default function Home() {
           supplier: String(transaction.supplier ?? ''),
           category: String(transaction.category ?? ''),
           notes: String(transaction.notes ?? ''),
+          contract_number: String(transaction.contract_number ?? ''),
+          agency: transaction.agency ? String(transaction.agency) : undefined,
+          representative: transaction.representative ? String(transaction.representative) : undefined,
         }))
       );
     };
@@ -431,6 +508,17 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('el-GR');
   };
 
+  const formatPaymentMethod = (method: string) => {
+    const paymentMethods: { [key: string]: string } = {
+      cash: 'Μετρητά',
+      card: 'Κάρτα',
+      bank: 'Τράπεζα',
+      credit: 'Επί Πιστώσει',
+      other: 'Άλλο',
+    };
+    return paymentMethods[method] || '-';
+  };
+
   const formatRelatedValue = (label: string, id: string) =>
     id ? `${label} #${id}` : '-';
 
@@ -520,6 +608,17 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         </button>
       );
     }
+    if (activeWindow === 'Έσοδα') {
+  return (
+    <button
+      className="rounded-2xl border border-sky-500 px-5 py-3 text-sm font-semibold text-sky-300 hover:bg-sky-500/10"
+      type="button"
+      onClick={() => setShowIncomeModal(true)}
+    >
+      + Καταχώρηση Εσόδου
+    </button>
+  );
+}
     return null;
   };
 
@@ -553,7 +652,123 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             {renderWindowContent()}
           </Window>
         )}
+{showIncomeModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="w-full max-w-md rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl">
+      <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-800">
+        <h3 className="text-lg font-semibold text-white">Καταχώρηση Εσόδου</h3>
+        <button
+          type="button"
+          onClick={() => setShowIncomeModal(false)}
+          className="text-zinc-400 hover:text-white transition-colors p-2 rounded-lg"
+        >
+          ✕
+        </button>
+      </div>
 
+      <div className="p-6 space-y-4">
+        <label className="space-y-2 text-sm text-zinc-300 block">
+          <span>Ποσό</span>
+          <input
+            value={incomeForm.amount}
+            onChange={(event) => setIncomeForm({ ...incomeForm, amount: event.target.value })}
+            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500"
+          />
+        </label>
+
+        <label className="space-y-2 text-sm text-zinc-300 block">
+          <span>Τρόπος Πληρωμής</span>
+          <select
+            value={incomeForm.payment_method}
+            onChange={(event) => setIncomeForm({ ...incomeForm, payment_method: event.target.value })}
+            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500"
+          >
+            <option value="cash">Μετρητά</option>
+            <option value="card">Κάρτα</option>
+            <option value="bank">Τράπεζα</option>
+            <option value="credit">Επί Πιστώσει</option>
+            <option value="other">Άλλο</option>
+          </select>
+        </label>
+<label className="space-y-2 text-sm text-zinc-300 block">
+  <span>Αυτοκίνητο</span>
+  <select
+    value={incomeForm.car_id}
+    onChange={(event) => setIncomeForm({ ...incomeForm, car_id: event.target.value })}
+    className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500"
+  >
+    <option value="">Επιλογή αυτοκινήτου</option>
+    {vehicles.map((vehicle) => (
+      <option key={vehicle.id} value={vehicle.id}>
+        {vehicle.plate} {vehicle.brand} {vehicle.model}
+      </option>
+    ))}
+  </select>
+</label>
+
+<label className="space-y-2 text-sm text-zinc-300 block">
+  <span>Πρακτορείο</span>
+  <input
+    value={incomeForm.agency}
+    onChange={(event) => setIncomeForm({ ...incomeForm, agency: event.target.value })}
+    placeholder="π.χ. Direct / Lippia / Cedok"
+    className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500"
+  />
+</label>
+
+<label className="space-y-2 text-sm text-zinc-300 block">
+  <span>Αντιπρόσωπος</span>
+  <input
+    value={incomeForm.representative}
+    onChange={(event) => setIncomeForm({ ...incomeForm, representative: event.target.value })}
+    placeholder="π.χ. Γιάννης"
+    className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500"
+  />
+</label>
+<label className="space-y-2 text-sm text-zinc-300 block">
+  <span>Αριθμός Συμβολαίου</span>
+  <input
+    value={incomeForm.contract_number}
+    onChange={(event) =>
+      setIncomeForm({
+        ...incomeForm,
+        contract_number: event.target.value,
+      })
+    }
+    placeholder="π.χ. RA-2026-0152"
+    className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500"
+  />
+</label>
+        <label className="space-y-2 text-sm text-zinc-300 block">
+          <span>Σημειώσεις</span>
+          <textarea
+            value={incomeForm.notes}
+            onChange={(event) => setIncomeForm({ ...incomeForm, notes: event.target.value })}
+            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 min-h-24"
+          />
+        </label>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setShowIncomeModal(false)}
+            className="rounded-2xl border border-zinc-700 px-5 py-3 text-sm text-zinc-300"
+          >
+            Ακύρωση
+          </button>
+
+          <button
+            type="button"
+            onClick={handleAddIncome}
+            className="rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-white hover:bg-sky-400"
+          >
+            Αποθήκευση
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
         {showAddCar && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
             <div className="w-full max-w-2xl rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl shadow-black/30 overflow-hidden">
