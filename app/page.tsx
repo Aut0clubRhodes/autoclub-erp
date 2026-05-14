@@ -9,12 +9,22 @@ import FinanceIncome from '@/components/FinanceIncome';
 import FinanceExpenses from '@/components/FinanceExpenses';
 import { fetchCars, addCar, deleteCar, updateCar } from '@/lib/carsApi';
 import { fetchTransactions, addTransaction } from '@/lib/financeApi';
+import AgenciesManager from '@/components/AgenciesManager';
 import {
   addIncomeEntry,
   updateIncomeTransactionLink,
 } from '@/lib/incomeApi';
 import { addBooking } from '@/lib/bookingsApi';
-type WindowType = 'Αυτοκίνητα' | 'Ταμείο' | 'Έσοδα' | 'Έξοδα' | 'Προμηθευτές' | 'Αναφορές' | null;
+type WindowType =
+  | 'Αυτοκίνητα'
+  | 'Ταμείο'
+  | 'Έσοδα'
+  | 'Έξοδα'
+  | 'Προμηθευτές'
+  | 'Αναφορές'
+  | 'Πρακτορεία'
+  | 'Αντιπρόσωποι'
+  | null;
 
 type Vehicle = {
   id: string;
@@ -584,8 +594,13 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
   const renderWindowContent = () => {
     switch (activeWindow) {
-      case 'Αυτοκίνητα':
-        return (
+  case 'Πρακτορεία':
+    return (
+      <AgenciesManager />
+    );
+
+  case 'Αυτοκίνητα':
+    return (
           <div className="space-y-4">
             <div className="w-full max-w-3xl">
               <input
@@ -655,6 +670,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return 'Προμηθευτές';
       case 'Αναφορές':
         return 'Αναφορές';
+       case 'Πρακτορεία':
+  return 'Πρακτορεία';
       default:
         return '';
     }
@@ -689,7 +706,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         {/* Homepage with centered logo */}
         {!activeWindow && (
           <div className="w-full h-full bg-zinc-950 flex items-center justify-center">
-            <div className="w-[500px] h-[500px] flex items-center justify-center">
+            <div className="relative w-[500px] h-[500px] flex items-center justify-center">
               <Image
                 src="/logo.png"
                 alt="AUTOCLUB"

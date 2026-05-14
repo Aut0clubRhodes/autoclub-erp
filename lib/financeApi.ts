@@ -30,6 +30,7 @@ export async function addTransaction(transaction: {
   supplier_id?: number | null;
   contract_number?: string | null;
   notes?: string | null;
+  income_entry_id?: number | null;
 }) {
   console.log('INSERT PAYLOAD:', transaction);
 
