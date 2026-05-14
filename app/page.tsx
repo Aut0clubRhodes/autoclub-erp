@@ -9,6 +9,10 @@ import FinanceIncome from '@/components/FinanceIncome';
 import FinanceExpenses from '@/components/FinanceExpenses';
 import { fetchCars, addCar, deleteCar, updateCar } from '@/lib/carsApi';
 import { fetchTransactions, addTransaction } from '@/lib/financeApi';
+import {
+  addIncomeEntry,
+  updateIncomeTransactionLink,
+} from '@/lib/incomeApi';
 type WindowType = 'Αυτοκίνητα' | 'Ταμείο' | 'Έσοδα' | 'Έξοδα' | 'Προμηθευτές' | 'Αναφορές' | null;
 
 type Vehicle = {
@@ -102,6 +106,7 @@ export default function Home() {
   const [showAddCar, setShowAddCar] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [incomeForm, setIncomeForm] = useState({
+    income_type: 'rental',
     amount: '',
     payment_method: 'cash',
     car_id: '',
@@ -110,7 +115,7 @@ export default function Home() {
     contract_number: '',
     notes: '',
   });
-  const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [newVehicle, setNewVehicle] = useState<Vehicle>({
     id: '',
     plate: '',
@@ -140,18 +145,42 @@ const handleAddIncome = async () => {
   }
 
   try {
-    const newTransaction = await addTransaction({
-      type: 'income',
-      source: 'manual_income',
-      amount: Number(incomeForm.amount),
-      date: new Date().toISOString().split('T')[0],
-      payment_method: incomeForm.payment_method,
-      car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
-      agency: incomeForm.agency || null,
-      representative: incomeForm.representative || null,
-      contract_number: incomeForm.contract_number || null,
-      notes: incomeForm.notes || null,
-    });
+    const incomeEntry = await addIncomeEntry({
+  income_type: incomeForm.income_type,
+  amount: Number(incomeForm.amount),
+  payment_method: incomeForm.payment_method,
+  car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
+  agency: incomeForm.agency || null,
+  representative: incomeForm.representative || null,
+  contract_number: incomeForm.contract_number || null,
+  notes: incomeForm.notes || null,
+});
+
+if (!incomeEntry) {
+  console.error('Failed to create income entry');
+  return;
+}
+
+const newTransaction = await addTransaction({
+  type: 'income',
+  source: incomeForm.income_type,
+  amount: Number(incomeForm.amount),
+  date: new Date().toISOString().split('T')[0],
+  payment_method: incomeForm.payment_method,
+  car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
+  agency: incomeForm.agency || null,
+  representative: incomeForm.representative || null,
+  contract_number: incomeForm.contract_number || null,
+  notes: incomeForm.notes || null,
+  income_entry_id: incomeEntry.id,
+});
+
+if (newTransaction?.id) {
+  await updateIncomeTransactionLink(
+    incomeEntry.id,
+    newTransaction.id
+  );
+}
 
     // Success if we get data back or if we get true (insert succeeded but no data returned)
     if (newTransaction) {
@@ -166,7 +195,9 @@ const handleAddIncome = async () => {
           payment_method: String(transaction.payment_method ?? ''),
           type: String(transaction.type ?? ''),
           car_id: transaction.car_id ?? null,
-          car_plate: vehicles.find((vehicle: any) => vehicle.id === transaction.car_id)?.plate || '-',
+         car_plate: transaction.car_id
+  ? vehicles.find((vehicle: any) => String(vehicle.id) === String(transaction.car_id))?.plate || `#${transaction.car_id}`
+  : '-',
           agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
           representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
           supplier: String(transaction.supplier ?? ''),
@@ -179,6 +210,7 @@ const handleAddIncome = async () => {
       );
 
       setIncomeForm({
+        income_type: 'rental',
         amount: '',
         payment_method: 'cash',
         car_id: '',
@@ -197,7 +229,7 @@ const handleAddIncome = async () => {
   }
 };
   useEffect(() => {
-    if (activeWindow === 'Αυτοκίνητα') {
+    if (activeWindow === 'Αυτοκίνητα' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα') {
       const loadCars = async () => {
         const cars = await fetchCars();
         const mappedCars = cars.map((car: any) => ({
@@ -229,6 +261,7 @@ const handleAddIncome = async () => {
 
     const loadFinanceTransactions = async () => {
       const transactionRows = await fetchTransactions();
+      const carsData = await fetchCars();
       setTransactions(
         (transactionRows || []).map((transaction: any) => ({
           id: String(transaction.id ?? ''),
@@ -237,7 +270,9 @@ const handleAddIncome = async () => {
           payment_method: String(transaction.payment_method ?? ''),
           type: String(transaction.type ?? ''),
           car_id: transaction.car_id ?? null,
-          car_plate: vehicles.find((vehicle: any) => vehicle.id === transaction.car_id)?.plate || '-',
+       car_plate: transaction.car_id
+  ? carsData.find((vehicle: any) => String(vehicle.id) === String(transaction.car_id))?.plate || `#${transaction.car_id}`
+  : '-',
           agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
           representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
           supplier: String(transaction.supplier ?? ''),
@@ -671,6 +706,24 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
       <div className="p-6 space-y-4">
         <label className="space-y-2 text-sm text-zinc-300 block">
+  <span>Τύπος Εσόδου</span>
+
+  <select
+    value={incomeForm.income_type}
+    onChange={(event) =>
+      setIncomeForm({
+        ...incomeForm,
+        income_type: event.target.value,
+      })
+    }
+    className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500"
+  >
+    <option value="rental">Ενοικίαση Αυτοκινήτου</option>
+    <option value="car_sale">Πώληση Αυτοκινήτου</option>
+    <option value="other_income">Άλλο Έσοδο</option>
+  </select>
+</label>
+        <label className="space-y-2 text-sm text-zinc-300 block">
           <span>Ποσό</span>
           <input
             value={incomeForm.amount}
@@ -703,7 +756,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     <option value="">Επιλογή αυτοκινήτου</option>
     {vehicles.map((vehicle) => (
       <option key={vehicle.id} value={vehicle.id}>
-        {vehicle.plate} {vehicle.brand} {vehicle.model}
+        {vehicle.plate}
       </option>
     ))}
   </select>
