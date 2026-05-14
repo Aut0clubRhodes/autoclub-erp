@@ -35,6 +35,7 @@ type Transaction = {
   payment_method: string;
   type: string;
   car_id: string;
+  car_plate: string;
   agency_id: string;
   representative_id: string;
   supplier: string;
@@ -164,7 +165,8 @@ const handleAddIncome = async () => {
           amount: Number(transaction.amount) || 0,
           payment_method: String(transaction.payment_method ?? ''),
           type: String(transaction.type ?? ''),
-          car_id: transaction.car_id ? String(transaction.car_id) : '',
+          car_id: transaction.car_id ?? null,
+          car_plate: vehicles.find((vehicle: any) => vehicle.id === transaction.car_id)?.plate || '-',
           agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
           representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
           supplier: String(transaction.supplier ?? ''),
@@ -234,7 +236,8 @@ const handleAddIncome = async () => {
           amount: Number(transaction.amount) || 0,
           payment_method: String(transaction.payment_method ?? ''),
           type: String(transaction.type ?? ''),
-          car_id: transaction.car_id ? String(transaction.car_id) : '',
+          car_id: transaction.car_id ?? null,
+          car_plate: vehicles.find((vehicle: any) => vehicle.id === transaction.car_id)?.plate || '-',
           agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
           representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
           supplier: String(transaction.supplier ?? ''),

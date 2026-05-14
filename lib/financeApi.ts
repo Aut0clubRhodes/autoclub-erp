@@ -7,12 +7,14 @@ export async function fetchTransactions() {
     .order('date', { ascending: false });
 
   if (error) {
-    console.log(error);
+    console.error('FETCH TRANSACTIONS ERROR RAW:', JSON.stringify(error, null, 2));
+    console.error('FETCH TRANSACTIONS ERROR OBJECT:', error);
     return [];
   }
 
   return data || [];
 }
+
 export async function addTransaction(transaction: {
   type: string;
   source: string;
@@ -22,22 +24,32 @@ export async function addTransaction(transaction: {
   category?: string;
   car_id?: number | null;
   booking_id?: number | null;
-  agency_id?: number | null;
-  representative_id?: number | null;
+  agency?: string | null;
+  representative?: string | null;
   supplier?: string | null;
   supplier_id?: number | null;
+  contract_number?: string | null;
   notes?: string | null;
 }) {
-  const { data, error } = await supabase
+  console.log('INSERT PAYLOAD:', transaction);
+
+  const { data, error, status, statusText } = await supabase
     .from('transactions')
     .insert([transaction])
-    .select()
-    .single();
+    .select();
+
+  console.log('INSERT DATA:', data);
+  console.log('INSERT STATUS:', status, statusText);
+  console.log('INSERT ERROR RAW:', JSON.stringify(error, null, 2));
+  console.log('INSERT ERROR OBJECT:', error);
 
   if (error) {
-    console.log(error);
     return null;
   }
 
-  return data;
+  if (data && data.length > 0) {
+    return data[0];
+  }
+
+  return true;
 }
