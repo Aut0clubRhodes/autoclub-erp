@@ -6,6 +6,7 @@ type FinanceTransaction = {
   amount: number;
   payment_method: string;
   car_id: string;
+  car_plate?: string;
   supplier: string;
   category: string;
   notes: string;
@@ -13,9 +14,10 @@ type FinanceTransaction = {
 
 interface FinanceExpensesProps {
   expenseTransactions: FinanceTransaction[];
+  onAddExpense: () => void;
 }
 
-export default function FinanceExpenses({ expenseTransactions }: FinanceExpensesProps) {
+export default function FinanceExpenses({ expenseTransactions, onAddExpense }: FinanceExpensesProps) {
   const formatMoney = (value: number) =>
     `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -23,9 +25,6 @@ export default function FinanceExpenses({ expenseTransactions }: FinanceExpenses
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('el-GR');
   };
-
-  const formatRelatedValue = (label: string, id: string) =>
-    id ? `${label} #${id}` : '-';
 
   return (
     <div className="space-y-5">
@@ -36,6 +35,7 @@ export default function FinanceExpenses({ expenseTransactions }: FinanceExpenses
         </div>
         <button
           type="button"
+          onClick={onAddExpense}
           className="rounded-2xl border border-rose-600 bg-rose-600/10 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-600/20"
         >
           + Καταχώρηση Εξόδου
@@ -62,7 +62,7 @@ export default function FinanceExpenses({ expenseTransactions }: FinanceExpenses
                 <td className="px-4 py-4 text-sm text-white">{formatMoney(transaction.amount)}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{transaction.payment_method || '-'}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{transaction.supplier || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{formatRelatedValue('Αυτοκίνητο', transaction.car_id)}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.car_plate || '-'}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{transaction.category || '-'}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{transaction.notes || '-'}</td>
               </tr>
