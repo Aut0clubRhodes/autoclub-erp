@@ -10,6 +10,7 @@ import FinanceExpenses from '@/components/FinanceExpenses';
 import { fetchCars, addCar, deleteCar, updateCar } from '@/lib/carsApi';
 import { fetchTransactions, addTransaction } from '@/lib/financeApi';
 import AgenciesManager from '@/components/AgenciesManager';
+import { supabase } from '@/lib/supabaseClient';
 import {
   addIncomeEntry,
   updateIncomeTransactionLink,
@@ -23,7 +24,6 @@ type WindowType =
   | 'Προμηθευτές'
   | 'Αναφορές'
   | 'Πρακτορεία'
-  | 'Αντιπρόσωποι'
   | null;
 
 type Vehicle = {
@@ -59,6 +59,17 @@ type Transaction = {
   contract_number?: string;
   agency?: string;
   representative?: string;
+};
+
+type Agency = {
+  id: number;
+  name: string;
+};
+
+type Representative = {
+  id: number;
+  name: string;
+  agency_id: number;
 };
 
 const initialVehicles: Vehicle[] = [
@@ -121,12 +132,14 @@ export default function Home() {
     amount: '',
     payment_method: 'cash',
     car_id: '',
-    agency: '',
-    representative: '',
+    agency_id: '',
+    representative_id: '',
     contract_number: '',
     notes: '',
   });
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [representatives, setRepresentatives] = useState<Representative[]>([]);
   const [newVehicle, setNewVehicle] = useState<Vehicle>({
     id: '',
     plate: '',
@@ -160,8 +173,8 @@ if (incomeForm.income_type === 'rental') {
     car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
     amount: Number(incomeForm.amount),
     payment_method: incomeForm.payment_method,
-    agency: incomeForm.agency || null,
-    representative: incomeForm.representative || null,
+    agency_id: incomeForm.agency_id ? Number(incomeForm.agency_id) : null,
+    representative_id: incomeForm.representative_id ? Number(incomeForm.representative_id) : null,
     contract_number: incomeForm.contract_number || null,
     income_type: 'rental',
   });
@@ -182,8 +195,8 @@ if (incomeForm.income_type === 'other_income') {
   amount: Number(incomeForm.amount),
   payment_method: incomeForm.payment_method,
   car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
-  agency: incomeForm.agency || null,
-  representative: incomeForm.representative || null,
+  agency_id: incomeForm.agency_id ? Number(incomeForm.agency_id) : null,
+  representative_id: incomeForm.representative_id ? Number(incomeForm.representative_id) : null,
   contract_number: incomeForm.contract_number || null,
   notes: incomeForm.notes || null,
 });
@@ -200,8 +213,8 @@ const newTransaction = await addTransaction({
   date: new Date().toISOString().split('T')[0],
   payment_method: incomeForm.payment_method,
   car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
-  agency: incomeForm.agency || null,
-  representative: incomeForm.representative || null,
+  agency_id: incomeForm.agency_id ? Number(incomeForm.agency_id) : null,
+  representative_id: incomeForm.representative_id ? Number(incomeForm.representative_id) : null,
   contract_number: incomeForm.contract_number || null,
   notes: incomeForm.notes || null,
   income_entry_id: incomeEntry.id,
@@ -246,8 +259,8 @@ if (newTransaction?.id) {
         amount: '',
         payment_method: 'cash',
         car_id: '',
-        agency: '',
-        representative: '',
+        agency_id: '',
+        representative_id: '',
         contract_number: '',
         notes: '',
       });
@@ -285,6 +298,20 @@ if (newTransaction?.id) {
       loadCars();
     }
   }, [activeWindow]);
+
+  useEffect(() => {
+    const loadAgencyData = async () => {
+      const [{ data: agencyRows }, { data: representativeRows }] = await Promise.all([
+        supabase.from('agencies').select('*').order('name'),
+        supabase.from('representatives').select('*').order('name'),
+      ]);
+
+      setAgencies(agencyRows || []);
+      setRepresentatives(representativeRows || []);
+    };
+
+    loadAgencyData();
+  }, []);
 
   useEffect(() => {
     if (activeWindow !== 'Ταμείο') {
@@ -531,7 +558,19 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     );
   });
 
-  const financeTransactions = transactions.filter((transaction) => {
+  const transactionsWithAgencyNames = transactions.map((transaction) => ({
+    ...transaction,
+    agency:
+      transaction.agency ||
+      agencies.find((agency) => String(agency.id) === transaction.agency_id)?.name,
+    representative:
+      transaction.representative ||
+      representatives.find(
+        (representative) => String(representative.id) === transaction.representative_id
+      )?.name,
+  }));
+
+  const financeTransactions = transactionsWithAgencyNames.filter((transaction) => {
     const transactionDate = new Date(transaction.date);
     if (fromDate) {
       const from = new Date(fromDate);
@@ -570,6 +609,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const totalPaidExpenses = sumAmount(paidExpenseTransactions);
   const totalSupplierCredits = sumAmount(supplierCreditTransactions);
   const netTotal = totalIncome - totalPaidExpenses;
+  const availableRepresentatives = representatives.filter(
+    (representative) => String(representative.agency_id) === incomeForm.agency_id
+  );
 
   const formatMoney = (value: number) =>
     `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -803,22 +845,40 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
 <label className="space-y-2 text-sm text-zinc-300 block">
   <span>Πρακτορείο</span>
-  <input
-    value={incomeForm.agency}
-    onChange={(event) => setIncomeForm({ ...incomeForm, agency: event.target.value })}
-    placeholder="π.χ. Direct / Lippia / Cedok"
+  <select
+    value={incomeForm.agency_id}
+    onChange={(event) =>
+      setIncomeForm({
+        ...incomeForm,
+        agency_id: event.target.value,
+        representative_id: '',
+      })
+    }
     className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500"
-  />
+  >
+    <option value="">Επιλογή πρακτορείου</option>
+    {agencies.map((agency) => (
+      <option key={agency.id} value={agency.id}>
+        {agency.name}
+      </option>
+    ))}
+  </select>
 </label>
 
 <label className="space-y-2 text-sm text-zinc-300 block">
   <span>Αντιπρόσωπος</span>
-  <input
-    value={incomeForm.representative}
-    onChange={(event) => setIncomeForm({ ...incomeForm, representative: event.target.value })}
-    placeholder="π.χ. Γιάννης"
+  <select
+    value={incomeForm.representative_id}
+    onChange={(event) => setIncomeForm({ ...incomeForm, representative_id: event.target.value })}
     className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500"
-  />
+  >
+    <option value="">Επιλογή αντιπροσώπου</option>
+    {availableRepresentatives.map((representative) => (
+      <option key={representative.id} value={representative.id}>
+        {representative.name}
+      </option>
+    ))}
+  </select>
 </label>
 <label className="space-y-2 text-sm text-zinc-300 block">
   <span>Αριθμός Συμβολαίου</span>

@@ -24,8 +24,8 @@ export async function addTransaction(transaction: {
   category?: string;
   car_id?: number | null;
   booking_id?: number | null;
-  agency?: string | null;
-  representative?: string | null;
+  agency_id?: number | null;
+  representative_id?: number | null;
   supplier?: string | null;
   supplier_id?: number | null;
   contract_number?: string | null;
