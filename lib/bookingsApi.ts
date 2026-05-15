@@ -14,3 +14,36 @@ export const addBooking = async (bookingData: any) => {
 
   return data;
 };
+
+export const deleteBooking = async (id: number) => {
+  const { error } = await supabase
+    .from('bookings')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.warn('Booking delete error:', error);
+    return false;
+  }
+
+  return true;
+};
+
+export const updateBookingTransactionLink = async (
+  bookingId: number,
+  transactionId: number
+) => {
+  const { error } = await supabase
+    .from('bookings')
+    .update({
+      transaction_id: transactionId,
+    })
+    .eq('id', bookingId);
+
+  if (error) {
+    console.error('Booking update error:', error);
+    return false;
+  }
+
+  return true;
+};

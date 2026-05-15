@@ -8,14 +8,28 @@ import FinanceOverview from '@/components/FinanceOverview';
 import FinanceIncome from '@/components/FinanceIncome';
 import FinanceExpenses from '@/components/FinanceExpenses';
 import { fetchCars, addCar, deleteCar, updateCar } from '@/lib/carsApi';
-import { fetchTransactions, addTransaction } from '@/lib/financeApi';
+import {
+  fetchTransactions,
+  addTransaction,
+  getTransactionById,
+  updateTransaction,
+  deleteTransaction,
+} from '@/lib/financeApi';
 import AgenciesManager from '@/components/AgenciesManager';
 import { supabase } from '@/lib/supabaseClient';
 import {
   addIncomeEntry,
+  deleteIncomeEntry,
+  deleteIncomeEntriesByTransactionId,
+  findIncomeEntryByTransactionId,
+  updateIncomeEntry,
   updateIncomeTransactionLink,
 } from '@/lib/incomeApi';
-import { addBooking } from '@/lib/bookingsApi';
+import {
+  addBooking,
+  deleteBooking,
+  updateBookingTransactionLink,
+} from '@/lib/bookingsApi';
 type WindowType =
   | 'Αυτοκίνητα'
   | 'Ταμείο'
@@ -57,6 +71,9 @@ type Transaction = {
   category: string;
   notes: string;
   contract_number?: string;
+  income_entry_id?: string;
+  booking_id?: string;
+  source?: string;
   agency?: string;
   representative?: string;
 };
@@ -70,6 +87,17 @@ type Representative = {
   id: number;
   name: string;
   agency_id: number;
+};
+
+type RevenueByAgencyRow = {
+  agencyId: string;
+  agencyName: string;
+  totalRevenue: number;
+  cash: number;
+  card: number;
+  bank: number;
+  credit: number;
+  transactionsCount: number;
 };
 
 const initialVehicles: Vehicle[] = [
@@ -128,6 +156,8 @@ export default function Home() {
   const [showAddCar, setShowAddCar] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [incomeForm, setIncomeForm] = useState({
     income_type: 'rental',
     amount: '',
@@ -176,29 +206,28 @@ const handleAddIncome = async () => {
     console.warn('Amount is required');
     return;
   }
-if (incomeForm.income_type === 'rental') {
 
-  const booking = await addBooking({
-    car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
-    amount: Number(incomeForm.amount),
-    payment_method: incomeForm.payment_method,
-    agency_id: incomeForm.agency_id ? Number(incomeForm.agency_id) : null,
-    representative_id: incomeForm.representative_id ? Number(incomeForm.representative_id) : null,
-    contract_number: incomeForm.contract_number || null,
-    income_type: 'rental',
-  });
-
-  console.log('BOOKING CREATED:', booking);
-}
-
-if (incomeForm.income_type === 'car_sale') {
-  console.log('Car sale selected - create income entry + transaction');
-}
-
-if (incomeForm.income_type === 'other_income') {
-  console.log('Other income selected - create income entry + transaction');
-}
   try {
+    const booking =
+      incomeForm.income_type === 'rental'
+        ? await addBooking({
+            car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
+            amount: Number(incomeForm.amount),
+            payment_method: incomeForm.payment_method,
+            agency_id: incomeForm.agency_id ? Number(incomeForm.agency_id) : null,
+            representative_id: incomeForm.representative_id
+              ? Number(incomeForm.representative_id)
+              : null,
+            contract_number: incomeForm.contract_number || null,
+            income_type: 'rental',
+          })
+        : null;
+
+    if (incomeForm.income_type === 'rental' && !booking) {
+      console.error('Failed to create booking');
+      return;
+    }
+
     const incomeEntry = await addIncomeEntry({
   income_type: incomeForm.income_type,
   amount: Number(incomeForm.amount),
@@ -227,6 +256,7 @@ const newTransaction = await addTransaction({
   contract_number: incomeForm.contract_number || null,
   notes: incomeForm.notes || null,
   income_entry_id: incomeEntry.id,
+  booking_id: booking?.id ?? null,
 });
 
 if (newTransaction?.id) {
@@ -234,6 +264,13 @@ if (newTransaction?.id) {
     incomeEntry.id,
     newTransaction.id
   );
+
+  if (booking?.id) {
+    await updateBookingTransactionLink(
+      booking.id,
+      newTransaction.id
+    );
+  }
 }
 
     // Success if we get data back or if we get true (insert succeeded but no data returned)
@@ -258,6 +295,9 @@ if (newTransaction?.id) {
           category: String(transaction.category ?? ''),
           notes: String(transaction.notes ?? ''),
           contract_number: String(transaction.contract_number ?? ''),
+          income_entry_id: transaction.income_entry_id ? String(transaction.income_entry_id) : '',
+          booking_id: transaction.booking_id ? String(transaction.booking_id) : '',
+          source: transaction.source ? String(transaction.source) : undefined,
           agency: transaction.agency ? String(transaction.agency) : undefined,
           representative: transaction.representative ? String(transaction.representative) : undefined,
         }))
@@ -274,6 +314,7 @@ if (newTransaction?.id) {
         notes: '',
       });
 
+      setEditingIncomeId(null);
       setShowIncomeModal(false);
     } else {
       console.error('Failed to add transaction - Supabase returned error or no response');
@@ -281,6 +322,128 @@ if (newTransaction?.id) {
   } catch (error) {
     console.error('Error adding income:', error);
   }
+};
+
+const reloadTransactions = async () => {
+  const updatedTransactions = await fetchTransactions();
+  setTransactions(
+    (updatedTransactions || []).map((transaction: any) => ({
+      id: String(transaction.id ?? ''),
+      date: transaction.date ?? '',
+      amount: Number(transaction.amount) || 0,
+      payment_method: String(transaction.payment_method ?? ''),
+      type: String(transaction.type ?? ''),
+      car_id: transaction.car_id ?? null,
+      car_plate: transaction.car_id
+        ? vehicles.find((vehicle: any) => String(vehicle.id) === String(transaction.car_id))?.plate ||
+          `#${transaction.car_id}`
+        : '-',
+      agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
+      representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
+      supplier: String(transaction.supplier ?? ''),
+      category: String(transaction.category ?? ''),
+      notes: String(transaction.notes ?? ''),
+      contract_number: String(transaction.contract_number ?? ''),
+      income_entry_id: transaction.income_entry_id ? String(transaction.income_entry_id) : '',
+      booking_id: transaction.booking_id ? String(transaction.booking_id) : '',
+      source: transaction.source ? String(transaction.source) : undefined,
+      agency: transaction.agency ? String(transaction.agency) : undefined,
+      representative: transaction.representative ? String(transaction.representative) : undefined,
+    }))
+  );
+};
+
+const handleEditIncome = (transaction: Transaction) => {
+  setEditingIncomeId(transaction.id);
+  setIncomeForm({
+    income_type: transaction.source || 'rental',
+    amount: String(transaction.amount || ''),
+    payment_method: transaction.payment_method || 'cash',
+    car_id: transaction.car_id ? String(transaction.car_id) : '',
+    agency_id: transaction.agency_id || '',
+    representative_id: transaction.representative_id || '',
+    contract_number: transaction.contract_number || '',
+    notes: transaction.notes || '',
+  });
+  setShowIncomeModal(true);
+};
+
+const handleDeleteIncome = async (transaction: Transaction) => {
+  const persistedTransaction = await getTransactionById(Number(transaction.id));
+  console.log('DELETE TRANSACTION', persistedTransaction);
+
+  const fallbackIncomeEntry = await findIncomeEntryByTransactionId(Number(transaction.id));
+  const incomeEntryId =
+    (persistedTransaction?.income_entry_id ? String(persistedTransaction.income_entry_id) : '') ||
+    transaction.income_entry_id ||
+    (fallbackIncomeEntry?.id ? String(fallbackIncomeEntry.id) : '');
+  const bookingId =
+    (persistedTransaction?.booking_id ? String(persistedTransaction.booking_id) : '') ||
+    transaction.booking_id ||
+    '';
+
+  if (incomeEntryId) {
+    console.log('DELETE INCOME ENTRY ID', incomeEntryId);
+    await deleteIncomeEntry(Number(incomeEntryId));
+  } else {
+    console.log('DELETE INCOME ENTRY BY TRANSACTION ID', transaction.id);
+    await deleteIncomeEntriesByTransactionId(Number(transaction.id));
+  }
+
+  if (bookingId) {
+    console.log('DELETE BOOKING ID', bookingId);
+    try {
+      const bookingDeleted = await deleteBooking(Number(bookingId));
+      if (!bookingDeleted) {
+        console.warn('Booking delete failed, continuing income deletion:', bookingId);
+      }
+    } catch (error) {
+      console.warn('Booking delete failed, continuing income deletion:', bookingId, error);
+    }
+  }
+
+  const deleted = await deleteTransaction(Number(transaction.id));
+  if (!deleted) return;
+
+  await reloadTransactions();
+};
+
+const handleSaveIncome = async () => {
+  if (!editingIncomeId) {
+    await handleAddIncome();
+    return;
+  }
+
+  const updated = await updateTransaction(Number(editingIncomeId), {
+    amount: Number(incomeForm.amount),
+    payment_method: incomeForm.payment_method,
+    car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
+    agency_id: incomeForm.agency_id ? Number(incomeForm.agency_id) : null,
+    representative_id: incomeForm.representative_id ? Number(incomeForm.representative_id) : null,
+    contract_number: incomeForm.contract_number || null,
+    notes: incomeForm.notes || null,
+  });
+
+  if (!updated) return;
+
+  const originalTransaction = transactions.find((transaction) => transaction.id === editingIncomeId);
+  if (originalTransaction?.income_entry_id) {
+    await updateIncomeEntry(Number(originalTransaction.income_entry_id), {
+      amount: Number(incomeForm.amount),
+      payment_method: incomeForm.payment_method,
+      car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
+      agency_id: incomeForm.agency_id ? Number(incomeForm.agency_id) : null,
+      representative_id: incomeForm.representative_id
+        ? Number(incomeForm.representative_id)
+        : null,
+      contract_number: incomeForm.contract_number || null,
+      notes: incomeForm.notes || null,
+    });
+  }
+
+  await reloadTransactions();
+  setEditingIncomeId(null);
+  setShowIncomeModal(false);
 };
 
 const handleAddExpense = async () => {
@@ -338,6 +501,49 @@ const handleAddExpense = async () => {
     category: '',
     notes: '',
   });
+  setEditingExpenseId(null);
+  setShowExpenseModal(false);
+};
+
+const handleEditExpense = (transaction: Transaction) => {
+  setEditingExpenseId(transaction.id);
+  setExpenseForm({
+    amount: String(transaction.amount || ''),
+    payment_method: transaction.payment_method || 'cash',
+    supplier: transaction.supplier || '',
+    car_id: transaction.car_id ? String(transaction.car_id) : '',
+    category: transaction.category || '',
+    notes: transaction.notes || '',
+  });
+  setShowExpenseModal(true);
+};
+
+const handleDeleteExpense = async (transaction: Transaction) => {
+  const deleted = await deleteTransaction(Number(transaction.id));
+  if (!deleted) return;
+
+  await reloadTransactions();
+};
+
+const handleSaveExpense = async () => {
+  if (!editingExpenseId) {
+    await handleAddExpense();
+    return;
+  }
+
+  const updated = await updateTransaction(Number(editingExpenseId), {
+    amount: Number(expenseForm.amount),
+    payment_method: expenseForm.payment_method,
+    supplier: expenseForm.supplier || null,
+    car_id: expenseForm.car_id ? Number(expenseForm.car_id) : null,
+    category: expenseForm.category || null,
+    notes: expenseForm.notes || null,
+  });
+
+  if (!updated) return;
+
+  await reloadTransactions();
+  setEditingExpenseId(null);
   setShowExpenseModal(false);
 };
   useEffect(() => {
@@ -381,7 +587,12 @@ const handleAddExpense = async () => {
   }, []);
 
   useEffect(() => {
-    if (activeWindow !== 'Ταμείο' && activeWindow !== 'Έσοδα' && activeWindow !== 'Έξοδα') {
+    if (
+      activeWindow !== 'Ταμείο' &&
+      activeWindow !== 'Έσοδα' &&
+      activeWindow !== 'Έξοδα' &&
+      activeWindow !== 'Αναφορές'
+    ) {
       return;
     }
 
@@ -405,6 +616,9 @@ const handleAddExpense = async () => {
           category: String(transaction.category ?? ''),
           notes: String(transaction.notes ?? ''),
           contract_number: String(transaction.contract_number ?? ''),
+          income_entry_id: transaction.income_entry_id ? String(transaction.income_entry_id) : '',
+          booking_id: transaction.booking_id ? String(transaction.booking_id) : '',
+          source: transaction.source ? String(transaction.source) : undefined,
           agency: transaction.agency ? String(transaction.agency) : undefined,
           representative: transaction.representative ? String(transaction.representative) : undefined,
         }))
@@ -423,6 +637,8 @@ const handleAddExpense = async () => {
     setActiveWindow(null);
     setShowAddCar(false);
     setShowExpenseModal(false);
+    setEditingIncomeId(null);
+    setEditingExpenseId(null);
   };
 
   const openAddCarModal = () => {
@@ -680,6 +896,39 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const availableRepresentatives = representatives.filter(
     (representative) => String(representative.agency_id) === incomeForm.agency_id
   );
+  const revenueByAgency = incomeTransactions
+    .filter((transaction) => transaction.agency_id)
+    .reduce<Record<string, RevenueByAgencyRow>>((rows, transaction) => {
+      const agencyId = transaction.agency_id;
+      const currentRow = rows[agencyId] || {
+        agencyId,
+        agencyName:
+          agencies.find((agency) => String(agency.id) === agencyId)?.name ||
+          `Πρακτορείο #${agencyId}`,
+        totalRevenue: 0,
+        cash: 0,
+        card: 0,
+        bank: 0,
+        credit: 0,
+        transactionsCount: 0,
+      };
+      const amount = Number(transaction.amount) || 0;
+      const paymentMethod = String(transaction.payment_method).toLowerCase();
+
+      currentRow.totalRevenue += amount;
+      currentRow.transactionsCount += 1;
+
+      if (paymentMethod === 'cash') currentRow.cash += amount;
+      if (paymentMethod === 'card') currentRow.card += amount;
+      if (paymentMethod === 'bank') currentRow.bank += amount;
+      if (paymentMethod === 'credit') currentRow.credit += amount;
+
+      rows[agencyId] = currentRow;
+      return rows;
+    }, {});
+  const revenueByAgencyRows = Object.values(revenueByAgency).sort(
+    (left, right) => right.totalRevenue - left.totalRevenue
+  );
 
   const formatMoney = (value: number) =>
     `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -742,12 +991,20 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           />
         );
       case 'Έσοδα':
-        return <FinanceIncome incomeTransactions={incomeTransactions} />;
+        return (
+          <FinanceIncome
+            incomeTransactions={incomeTransactions}
+            onEditIncome={handleEditIncome}
+            onDeleteIncome={handleDeleteIncome}
+          />
+        );
       case 'Έξοδα':
         return (
           <FinanceExpenses
             expenseTransactions={expenseTransactions}
             onAddExpense={() => setShowExpenseModal(true)}
+            onEditExpense={handleEditExpense}
+            onDeleteExpense={handleDeleteExpense}
           />
         );
       case 'Προμηθευτές':
@@ -760,9 +1017,72 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         );
       case 'Αναφορές':
         return (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <p className="text-zinc-400 text-lg">Οι αναφορές θα εμφανίζονται εδώ</p>
+          <div className="space-y-5">
+            <section className="rounded-3xl border border-zinc-800 bg-zinc-950/90 p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-white">Revenue by Agency</h2>
+                  <p className="mt-1 text-sm text-zinc-500">Έσοδα ανά πρακτορείο.</p>
+                </div>
+                <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2">
+                  <label className="space-y-2 text-sm text-zinc-300">
+                    <span>Από</span>
+                    <input
+                      type="date"
+                      value={fromDate}
+                      onChange={(event) => setFromDate(event.target.value)}
+                      onClick={(event) => event.currentTarget.showPicker?.()}
+                      className="w-full rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+                    />
+                  </label>
+                  <label className="space-y-2 text-sm text-zinc-300">
+                    <span>Έως</span>
+                    <input
+                      type="date"
+                      value={toDate}
+                      onChange={(event) => setToDate(event.target.value)}
+                      onClick={(event) => event.currentTarget.showPicker?.()}
+                      className="w-full rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+                    />
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <div className="overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
+              <table className="min-w-[900px] w-full text-left">
+                <thead>
+                  <tr className="border-b border-zinc-800 bg-zinc-900/80">
+                    <th className="px-4 py-3 text-sm text-zinc-400">Agency</th>
+                    <th className="px-4 py-3 text-sm text-zinc-400">Total Revenue</th>
+                    <th className="px-4 py-3 text-sm text-zinc-400">Cash</th>
+                    <th className="px-4 py-3 text-sm text-zinc-400">Card</th>
+                    <th className="px-4 py-3 text-sm text-zinc-400">Bank</th>
+                    <th className="px-4 py-3 text-sm text-zinc-400">Credit</th>
+                    <th className="px-4 py-3 text-sm text-zinc-400">Transactions Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {revenueByAgencyRows.map((row) => (
+                    <tr key={row.agencyId} className="border-b border-zinc-800 hover:bg-zinc-900/60">
+                      <td className="px-4 py-4 text-sm text-zinc-200">{row.agencyName}</td>
+                      <td className="px-4 py-4 text-sm text-white">{formatMoney(row.totalRevenue)}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{formatMoney(row.cash)}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{formatMoney(row.card)}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{formatMoney(row.bank)}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{formatMoney(row.credit)}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{row.transactionsCount}</td>
+                    </tr>
+                  ))}
+                  {revenueByAgencyRows.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-6 text-center text-sm text-zinc-400">
+                        Δεν βρέθηκαν έσοδα πρακτορείων.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         );
@@ -851,7 +1171,10 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         <h3 className="text-lg font-semibold text-white">Καταχώρηση Εσόδου</h3>
         <button
           type="button"
-          onClick={() => setShowIncomeModal(false)}
+          onClick={() => {
+            setShowIncomeModal(false);
+            setEditingIncomeId(null);
+          }}
           className="text-zinc-400 hover:text-white transition-colors p-2 rounded-lg"
         >
           ✕
@@ -979,7 +1302,10 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         <div className="flex justify-end gap-3 pt-2">
           <button
             type="button"
-            onClick={() => setShowIncomeModal(false)}
+            onClick={() => {
+              setShowIncomeModal(false);
+              setEditingIncomeId(null);
+            }}
             className="rounded-2xl border border-zinc-700 px-5 py-3 text-sm text-zinc-300"
           >
             Ακύρωση
@@ -987,7 +1313,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
           <button
             type="button"
-            onClick={handleAddIncome}
+            onClick={handleSaveIncome}
             className="rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-white hover:bg-sky-400"
           >
             Αποθήκευση
@@ -1004,7 +1330,10 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         <h3 className="text-lg font-semibold text-white">Καταχώρηση Εξόδου</h3>
         <button
           type="button"
-          onClick={() => setShowExpenseModal(false)}
+          onClick={() => {
+            setShowExpenseModal(false);
+            setEditingExpenseId(null);
+          }}
           className="text-zinc-400 hover:text-white transition-colors p-2 rounded-lg"
         >
           ✕
@@ -1084,7 +1413,10 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         <div className="flex justify-end gap-3 pt-2">
           <button
             type="button"
-            onClick={() => setShowExpenseModal(false)}
+            onClick={() => {
+              setShowExpenseModal(false);
+              setEditingExpenseId(null);
+            }}
             className="rounded-2xl border border-zinc-700 px-5 py-3 text-sm text-zinc-300"
           >
             Ακύρωση
@@ -1092,7 +1424,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
           <button
             type="button"
-            onClick={handleAddExpense}
+            onClick={handleSaveExpense}
             className="rounded-2xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white hover:bg-rose-500"
           >
             Αποθήκευση

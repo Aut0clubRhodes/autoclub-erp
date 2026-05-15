@@ -5,19 +5,35 @@ type FinanceTransaction = {
   date: string;
   amount: number;
   payment_method: string;
+  type: string;
   car_id: string;
-  car_plate?: string;
+  car_plate: string;
+  agency_id: string;
+  representative_id: string;
   supplier: string;
   category: string;
   notes: string;
+  contract_number?: string;
+  income_entry_id?: string;
+  booking_id?: string;
+  source?: string;
+  agency?: string;
+  representative?: string;
 };
 
 interface FinanceExpensesProps {
   expenseTransactions: FinanceTransaction[];
   onAddExpense: () => void;
+  onEditExpense: (transaction: FinanceTransaction) => void;
+  onDeleteExpense: (transaction: FinanceTransaction) => void;
 }
 
-export default function FinanceExpenses({ expenseTransactions, onAddExpense }: FinanceExpensesProps) {
+export default function FinanceExpenses({
+  expenseTransactions,
+  onAddExpense,
+  onEditExpense,
+  onDeleteExpense,
+}: FinanceExpensesProps) {
   const formatMoney = (value: number) =>
     `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -53,6 +69,7 @@ export default function FinanceExpenses({ expenseTransactions, onAddExpense }: F
               <th className="px-4 py-3 text-sm text-zinc-400">Αυτοκίνητο</th>
               <th className="px-4 py-3 text-sm text-zinc-400">Κατηγορία</th>
               <th className="px-4 py-3 text-sm text-zinc-400">Σημειώσεις</th>
+              <th className="px-4 py-3 text-sm text-zinc-400">Ενέργειες</th>
             </tr>
           </thead>
           <tbody>
@@ -65,11 +82,29 @@ export default function FinanceExpenses({ expenseTransactions, onAddExpense }: F
                 <td className="px-4 py-4 text-sm text-zinc-200">{transaction.car_plate || '-'}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{transaction.category || '-'}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{transaction.notes || '-'}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onEditExpense(transaction)}
+                      className="rounded-xl border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900"
+                    >
+                      Επεξεργασία
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteExpense(transaction)}
+                      className="rounded-xl border border-red-700 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40"
+                    >
+                      Διαγραφή
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
             {expenseTransactions.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-sm text-zinc-400">
+                <td colSpan={8} className="px-4 py-6 text-center text-sm text-zinc-400">
                   Δεν βρέθηκαν συναλλαγές.
                 </td>
               </tr>

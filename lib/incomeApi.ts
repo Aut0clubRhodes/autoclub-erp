@@ -47,3 +47,73 @@ export const fetchIncomeEntries = async () => {
 
   return data;
 };
+
+export const updateIncomeEntry = async (
+  id: number,
+  updates: {
+    amount?: number;
+    payment_method?: string;
+    car_id?: number | null;
+    agency_id?: number | null;
+    representative_id?: number | null;
+    contract_number?: string | null;
+    notes?: string | null;
+  }
+) => {
+  const { data, error } = await supabase
+    .from('income_entries')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Income entry update error:', error);
+    return null;
+  }
+
+  return data;
+};
+
+export const deleteIncomeEntry = async (id: number) => {
+  const { error } = await supabase
+    .from('income_entries')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Income entry delete error:', error);
+    return false;
+  }
+
+  return true;
+};
+
+export const findIncomeEntryByTransactionId = async (transactionId: number) => {
+  const { data, error } = await supabase
+    .from('income_entries')
+    .select('id')
+    .eq('transaction_id', transactionId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Income entry lookup error:', error);
+    return null;
+  }
+
+  return data;
+};
+
+export const deleteIncomeEntriesByTransactionId = async (transactionId: number) => {
+  const { error } = await supabase
+    .from('income_entries')
+    .delete()
+    .eq('transaction_id', transactionId);
+
+  if (error) {
+    console.error('Income entry delete by transaction error:', error);
+    return false;
+  }
+
+  return true;
+};
