@@ -80,7 +80,7 @@ export default function FinanceOverview({
 
       <section className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-5">
-          <p className="text-sm text-zinc-400">Πληρωμένα Έξοδα</p>
+          <p className="text-sm text-zinc-400">Έξοδα</p>
           <p className="mt-3 text-3xl font-semibold text-white">{formatMoney(totalPaidExpenses)}</p>
         </div>
         <div className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-5">

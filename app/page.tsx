@@ -161,6 +161,7 @@ export default function Home() {
   const [showAddCar, setShowAddCar] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [showSupplierPaymentModal, setShowSupplierPaymentModal] = useState(false);
   const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [incomeForm, setIncomeForm] = useState({
@@ -181,6 +182,13 @@ export default function Home() {
     supplier_id: '',
     car_id: '',
     category: '',
+    notes: '',
+  });
+  const [supplierPaymentForm, setSupplierPaymentForm] = useState({
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    supplier_id: '',
+    payment_method: 'cash',
     notes: '',
   });
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -440,27 +448,16 @@ const handleAddExpense = async () => {
     return;
   }
 
-  if (expenseForm.movement_type === 'supplier_payment' && !expenseForm.supplier_id) {
-    console.warn('Supplier is required');
-    return;
-  }
-
   // Financial expenses are stored in transactions; the Expenses tab does not use the legacy expenses table.
   const newTransaction = await addTransaction({
-    type: expenseForm.movement_type,
-    source: expenseForm.movement_type,
+    type: 'expense',
+    source: 'expense',
     amount: Number(expenseForm.amount),
     date: expenseForm.date,
     payment_method: expenseForm.payment_method,
     supplier_id: expenseForm.supplier_id ? Number(expenseForm.supplier_id) : null,
-    car_id:
-      expenseForm.movement_type === 'expense' && expenseForm.car_id
-        ? Number(expenseForm.car_id)
-        : null,
-    category:
-      expenseForm.movement_type === 'supplier_payment'
-        ? 'supplier_payment'
-        : expenseForm.category || undefined,
+    car_id: expenseForm.car_id ? Number(expenseForm.car_id) : null,
+    category: expenseForm.category || undefined,
     notes: expenseForm.notes || null,
   });
 
@@ -509,9 +506,22 @@ const handleAddExpense = async () => {
 };
 
 const handleEditExpense = (transaction: Transaction) => {
+  if (transaction.type === 'supplier_payment') {
+    setEditingExpenseId(transaction.id);
+    setSupplierPaymentForm({
+      amount: String(transaction.amount || ''),
+      date: transaction.date || new Date().toISOString().split('T')[0],
+      supplier_id: transaction.supplier_id ? String(transaction.supplier_id) : '',
+      payment_method: transaction.payment_method || 'cash',
+      notes: transaction.notes || '',
+    });
+    setShowSupplierPaymentModal(true);
+    return;
+  }
+
   setEditingExpenseId(transaction.id);
   setExpenseForm({
-    movement_type: transaction.type === 'supplier_payment' ? 'supplier_payment' : 'expense',
+    movement_type: 'expense',
     amount: String(transaction.amount || ''),
     date: transaction.date || new Date().toISOString().split('T')[0],
     payment_method: transaction.payment_method || 'cash',
@@ -538,6 +548,18 @@ const openAddExpenseModal = () => {
   setShowExpenseModal(true);
 };
 
+const openSupplierPaymentModal = () => {
+  setEditingExpenseId(null);
+  setSupplierPaymentForm({
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    supplier_id: '',
+    payment_method: 'cash',
+    notes: '',
+  });
+  setShowSupplierPaymentModal(true);
+};
+
 const handleDeleteExpense = async (transaction: Transaction) => {
   const deleted = await deleteTransaction(Number(transaction.id));
   if (!deleted) return;
@@ -552,20 +574,14 @@ const handleSaveExpense = async () => {
   }
 
   const updated = await updateTransaction(Number(editingExpenseId), {
-    type: expenseForm.movement_type,
-    source: expenseForm.movement_type,
+    type: 'expense',
+    source: 'expense',
     amount: Number(expenseForm.amount),
     date: expenseForm.date,
     payment_method: expenseForm.payment_method,
     supplier_id: expenseForm.supplier_id ? Number(expenseForm.supplier_id) : null,
-    car_id:
-      expenseForm.movement_type === 'expense' && expenseForm.car_id
-        ? Number(expenseForm.car_id)
-        : null,
-    category:
-      expenseForm.movement_type === 'supplier_payment'
-        ? 'supplier_payment'
-        : expenseForm.category || null,
+    car_id: expenseForm.car_id ? Number(expenseForm.car_id) : null,
+    category: expenseForm.category || null,
     notes: expenseForm.notes || null,
   });
 
@@ -574,6 +590,65 @@ const handleSaveExpense = async () => {
   await reloadTransactions();
   setEditingExpenseId(null);
   setShowExpenseModal(false);
+};
+
+const handleSaveSupplierPayment = async () => {
+  if (!supplierPaymentForm.amount || Number(supplierPaymentForm.amount) <= 0) {
+    console.warn('Supplier payment amount must be greater than zero');
+    return;
+  }
+
+  if (!supplierPaymentForm.supplier_id) {
+    console.warn('Supplier is required');
+    return;
+  }
+
+  if (!supplierPaymentForm.payment_method) {
+    console.warn('Payment method is required');
+    return;
+  }
+
+  if (!['cash', 'card', 'bank'].includes(supplierPaymentForm.payment_method)) {
+    console.warn('Invalid supplier payment method');
+    return;
+  }
+
+  if (!editingExpenseId) {
+    const created = await addTransaction({
+      type: 'supplier_payment',
+      source: 'supplier_payment',
+      amount: Number(supplierPaymentForm.amount),
+      date: supplierPaymentForm.date,
+      payment_method: supplierPaymentForm.payment_method,
+      supplier_id: Number(supplierPaymentForm.supplier_id),
+      car_id: null,
+      category: 'supplier_payment',
+      notes: supplierPaymentForm.notes || null,
+    });
+
+    if (!created) {
+      console.error('Failed to add supplier payment transaction');
+      return;
+    }
+  } else {
+    const updated = await updateTransaction(Number(editingExpenseId), {
+      type: 'supplier_payment',
+      source: 'supplier_payment',
+      amount: Number(supplierPaymentForm.amount),
+      date: supplierPaymentForm.date,
+      payment_method: supplierPaymentForm.payment_method,
+      supplier_id: Number(supplierPaymentForm.supplier_id),
+      car_id: null,
+      category: 'supplier_payment',
+      notes: supplierPaymentForm.notes || null,
+    });
+
+    if (!updated) return;
+  }
+
+  await reloadTransactions();
+  setEditingExpenseId(null);
+  setShowSupplierPaymentModal(false);
 };
   useEffect(() => {
     if (activeWindow === 'Αυτοκίνητα' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα') {
@@ -1065,6 +1140,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           <FinanceExpenses
             expenseTransactions={expenseTransactions}
             onAddExpense={openAddExpenseModal}
+            onAddSupplierPayment={openSupplierPaymentModal}
             onEditExpense={handleEditExpense}
             onDeleteExpense={handleDeleteExpense}
           />
@@ -1402,31 +1478,6 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
       <div className="p-6 space-y-4">
         <label className="space-y-2 text-sm text-zinc-300 block">
-          <span>Τύπος Κίνησης</span>
-          <select
-            value={expenseForm.movement_type}
-            onChange={(event) =>
-              setExpenseForm({
-                ...expenseForm,
-                movement_type: event.target.value,
-                payment_method:
-                  event.target.value === 'supplier_payment' &&
-                  expenseForm.payment_method === 'credit'
-                    ? 'cash'
-                    : expenseForm.payment_method,
-                car_id: event.target.value === 'supplier_payment' ? '' : expenseForm.car_id,
-                category:
-                  event.target.value === 'supplier_payment' ? 'supplier_payment' : expenseForm.category,
-              })
-            }
-            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
-          >
-            <option value="expense">Έξοδο</option>
-            <option value="supplier_payment">Πληρωμή Προμηθευτή</option>
-          </select>
-        </label>
-
-        <label className="space-y-2 text-sm text-zinc-300 block">
           <span>Ποσό</span>
           <input
             value={expenseForm.amount}
@@ -1458,9 +1509,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             <option value="cash">Μετρητά</option>
             <option value="card">Κάρτα</option>
             <option value="bank">Τράπεζα</option>
-            {expenseForm.movement_type === 'expense' && (
-              <option value="credit">Επί Πιστώσει</option>
-            )}
+            <option value="credit">Επί Πιστώσει</option>
           </select>
         </label>
 
@@ -1480,9 +1529,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           </select>
         </label>
 
-        {expenseForm.movement_type === 'expense' && (
-          <>
-            <label className="space-y-2 text-sm text-zinc-300 block">
+        <>
+          <label className="space-y-2 text-sm text-zinc-300 block">
               <span>Αυτοκίνητο</span>
               <select
                 value={expenseForm.car_id}
@@ -1496,9 +1544,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                   </option>
                 ))}
               </select>
-            </label>
+          </label>
 
-            <label className="space-y-2 text-sm text-zinc-300 block">
+          <label className="space-y-2 text-sm text-zinc-300 block">
               <span>Κατηγορία</span>
               <select
                 value={expenseForm.category}
@@ -1512,9 +1560,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                   </option>
                 ))}
               </select>
-            </label>
-          </>
-        )}
+          </label>
+        </>
 
         <label className="space-y-2 text-sm text-zinc-300 block">
           <span>Σημειώσεις</span>
@@ -1540,6 +1587,122 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           <button
             type="button"
             onClick={handleSaveExpense}
+            className="rounded-2xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white hover:bg-rose-500"
+          >
+            Αποθήκευση
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+{showSupplierPaymentModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="w-full max-w-md rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl">
+      <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-800">
+        <h3 className="text-lg font-semibold text-white">Πληρωμή Προμηθευτή</h3>
+        <button
+          type="button"
+          onClick={() => {
+            setShowSupplierPaymentModal(false);
+            setEditingExpenseId(null);
+          }}
+          className="text-zinc-400 hover:text-white transition-colors p-2 rounded-lg"
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="p-6 space-y-4">
+        <label className="space-y-2 text-sm text-zinc-300 block">
+          <span>Ποσό</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={supplierPaymentForm.amount}
+            onChange={(event) =>
+              setSupplierPaymentForm({ ...supplierPaymentForm, amount: event.target.value })
+            }
+            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
+          />
+        </label>
+
+        <label className="space-y-2 text-sm text-zinc-300 block">
+          <span>Ημερομηνία</span>
+          <input
+            type="date"
+            value={supplierPaymentForm.date}
+            onChange={(event) =>
+              setSupplierPaymentForm({ ...supplierPaymentForm, date: event.target.value })
+            }
+            onClick={(event) => event.currentTarget.showPicker?.()}
+            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
+          />
+        </label>
+
+        <label className="space-y-2 text-sm text-zinc-300 block">
+          <span>Προμηθευτής</span>
+          <select
+            value={supplierPaymentForm.supplier_id}
+            onChange={(event) =>
+              setSupplierPaymentForm({ ...supplierPaymentForm, supplier_id: event.target.value })
+            }
+            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
+          >
+            <option value="">Επιλογή προμηθευτή</option>
+            {suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-2 text-sm text-zinc-300 block">
+          <span>Τρόπος Πληρωμής</span>
+          <select
+            value={supplierPaymentForm.payment_method}
+            onChange={(event) =>
+              setSupplierPaymentForm({
+                ...supplierPaymentForm,
+                payment_method: event.target.value,
+              })
+            }
+            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
+          >
+            <option value="cash">Μετρητά</option>
+            <option value="card">Κάρτα</option>
+            <option value="bank">Τράπεζα</option>
+          </select>
+        </label>
+
+        <label className="space-y-2 text-sm text-zinc-300 block">
+          <span>Σημειώσεις</span>
+          <textarea
+            value={supplierPaymentForm.notes}
+            onChange={(event) =>
+              setSupplierPaymentForm({ ...supplierPaymentForm, notes: event.target.value })
+            }
+            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500 min-h-24"
+          />
+        </label>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => {
+              setShowSupplierPaymentModal(false);
+              setEditingExpenseId(null);
+            }}
+            className="rounded-2xl border border-zinc-700 px-5 py-3 text-sm text-zinc-300"
+          >
+            Ακύρωση
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSaveSupplierPayment}
             className="rounded-2xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white hover:bg-rose-500"
           >
             Αποθήκευση

@@ -26,6 +26,7 @@ type FinanceTransaction = {
 interface FinanceExpensesProps {
   expenseTransactions: FinanceTransaction[];
   onAddExpense: () => void;
+  onAddSupplierPayment: () => void;
   onEditExpense: (transaction: FinanceTransaction) => void;
   onDeleteExpense: (transaction: FinanceTransaction) => void;
 }
@@ -33,6 +34,7 @@ interface FinanceExpensesProps {
 export default function FinanceExpenses({
   expenseTransactions,
   onAddExpense,
+  onAddSupplierPayment,
   onEditExpense,
   onDeleteExpense,
 }: FinanceExpensesProps) {
@@ -51,13 +53,22 @@ export default function FinanceExpenses({
           <h2 className="text-sm font-semibold text-white">Έξοδα</h2>
           <p className="mt-1 text-sm text-zinc-500">Πλήρης λίστα εξόδων και πληρωμών προμηθευτών.</p>
         </div>
-        <button
-          type="button"
-          onClick={onAddExpense}
-          className="rounded-2xl border border-rose-600 bg-rose-600/10 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-600/20"
-        >
-          + Καταχώρηση Εξόδου
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={onAddExpense}
+            className="rounded-2xl border border-rose-600 bg-rose-600/10 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-600/20"
+          >
+            + Καταχώρηση Εξόδου
+          </button>
+          <button
+            type="button"
+            onClick={onAddSupplierPayment}
+            className="rounded-2xl border border-rose-600 bg-rose-600/10 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-600/20"
+          >
+            Πληρωμή Προμηθευτή
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
@@ -80,7 +91,15 @@ export default function FinanceExpenses({
               <tr key={transaction.id} className="border-b border-zinc-800 hover:bg-zinc-900/60">
                 <td className="px-4 py-4 text-sm text-zinc-200">{formatDate(transaction.date)}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">
-                  {transaction.type === 'supplier_payment' ? 'Πληρωμή Προμηθευτή' : 'Έξοδο'}
+                  <span
+                    className={
+                      transaction.type === 'supplier_payment'
+                        ? 'rounded-full border border-sky-700 bg-sky-950/40 px-3 py-1 text-xs text-sky-200'
+                        : ''
+                    }
+                  >
+                    {transaction.type === 'supplier_payment' ? 'Πληρωμή Προμηθευτή' : 'Έξοδο'}
+                  </span>
                 </td>
                 <td className="px-4 py-4 text-sm text-white">{formatMoney(transaction.amount)}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{transaction.payment_method || '-'}</td>
