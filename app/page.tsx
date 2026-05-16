@@ -7,6 +7,7 @@ import Window from '@/components/Window';
 import FinanceOverview from '@/components/FinanceOverview';
 import FinanceIncome from '@/components/FinanceIncome';
 import FinanceExpenses from '@/components/FinanceExpenses';
+import ReportsCenter from '@/components/reports/ReportsCenter';
 import { fetchCars, addCar, deleteCar, updateCar } from '@/lib/carsApi';
 import {
   fetchTransactions,
@@ -25,8 +26,14 @@ import {
   updateIncomeEntry,
   updateIncomeTransactionLink,
 } from '@/lib/incomeApi';
-import { addBooking, updateBookingTransactionLink } from '@/lib/bookingsApi';
+import {
+  addBooking,
+  fetchBookings,
+  updateBookingTransactionLink,
+  type BookingRecord,
+} from '@/lib/bookingsApi';
 import { fetchSuppliers, type SupplierRecord } from '@/lib/suppliersApi';
+import { fetchSupplierLedger, type SupplierLedgerRow } from '@/lib/reportsApi';
 import {
   fetchExpenseCategories,
   seedDefaultExpenseCategories,
@@ -196,6 +203,8 @@ export default function Home() {
   const [representatives, setRepresentatives] = useState<Representative[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierRecord[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
+  const [bookings, setBookings] = useState<BookingRecord[]>([]);
+  const [supplierLedger, setSupplierLedger] = useState<SupplierLedgerRow[]>([]);
   const [newVehicle, setNewVehicle] = useState<Vehicle>({
     id: '',
     plate: '',
@@ -649,7 +658,12 @@ const handleSaveSupplierPayment = async () => {
   setShowSupplierPaymentModal(false);
 };
   useEffect(() => {
-    if (activeWindow === 'Αυτοκίνητα' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα') {
+    if (
+      activeWindow === 'Αυτοκίνητα' ||
+      activeWindow === 'Έσοδα' ||
+      activeWindow === 'Έξοδα' ||
+      activeWindow === 'Αναφορές'
+    ) {
       const loadCars = async () => {
         const cars = await fetchCars();
         const mappedCars = cars.map((car: any) => ({
@@ -672,6 +686,24 @@ const handleSaveSupplierPayment = async () => {
       };
       loadCars();
     }
+  }, [activeWindow]);
+
+  useEffect(() => {
+    if (activeWindow !== 'Αναφορές') {
+      return;
+    }
+
+    const loadReportsData = async () => {
+      const [bookingRows, supplierLedgerRows] = await Promise.all([
+        fetchBookings(),
+        fetchSupplierLedger(),
+      ]);
+
+      setBookings(bookingRows);
+      setSupplierLedger(supplierLedgerRows);
+    };
+
+    loadReportsData();
   }, [activeWindow]);
 
   useEffect(() => {
@@ -1156,74 +1188,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return <ExpenseCategoriesManager />;
       case 'Αναφορές':
         return (
-          <div className="space-y-5">
-            <section className="rounded-3xl border border-zinc-800 bg-zinc-950/90 p-5">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold text-white">Revenue by Agency</h2>
-                  <p className="mt-1 text-sm text-zinc-500">Έσοδα ανά πρακτορείο.</p>
-                </div>
-                <div className="grid w-full gap-3 sm:w-auto sm:grid-cols-2">
-                  <label className="space-y-2 text-sm text-zinc-300">
-                    <span>Από</span>
-                    <input
-                      type="date"
-                      value={fromDate}
-                      onChange={(event) => setFromDate(event.target.value)}
-                      onClick={(event) => event.currentTarget.showPicker?.()}
-                      className="w-full rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                    />
-                  </label>
-                  <label className="space-y-2 text-sm text-zinc-300">
-                    <span>Έως</span>
-                    <input
-                      type="date"
-                      value={toDate}
-                      onChange={(event) => setToDate(event.target.value)}
-                      onClick={(event) => event.currentTarget.showPicker?.()}
-                      className="w-full rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
-                    />
-                  </label>
-                </div>
-              </div>
-            </section>
-
-            <div className="overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
-              <table className="min-w-[900px] w-full text-left">
-                <thead>
-                  <tr className="border-b border-zinc-800 bg-zinc-900/80">
-                    <th className="px-4 py-3 text-sm text-zinc-400">Agency</th>
-                    <th className="px-4 py-3 text-sm text-zinc-400">Total Revenue</th>
-                    <th className="px-4 py-3 text-sm text-zinc-400">Cash</th>
-                    <th className="px-4 py-3 text-sm text-zinc-400">Card</th>
-                    <th className="px-4 py-3 text-sm text-zinc-400">Bank</th>
-                    <th className="px-4 py-3 text-sm text-zinc-400">Credit</th>
-                    <th className="px-4 py-3 text-sm text-zinc-400">Transactions Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {revenueByAgencyRows.map((row) => (
-                    <tr key={row.agencyId} className="border-b border-zinc-800 hover:bg-zinc-900/60">
-                      <td className="px-4 py-4 text-sm text-zinc-200">{row.agencyName}</td>
-                      <td className="px-4 py-4 text-sm text-white">{formatMoney(row.totalRevenue)}</td>
-                      <td className="px-4 py-4 text-sm text-zinc-200">{formatMoney(row.cash)}</td>
-                      <td className="px-4 py-4 text-sm text-zinc-200">{formatMoney(row.card)}</td>
-                      <td className="px-4 py-4 text-sm text-zinc-200">{formatMoney(row.bank)}</td>
-                      <td className="px-4 py-4 text-sm text-zinc-200">{formatMoney(row.credit)}</td>
-                      <td className="px-4 py-4 text-sm text-zinc-200">{row.transactionsCount}</td>
-                    </tr>
-                  ))}
-                  {revenueByAgencyRows.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="px-4 py-6 text-center text-sm text-zinc-400">
-                        Δεν βρέθηκαν έσοδα πρακτορείων.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <ReportsCenter
+            transactions={transactionsWithAgencyNames}
+            bookings={bookings}
+            agencies={agencies}
+            representatives={representatives}
+            supplierLedger={supplierLedger}
+            vehicles={vehicles.map((vehicle) => ({ id: vehicle.id, plate: vehicle.plate }))}
+          />
         );
       default:
         return null;
@@ -1301,6 +1273,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             title={getWindowTitle()}
             onClose={handleWindowClose}
             titleActions={getWindowActions()}
+            fullscreen={activeWindow === 'Αναφορές'}
           >
             {renderWindowContent()}
           </Window>

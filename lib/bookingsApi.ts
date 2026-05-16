@@ -1,5 +1,29 @@
 import { supabase } from './supabaseClient';
 
+export type BookingRecord = {
+  id: number;
+  car_id?: number | null;
+  amount?: number | null;
+  payment_method?: string | null;
+  agency_id?: number | null;
+  representative_id?: number | null;
+  contract_number?: string | null;
+  income_type?: string | null;
+  transaction_id?: number | null;
+  created_at?: string | null;
+};
+
+export const fetchBookings = async (): Promise<BookingRecord[]> => {
+  const { data, error } = await supabase.from('bookings').select('*').order('id', { ascending: false });
+
+  if (error) {
+    console.error('Fetch bookings error:', error);
+    return [];
+  }
+
+  return data || [];
+};
+
 export const addBooking = async (bookingData: any) => {
   const { data, error } = await supabase
     .from('bookings')

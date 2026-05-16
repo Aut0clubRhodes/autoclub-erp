@@ -1,0 +1,124 @@
+'use client';
+
+import { Fragment, useState } from 'react';
+import type { SupplierLedgerRow } from '@/lib/reportsApi';
+import type { ReportTransaction } from './types';
+
+type SuppliersReportProps = {
+  transactions: ReportTransaction[];
+  supplierLedger: SupplierLedgerRow[];
+};
+
+const money = (value: number) =>
+  `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+export default function SuppliersReport({ transactions, supplierLedger }: SuppliersReportProps) {
+  const [expandedSupplierId, setExpandedSupplierId] = useState<number | null>(null);
+  const rows = supplierLedger
+    .map((supplier) => {
+      const supplierTransactions = transactions.filter(
+        (transaction) => transaction.supplier_id === supplier.supplier_id
+      );
+      const totalPayments = supplierTransactions
+        .filter((transaction) => transaction.type === 'supplier_payment')
+        .reduce((sum, transaction) => sum + transaction.amount, 0);
+      const outstandingBalance = supplierTransactions.reduce((sum, transaction) => {
+        if (transaction.type === 'expense' && transaction.payment_method === 'credit') {
+          return sum + transaction.amount;
+        }
+
+        if (transaction.type === 'supplier_payment') {
+          return sum - transaction.amount;
+        }
+
+        return sum;
+      }, 0);
+
+      return {
+        ...supplier,
+        total_payments: totalPayments,
+        outstanding_balance: outstandingBalance,
+      };
+    })
+    .filter(
+      (supplier) =>
+        supplier.total_payments !== 0 ||
+        supplier.outstanding_balance !== 0 ||
+        transactions.some((transaction) => transaction.supplier_id === supplier.supplier_id)
+    );
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-zinc-800">
+      <table className="w-full min-w-[760px] text-left">
+        <thead className="bg-zinc-900/90">
+          <tr>
+            <th className="px-4 py-3 text-sm text-zinc-400">Προμηθευτής</th>
+            <th className="px-4 py-3 text-sm text-zinc-400">Πληρωμένα</th>
+            <th className="px-4 py-3 text-sm text-zinc-400">Υπόλοιπο Πίστωσης</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((supplier) => {
+            const expanded = expandedSupplierId === supplier.supplier_id;
+            const history = transactions
+              .filter(
+                (transaction) =>
+                  transaction.supplier_id === supplier.supplier_id &&
+                  ((transaction.type === 'expense' && transaction.payment_method === 'credit') ||
+                    transaction.type === 'supplier_payment')
+              )
+              .sort((left, right) => right.date.localeCompare(left.date));
+
+            return (
+              <Fragment key={supplier.supplier_id}>
+                <tr
+                  onClick={() => setExpandedSupplierId(expanded ? null : supplier.supplier_id)}
+                  className="cursor-pointer border-t border-zinc-800 hover:bg-zinc-900/60"
+                >
+                  <td className="px-4 py-4 text-sm text-white">{supplier.supplier_name}</td>
+                  <td className="px-4 py-4 text-sm text-zinc-200">{money(supplier.total_payments)}</td>
+                  <td className={`px-4 py-4 text-sm ${supplier.outstanding_balance > 0 ? 'text-rose-300' : 'text-zinc-200'}`}>
+                    {money(supplier.outstanding_balance)}
+                  </td>
+                </tr>
+                {expanded && (
+                  <tr className="border-t border-zinc-800 bg-zinc-950/80">
+                    <td colSpan={3} className="p-4">
+                      <div className="overflow-hidden rounded-2xl border border-zinc-800">
+                        <table className="w-full text-left">
+                          <thead className="bg-zinc-900/70">
+                            <tr>
+                              <th className="px-4 py-3 text-sm text-zinc-400">Ημερομηνία</th>
+                              <th className="px-4 py-3 text-sm text-zinc-400">Τύπος</th>
+                              <th className="px-4 py-3 text-sm text-zinc-400">Ποσό</th>
+                              <th className="px-4 py-3 text-sm text-zinc-400">Σημειώσεις</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {history.map((transaction) => (
+                              <tr key={transaction.id} className="border-t border-zinc-800">
+                                <td className="px-4 py-3 text-sm text-zinc-200">{transaction.date}</td>
+                                <td className="px-4 py-3 text-sm text-zinc-200">
+                                  {transaction.type === 'supplier_payment'
+                                    ? 'Πληρωμή Προμηθευτή'
+                                    : 'Χρέωση Πίστωσης'}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-zinc-200">{money(transaction.amount)}</td>
+                                <td className="px-4 py-3 text-sm text-zinc-200">{transaction.notes || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+      {rows.length === 0 && <p className="p-6 text-sm text-zinc-500">Δεν βρέθηκαν προμηθευτές.</p>}
+    </div>
+  );
+}
