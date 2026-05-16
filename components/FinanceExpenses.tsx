@@ -117,17 +117,17 @@ export default function FinanceExpenses({
       </div>
 
       <div className="w-fit max-w-full overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
-        <table className="w-max min-w-[1170px] text-left">
+        <table className="w-max min-w-[1130px] text-left">
           <colgroup>
             <col className="w-[95px]" />
-            <col className="w-[170px]" />
+            <col className="w-[168px]" />
             <col className="w-[95px]" />
             <col className="w-[120px]" />
-            <col className="w-[150px]" />
-            <col className="w-[110px]" />
-            <col className="w-[120px]" />
-            <col className="w-[120px]" />
-            <col className="w-[170px]" />
+            <col className="w-[145px]" />
+            <col className="w-[105px]" />
+            <col className="w-[115px]" />
+            <col className="w-[112px]" />
+            <col className="w-[160px]" />
           </colgroup>
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-900/80">

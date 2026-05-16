@@ -1167,7 +1167,13 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             setFromDate={setFromDate}
             setToDate={setToDate}
             totalIncome={totalIncome}
-            totalPaidOperationalExpenses={totalPaidOperationalExpenses}
+            totalIncomeCash={totalIncomeCash}
+            totalIncomeCard={totalIncomeCard}
+            totalIncomeBank={totalIncomeBank}
+            totalPaidExpenses={totalPaidExpenses}
+            totalExpensesCash={totalExpensesCash}
+            totalExpensesCard={totalExpensesCard}
+            totalExpensesBank={totalExpensesBank}
             totalSupplierPayments={totalSupplierPayments}
             totalSupplierCredits={totalSupplierCredits}
             netTotal={netTotal}
