@@ -12,6 +12,7 @@ import {
 export default function ExpenseCategoriesManager() {
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [newCategory, setNewCategory] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const loadCategories = async () => {
     const loadedCategories = await fetchExpenseCategories();
@@ -39,9 +40,18 @@ export default function ExpenseCategoriesManager() {
     loadCategories();
   };
 
-  const handleDeleteCategory = async (id: number) => {
-    const deleted = await deleteExpenseCategory(id);
-    if (!deleted) return;
+  const handleDeleteCategory = async (category: ExpenseCategory) => {
+    const confirmed = window.confirm(`Να διαγραφεί η κατηγορία "${category.name}";`);
+    if (!confirmed) return;
+
+    setErrorMessage('');
+    const deleted = await deleteExpenseCategory(category.id);
+    if (!deleted) {
+      const message = 'Η διαγραφή της κατηγορίας απέτυχε.';
+      console.error(message, category);
+      setErrorMessage(message);
+      return;
+    }
 
     loadCategories();
   };
@@ -65,6 +75,11 @@ export default function ExpenseCategoriesManager() {
       </div>
 
       <div className="space-y-3">
+        {errorMessage && (
+          <div className="rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+            {errorMessage}
+          </div>
+        )}
         {categories.map((category) => (
           <div
             key={category.id}
@@ -73,8 +88,12 @@ export default function ExpenseCategoriesManager() {
             <span className="text-white">{category.name}</span>
             <button
               type="button"
-              onClick={() => handleDeleteCategory(category.id)}
-              className="text-red-500 hover:text-red-400"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                handleDeleteCategory(category);
+              }}
+              className="pointer-events-auto text-red-500 hover:text-red-400"
             >
               Διαγραφή
             </button>

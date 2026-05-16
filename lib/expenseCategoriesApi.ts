@@ -68,12 +68,17 @@ export const addExpenseCategory = async (name: string) => {
   return data;
 };
 
-export const deleteExpenseCategory = async (id: number) => {
+export async function deleteExpenseCategory(id: number): Promise<boolean> {
   const { error } = await supabase.from('expense_categories').delete().eq('id', id);
   if (error) {
-    console.error('Delete expense category error:', error);
+    console.error('Delete expense category error:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
     return false;
   }
 
   return true;
-};
+}
