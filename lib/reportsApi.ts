@@ -1,5 +1,4 @@
 import { supabase } from './supabaseClient';
-import { fetchSuppliers } from './suppliersApi';
 
 export type SupplierLedgerRow = {
   supplier_id: number;
@@ -10,95 +9,58 @@ export type SupplierLedgerRow = {
 };
 
 export const fetchSupplierLedger = async (): Promise<SupplierLedgerRow[]> => {
-  const { data, error } = await supabase
-    .from('supplier_ledger_view')
-    .select('supplier_id, supplier_name, total_credit_charges, total_payments, outstanding_balance')
-    .order('supplier_name');
-
-  if (error) {
-    console.error('Fetch supplier ledger error:', {
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-      code: error.code,
-    });
-    return fetchSupplierLedgerFallback();
-  }
-
-  if (!data || data.length === 0) {
-    console.warn('Supplier ledger view returned no rows.');
-    return fetchSupplierLedgerFallback();
-  }
-
-  return (data || []).map((row) => ({
-    supplier_id: Number(row.supplier_id),
-    supplier_name: String(row.supplier_name ?? ''),
-    total_credit_charges: Number(row.total_credit_charges) || 0,
-    total_payments: Number(row.total_payments) || 0,
-    outstanding_balance: Number(row.outstanding_balance) || 0,
-  }));
-};
-
-const fetchSupplierLedgerFallback = async (): Promise<SupplierLedgerRow[]> => {
-  const [suppliers, transactionsResult] = await Promise.all([
-    fetchSuppliers(),
-    supabase
-      .from('transactions')
-      .select('supplier_id, type, payment_method, amount')
-      .not('supplier_id', 'is', null),
+  const [
+    { data: suppliers, error: suppliersError },
+    { data: transactions, error: transactionsError },
+  ] = await Promise.all([
+    supabase.from('suppliers').select('id, name'),
+    supabase.from('transactions').select('id, type, amount, payment_method, supplier_id'),
   ]);
 
-  if (transactionsResult.error) {
-    console.error('Fetch supplier ledger fallback transactions error:', {
-      message: transactionsResult.error.message,
-      details: transactionsResult.error.details,
-      hint: transactionsResult.error.hint,
-      code: transactionsResult.error.code,
+  if (suppliersError) {
+    console.error('Fetch supplier ledger suppliers error:', {
+      message: suppliersError.message,
+      details: suppliersError.details,
+      hint: suppliersError.hint,
+      code: suppliersError.code,
     });
     return [];
   }
 
-  const totalsBySupplier = new Map<
-    number,
-    { total_credit_charges: number; total_payments: number; outstanding_balance: number }
-  >();
+  if (transactionsError) {
+    console.error('Fetch supplier ledger transactions error:', {
+      message: transactionsError.message,
+      details: transactionsError.details,
+      hint: transactionsError.hint,
+      code: transactionsError.code,
+    });
+    return [];
+  }
 
-  (transactionsResult.data || []).forEach((transaction) => {
-    if (!transaction.supplier_id) return;
-
-    const supplierId = Number(transaction.supplier_id);
-    const amount = Number(transaction.amount) || 0;
-    const current = totalsBySupplier.get(supplierId) || {
-      total_credit_charges: 0,
-      total_payments: 0,
-      outstanding_balance: 0,
-    };
-
-    if (transaction.type === 'expense' && transaction.payment_method === 'credit') {
-      current.total_credit_charges += amount;
-      current.outstanding_balance += amount;
-    }
-
-    if (transaction.type === 'supplier_payment') {
-      current.total_payments += amount;
-      current.outstanding_balance -= amount;
-    }
-
-    totalsBySupplier.set(supplierId, current);
-  });
-
-  return suppliers
+  return (suppliers || [])
     .map((supplier) => {
-      const totals = totalsBySupplier.get(supplier.id) || {
-        total_credit_charges: 0,
-        total_payments: 0,
-        outstanding_balance: 0,
-      };
+      const supplierTransactions = (transactions || []).filter(
+        (transaction) => Number(transaction.supplier_id) === Number(supplier.id)
+      );
+
+      const creditCharges = supplierTransactions
+        .filter(
+          (transaction) =>
+            transaction.type === 'expense' &&
+            transaction.payment_method === 'credit'
+        )
+        .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+
+      const payments = supplierTransactions
+        .filter((transaction) => transaction.type === 'supplier_payment')
+        .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
 
       return {
-        supplier_id: supplier.id,
-        supplier_name: supplier.name,
-        ...totals,
+        supplier_id: Number(supplier.id),
+        supplier_name: String(supplier.name ?? ''),
+        total_credit_charges: creditCharges,
+        total_payments: payments,
+        outstanding_balance: creditCharges - payments,
       };
     })
     .sort((left, right) => left.supplier_name.localeCompare(right.supplier_name, 'el'));
