@@ -68,7 +68,9 @@ export const addExpenseCategory = async (name: string) => {
   return data;
 };
 
-export async function deleteExpenseCategory(id: number): Promise<boolean> {
+export async function deleteExpenseCategory(
+  id: number
+): Promise<{ success: boolean; error?: string; code?: string }> {
   const { error } = await supabase.from('expense_categories').delete().eq('id', id);
   if (error) {
     console.error('Delete expense category error:', {
@@ -77,8 +79,12 @@ export async function deleteExpenseCategory(id: number): Promise<boolean> {
       hint: error.hint,
       code: error.code,
     });
-    return false;
+    return {
+      success: false,
+      error: `${error.code || ''} ${error.message || ''} ${error.details || ''}`.trim(),
+      code: error.code,
+    };
   }
 
-  return true;
+  return { success: true };
 }

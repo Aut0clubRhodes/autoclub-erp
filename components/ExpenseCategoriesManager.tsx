@@ -44,16 +44,26 @@ export default function ExpenseCategoriesManager() {
     const confirmed = window.confirm(`Να διαγραφεί η κατηγορία "${category.name}";`);
     if (!confirmed) return;
 
+    const categoryId = Number(category.id);
+    console.log('Deleting category id:', categoryId, category.name);
     setErrorMessage('');
-    const deleted = await deleteExpenseCategory(category.id);
-    if (!deleted) {
-      const message = 'Η διαγραφή της κατηγορίας απέτυχε.';
-      console.error(message, category);
+    const result = await deleteExpenseCategory(categoryId);
+    if (!result.success) {
+      if (result.code === '401') {
+        console.error('Delete expense category unauthorized. DELETE policy may be missing.', result);
+      }
+
+      const message =
+        result.code === '409' || result.code === '23503'
+          ? 'Δεν μπορεί να διαγραφεί γιατί χρησιμοποιείται σε καταχωρήσεις εξόδων.'
+          : `Δεν έγινε διαγραφή: ${result.error || ''}`.trim();
+
+      alert(message);
       setErrorMessage(message);
       return;
     }
 
-    loadCategories();
+    setCategories((current) => current.filter((item) => item.id !== categoryId));
   };
 
   return (
