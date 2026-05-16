@@ -75,45 +75,40 @@ export const updateIncomeEntry = async (
   return data;
 };
 
-export const deleteIncomeEntry = async (id: number) => {
-  const { error } = await supabase
-    .from('income_entries')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
-    console.error('Income entry delete error:', error);
-    return false;
-  }
-
-  return true;
-};
-
-export const findIncomeEntryByTransactionId = async (transactionId: number) => {
+export const deleteIncomeEntryById = async (id: number) => {
   const { data, error } = await supabase
     .from('income_entries')
-    .select('id')
-    .eq('transaction_id', transactionId)
-    .maybeSingle();
+    .delete()
+    .eq('id', id)
+    .select();
 
-  if (error) {
-    console.error('Income entry lookup error:', error);
-    return null;
-  }
-
-  return data;
+  return { data, error };
 };
 
-export const deleteIncomeEntriesByTransactionId = async (transactionId: number) => {
-  const { error } = await supabase
+export const deleteIncomeEntryByTransactionId = async (transactionId: number) => {
+  const { data, error } = await supabase
     .from('income_entries')
     .delete()
+    .eq('transaction_id', transactionId)
+    .select();
+
+  return { data, error };
+};
+
+export const verifyIncomeEntryById = async (id: number) => {
+  const { data, error } = await supabase
+    .from('income_entries')
+    .select('*')
+    .eq('id', id);
+
+  return { data: data || [], error };
+};
+
+export const verifyIncomeEntriesByTransactionId = async (transactionId: number) => {
+  const { data, error } = await supabase
+    .from('income_entries')
+    .select('*')
     .eq('transaction_id', transactionId);
 
-  if (error) {
-    console.error('Income entry delete by transaction error:', error);
-    return false;
-  }
-
-  return true;
+  return { data: data || [], error };
 };

@@ -63,6 +63,7 @@ export default function FinanceExpenses({
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-900/80">
               <th className="px-4 py-3 text-sm text-zinc-400">Ημερομηνία</th>
+              <th className="px-4 py-3 text-sm text-zinc-400">Τύπος Κίνησης</th>
               <th className="px-4 py-3 text-sm text-zinc-400">Ποσό</th>
               <th className="px-4 py-3 text-sm text-zinc-400">Τρόπος Πληρωμής</th>
               <th className="px-4 py-3 text-sm text-zinc-400">Προμηθευτής</th>
@@ -76,6 +77,9 @@ export default function FinanceExpenses({
             {expenseTransactions.map((transaction) => (
               <tr key={transaction.id} className="border-b border-zinc-800 hover:bg-zinc-900/60">
                 <td className="px-4 py-4 text-sm text-zinc-200">{formatDate(transaction.date)}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">
+                  {transaction.type === 'supplier_payment' ? 'Πληρωμή Προμηθευτή' : 'Έξοδο'}
+                </td>
                 <td className="px-4 py-4 text-sm text-white">{formatMoney(transaction.amount)}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{transaction.payment_method || '-'}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{transaction.supplier || '-'}</td>
@@ -104,7 +108,7 @@ export default function FinanceExpenses({
             ))}
             {expenseTransactions.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-sm text-zinc-400">
+                <td colSpan={9} className="px-4 py-6 text-center text-sm text-zinc-400">
                   Δεν βρέθηκαν συναλλαγές.
                 </td>
               </tr>

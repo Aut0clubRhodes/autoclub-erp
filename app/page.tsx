@@ -14,22 +14,16 @@ import {
   getTransactionById,
   updateTransaction,
   deleteTransaction,
+  deleteIncomeFull,
 } from '@/lib/financeApi';
 import AgenciesManager from '@/components/AgenciesManager';
 import { supabase } from '@/lib/supabaseClient';
 import {
   addIncomeEntry,
-  deleteIncomeEntry,
-  deleteIncomeEntriesByTransactionId,
-  findIncomeEntryByTransactionId,
   updateIncomeEntry,
   updateIncomeTransactionLink,
 } from '@/lib/incomeApi';
-import {
-  addBooking,
-  deleteBooking,
-  updateBookingTransactionLink,
-} from '@/lib/bookingsApi';
+import { addBooking, updateBookingTransactionLink } from '@/lib/bookingsApi';
 type WindowType =
   | 'Αυτοκίνητα'
   | 'Ταμείο'
@@ -169,7 +163,9 @@ export default function Home() {
     notes: '',
   });
   const [expenseForm, setExpenseForm] = useState({
+    movement_type: 'expense',
     amount: '',
+    date: new Date().toISOString().split('T')[0],
     payment_method: 'cash',
     supplier: '',
     car_id: '',
@@ -244,6 +240,8 @@ if (!incomeEntry) {
   return;
 }
 
+console.log('CREATED INCOME ENTRY ID', incomeEntry.id);
+
 const newTransaction = await addTransaction({
   type: 'income',
   source: incomeForm.income_type,
@@ -260,10 +258,15 @@ const newTransaction = await addTransaction({
 });
 
 if (newTransaction?.id) {
+  console.log('CREATED TRANSACTION ID', newTransaction.id);
   await updateIncomeTransactionLink(
     incomeEntry.id,
     newTransaction.id
   );
+  console.log('LINKED INCOME ENTRY TO TRANSACTION', {
+    income_entry_id: incomeEntry.id,
+    transaction_id: newTransaction.id,
+  });
 
   if (booking?.id) {
     await updateBookingTransactionLink(
@@ -369,41 +372,11 @@ const handleEditIncome = (transaction: Transaction) => {
 };
 
 const handleDeleteIncome = async (transaction: Transaction) => {
-  const persistedTransaction = await getTransactionById(Number(transaction.id));
-  console.log('DELETE TRANSACTION', persistedTransaction);
-
-  const fallbackIncomeEntry = await findIncomeEntryByTransactionId(Number(transaction.id));
-  const incomeEntryId =
-    (persistedTransaction?.income_entry_id ? String(persistedTransaction.income_entry_id) : '') ||
-    transaction.income_entry_id ||
-    (fallbackIncomeEntry?.id ? String(fallbackIncomeEntry.id) : '');
-  const bookingId =
-    (persistedTransaction?.booking_id ? String(persistedTransaction.booking_id) : '') ||
-    transaction.booking_id ||
-    '';
-
-  if (incomeEntryId) {
-    console.log('DELETE INCOME ENTRY ID', incomeEntryId);
-    await deleteIncomeEntry(Number(incomeEntryId));
-  } else {
-    console.log('DELETE INCOME ENTRY BY TRANSACTION ID', transaction.id);
-    await deleteIncomeEntriesByTransactionId(Number(transaction.id));
+  const result = await deleteIncomeFull(Number(transaction.id));
+  if (result.error) {
+    console.error('Income delete RPC error:', result.error);
+    return;
   }
-
-  if (bookingId) {
-    console.log('DELETE BOOKING ID', bookingId);
-    try {
-      const bookingDeleted = await deleteBooking(Number(bookingId));
-      if (!bookingDeleted) {
-        console.warn('Booking delete failed, continuing income deletion:', bookingId);
-      }
-    } catch (error) {
-      console.warn('Booking delete failed, continuing income deletion:', bookingId, error);
-    }
-  }
-
-  const deleted = await deleteTransaction(Number(transaction.id));
-  if (!deleted) return;
 
   await reloadTransactions();
 };
@@ -452,15 +425,27 @@ const handleAddExpense = async () => {
     return;
   }
 
+  if (expenseForm.movement_type === 'supplier_payment' && !expenseForm.supplier.trim()) {
+    console.warn('Supplier is required');
+    return;
+  }
+
+  // Financial expenses are stored in transactions; the Expenses tab does not use the legacy expenses table.
   const newTransaction = await addTransaction({
-    type: 'expense',
-    source: 'expense',
+    type: expenseForm.movement_type,
+    source: expenseForm.movement_type,
     amount: Number(expenseForm.amount),
-    date: new Date().toISOString().split('T')[0],
+    date: expenseForm.date,
     payment_method: expenseForm.payment_method,
     supplier: expenseForm.supplier || null,
-    car_id: expenseForm.car_id ? Number(expenseForm.car_id) : null,
-    category: expenseForm.category || undefined,
+    car_id:
+      expenseForm.movement_type === 'expense' && expenseForm.car_id
+        ? Number(expenseForm.car_id)
+        : null,
+    category:
+      expenseForm.movement_type === 'supplier_payment'
+        ? 'supplier_payment'
+        : expenseForm.category || undefined,
     notes: expenseForm.notes || null,
   });
 
@@ -494,7 +479,9 @@ const handleAddExpense = async () => {
   );
 
   setExpenseForm({
+    movement_type: 'expense',
     amount: '',
+    date: new Date().toISOString().split('T')[0],
     payment_method: 'cash',
     supplier: '',
     car_id: '',
@@ -508,12 +495,29 @@ const handleAddExpense = async () => {
 const handleEditExpense = (transaction: Transaction) => {
   setEditingExpenseId(transaction.id);
   setExpenseForm({
+    movement_type: transaction.type === 'supplier_payment' ? 'supplier_payment' : 'expense',
     amount: String(transaction.amount || ''),
+    date: transaction.date || new Date().toISOString().split('T')[0],
     payment_method: transaction.payment_method || 'cash',
     supplier: transaction.supplier || '',
     car_id: transaction.car_id ? String(transaction.car_id) : '',
     category: transaction.category || '',
     notes: transaction.notes || '',
+  });
+  setShowExpenseModal(true);
+};
+
+const openAddExpenseModal = () => {
+  setEditingExpenseId(null);
+  setExpenseForm({
+    movement_type: 'expense',
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    payment_method: 'cash',
+    supplier: '',
+    car_id: '',
+    category: '',
+    notes: '',
   });
   setShowExpenseModal(true);
 };
@@ -532,11 +536,20 @@ const handleSaveExpense = async () => {
   }
 
   const updated = await updateTransaction(Number(editingExpenseId), {
+    type: expenseForm.movement_type,
+    source: expenseForm.movement_type,
     amount: Number(expenseForm.amount),
+    date: expenseForm.date,
     payment_method: expenseForm.payment_method,
     supplier: expenseForm.supplier || null,
-    car_id: expenseForm.car_id ? Number(expenseForm.car_id) : null,
-    category: expenseForm.category || null,
+    car_id:
+      expenseForm.movement_type === 'expense' && expenseForm.car_id
+        ? Number(expenseForm.car_id)
+        : null,
+    category:
+      expenseForm.movement_type === 'supplier_payment'
+        ? 'supplier_payment'
+        : expenseForm.category || null,
     notes: expenseForm.notes || null,
   });
 
@@ -873,9 +886,20 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   });
 
   const incomeTransactions = financeTransactions.filter((transaction) => transaction.type === 'income');
-  const expenseTransactions = financeTransactions.filter((transaction) => transaction.type === 'expense' || transaction.type === 'supplier_payment');
-  const paidExpenseTransactions = financeTransactions.filter((transaction) => transaction.type === 'expense');
-  const supplierCreditTransactions = financeTransactions.filter((transaction) => transaction.type === 'supplier_payment');
+  // Expenses UI is sourced only from transactions rows.
+  const expenseTransactions = financeTransactions.filter(
+    (transaction) => transaction.type === 'expense' || transaction.type === 'supplier_payment'
+  );
+  const paidExpenseTransactions = financeTransactions.filter(
+    (transaction) =>
+      transaction.type === 'expense' &&
+      ['cash', 'card', 'bank'].includes(String(transaction.payment_method).toLowerCase())
+  );
+  const supplierCreditTransactions = financeTransactions.filter(
+    (transaction) =>
+      transaction.type === 'expense' &&
+      String(transaction.payment_method).toLowerCase() === 'credit'
+  );
 
   const sumAmount = (items: Transaction[]) => items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const sumMethod = (items: Transaction[], method: string) =>
@@ -889,7 +913,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const totalExpensesBank = sumMethod(expenseTransactions, 'bank');
   const totalExpensesCredit = sumMethod(expenseTransactions, 'credit');
   const totalIncome = sumAmount(incomeTransactions);
-  const totalExpenses = sumAmount(expenseTransactions);
+  const totalExpenses = sumAmount(financeTransactions.filter((transaction) => transaction.type === 'expense'));
   const totalPaidExpenses = sumAmount(paidExpenseTransactions);
   const totalSupplierCredits = sumAmount(supplierCreditTransactions);
   const netTotal = totalIncome - totalPaidExpenses;
@@ -1002,7 +1026,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return (
           <FinanceExpenses
             expenseTransactions={expenseTransactions}
-            onAddExpense={() => setShowExpenseModal(true)}
+            onAddExpense={openAddExpenseModal}
             onEditExpense={handleEditExpense}
             onDeleteExpense={handleDeleteExpense}
           />
@@ -1342,10 +1366,46 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
       <div className="p-6 space-y-4">
         <label className="space-y-2 text-sm text-zinc-300 block">
+          <span>Τύπος Κίνησης</span>
+          <select
+            value={expenseForm.movement_type}
+            onChange={(event) =>
+              setExpenseForm({
+                ...expenseForm,
+                movement_type: event.target.value,
+                payment_method:
+                  event.target.value === 'supplier_payment' &&
+                  expenseForm.payment_method === 'credit'
+                    ? 'cash'
+                    : expenseForm.payment_method,
+                car_id: event.target.value === 'supplier_payment' ? '' : expenseForm.car_id,
+                category:
+                  event.target.value === 'supplier_payment' ? 'supplier_payment' : expenseForm.category,
+              })
+            }
+            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
+          >
+            <option value="expense">Έξοδο</option>
+            <option value="supplier_payment">Πληρωμή Προμηθευτή</option>
+          </select>
+        </label>
+
+        <label className="space-y-2 text-sm text-zinc-300 block">
           <span>Ποσό</span>
           <input
             value={expenseForm.amount}
             onChange={(event) => setExpenseForm({ ...expenseForm, amount: event.target.value })}
+            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
+          />
+        </label>
+
+        <label className="space-y-2 text-sm text-zinc-300 block">
+          <span>Ημερομηνία</span>
+          <input
+            type="date"
+            value={expenseForm.date}
+            onChange={(event) => setExpenseForm({ ...expenseForm, date: event.target.value })}
+            onClick={(event) => event.currentTarget.showPicker?.()}
             className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
           />
         </label>
@@ -1362,8 +1422,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             <option value="cash">Μετρητά</option>
             <option value="card">Κάρτα</option>
             <option value="bank">Τράπεζα</option>
-            <option value="credit">Επί Πιστώσει</option>
-            <option value="other">Άλλο</option>
+            {expenseForm.movement_type === 'expense' && (
+              <option value="credit">Επί Πιστώσει</option>
+            )}
           </select>
         </label>
 
@@ -1376,30 +1437,46 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           />
         </label>
 
-        <label className="space-y-2 text-sm text-zinc-300 block">
-          <span>Αυτοκίνητο</span>
-          <select
-            value={expenseForm.car_id}
-            onChange={(event) => setExpenseForm({ ...expenseForm, car_id: event.target.value })}
-            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
-          >
-            <option value="">Επιλογή αυτοκινήτου</option>
-            {vehicles.map((vehicle) => (
-              <option key={vehicle.id} value={vehicle.id}>
-                {vehicle.plate}
-              </option>
-            ))}
-          </select>
-        </label>
+        {expenseForm.movement_type === 'expense' && (
+          <>
+            <label className="space-y-2 text-sm text-zinc-300 block">
+              <span>Αυτοκίνητο</span>
+              <select
+                value={expenseForm.car_id}
+                onChange={(event) => setExpenseForm({ ...expenseForm, car_id: event.target.value })}
+                className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
+              >
+                <option value="">Γενικό έξοδο επιχείρησης</option>
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>
+                    {vehicle.plate}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <label className="space-y-2 text-sm text-zinc-300 block">
-          <span>Κατηγορία</span>
-          <input
-            value={expenseForm.category}
-            onChange={(event) => setExpenseForm({ ...expenseForm, category: event.target.value })}
-            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
-          />
-        </label>
+            <label className="space-y-2 text-sm text-zinc-300 block">
+              <span>Κατηγορία</span>
+              <select
+                value={expenseForm.category}
+                onChange={(event) => setExpenseForm({ ...expenseForm, category: event.target.value })}
+                className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
+              >
+                <option value="">Επιλογή κατηγορίας</option>
+                <option value="Service">Service</option>
+                <option value="Insurance">Ασφάλεια</option>
+                <option value="KTEO">ΚΤΕΟ</option>
+                <option value="Tyres">Λάστιχα</option>
+                <option value="Road Tax">Τέλη Κυκλοφορίας</option>
+                <option value="Rent">Ενοίκιο</option>
+                <option value="Office Supplies">Αναλώσιμα Γραφείου</option>
+                <option value="Accountant">Λογιστής</option>
+                <option value="Public Fees">Δημόσιο / Παράβολα</option>
+                <option value="Other">Άλλο</option>
+              </select>
+            </label>
+          </>
+        )}
 
         <label className="space-y-2 text-sm text-zinc-300 block">
           <span>Σημειώσεις</span>

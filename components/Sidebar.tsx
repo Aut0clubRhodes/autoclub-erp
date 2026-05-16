@@ -35,7 +35,6 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Ταμείο', href: '/finance', icon: '💰' },
       { label: 'Έσοδα', href: '/finance/income', icon: '🧾' },
       { label: 'Έξοδα', href: '/finance/expenses', icon: '📤' },
-      { label: 'Προμηθευτές', href: '/suppliers', icon: '🏢' },
       { label: 'Αναφορές', href: '/reports', icon: '📈' },
     ],
   },
@@ -43,6 +42,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'ΣΥΣΤΗΜΑ',
    items: [
   { label: 'Πρακτορεία', href: '/agencies', icon: '🏢' },
+  { label: 'Προμηθευτές', href: '/suppliers', icon: '🏢' },
   { label: 'Ρυθμίσεις', href: '/settings', icon: '⚙️' },
 ],
   },

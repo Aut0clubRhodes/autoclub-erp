@@ -72,7 +72,10 @@ export async function getTransactionById(id: number) {
 export async function updateTransaction(
   id: number,
   updates: {
+    type?: string;
+    source?: string;
     amount?: number;
+    date?: string;
     payment_method?: string;
     car_id?: number | null;
     agency_id?: number | null;
@@ -110,4 +113,16 @@ export async function deleteTransaction(id: number) {
   }
 
   return true;
+}
+
+export async function deleteIncomeFull(transactionId: number) {
+  const { data, error } = await supabase.rpc('delete_income_full', {
+    p_transaction_id: transactionId,
+  });
+
+  if (error) {
+    return { data: null, error };
+  }
+
+  return { data, error: null };
 }
