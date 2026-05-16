@@ -17,8 +17,8 @@ const sections: { id: ReportSection; label: string }[] = [
 ];
 
 const initialFilters: ReportsFilters = {
-  fromDate: '',
-  toDate: '',
+  fromDate: '2026-01-01',
+  toDate: '2026-12-31',
   paymentMethod: '',
   agencyId: '',
   representativeId: '',

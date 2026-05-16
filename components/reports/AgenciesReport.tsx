@@ -11,158 +11,155 @@ type AgenciesReportProps = {
   representatives: ReportRepresentative[];
 };
 
+type MonthlyRow = {
+  id: string;
+  name: string;
+  months: number[];
+  total: number;
+};
+
+const months = ['Ιαν', 'Φεβ', 'Μαρ', 'Απρ', 'Μάι', 'Ιουν', 'Ιουλ', 'Αυγ', 'Σεπ', 'Οκτ', 'Νοε', 'Δεκ'];
+
 const money = (value: number) =>
   `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function AgenciesReport({
   transactions,
-  bookings,
+  bookings: _bookings,
   agencies,
   representatives,
 }: AgenciesReportProps) {
   const [expandedAgencyId, setExpandedAgencyId] = useState<string | null>(null);
-  const [expandedRepresentativeId, setExpandedRepresentativeId] = useState<string | null>(null);
   const incomeTransactions = transactions.filter((transaction) => transaction.type === 'income');
 
-  const rows = agencies
-    .map((agency) => {
-      const agencyTransactions = incomeTransactions.filter(
-        (transaction) => transaction.agency_id === String(agency.id)
-      );
-      const agencyBookings = bookings.filter((booking) => booking.agency_id === agency.id);
-      const revenue = agencyTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
-      return {
-        agency,
-        revenue,
-        bookingsCount: agencyBookings.length,
-        averageBooking: agencyBookings.length ? revenue / agencyBookings.length : 0,
-      };
-    })
-    .filter((row) => row.revenue > 0 || row.bookingsCount > 0)
-    .sort((left, right) => right.revenue - left.revenue);
+  const agencyRows = agencies
+    .map((agency) => buildMonthlyRow(String(agency.id), agency.name, incomeTransactions, 'agency_id'))
+    .filter((row) => row.total > 0)
+    .sort((left, right) => right.total - left.total);
+
+  const totalsRow = agencyRows.reduce(
+    (totals, row) => ({
+      months: totals.months.map((value, index) => value + row.months[index]),
+      total: totals.total + row.total,
+    }),
+    { months: Array.from({ length: 12 }, () => 0), total: 0 }
+  );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-800">
-      <table className="w-full min-w-[760px] text-left">
-        <thead className="bg-zinc-900/90">
+    <div className="overflow-x-auto rounded-2xl border border-zinc-800">
+      <table className="min-w-[1420px] w-full border-separate border-spacing-0 text-left">
+        <thead className="bg-zinc-900/95">
           <tr>
-            <th className="px-4 py-3 text-sm text-zinc-400">Πρακτορείο</th>
-            <th className="px-4 py-3 text-sm text-zinc-400">Τζίρος</th>
-            <th className="px-4 py-3 text-sm text-zinc-400">Κρατήσεις</th>
-            <th className="px-4 py-3 text-sm text-zinc-400">Μέσο Booking</th>
+            <th className="sticky left-0 z-10 border-b border-zinc-800 bg-zinc-900/95 px-4 py-3 text-sm text-zinc-400">
+              Πρακτορείο
+            </th>
+            {months.map((month) => (
+              <th key={month} className="border-b border-zinc-800 px-4 py-3 text-sm text-zinc-400">
+                {month}
+              </th>
+            ))}
+            <th className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 text-sm font-semibold text-white">
+              Σύνολο
+            </th>
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ agency, revenue, bookingsCount, averageBooking }) => {
-            const isExpanded = expandedAgencyId === String(agency.id);
-            const agencyRepresentatives = representatives.filter(
-              (representative) => representative.agency_id === agency.id
-            );
+          {agencyRows.map((agencyRow) => {
+            const isExpanded = expandedAgencyId === agencyRow.id;
+            const representativeRows = representatives
+              .filter((representative) => String(representative.agency_id) === agencyRow.id)
+              .map((representative) =>
+                buildMonthlyRow(
+                  String(representative.id),
+                  representative.name,
+                  incomeTransactions,
+                  'representative_id'
+                )
+              )
+              .filter((row) => row.total > 0)
+              .sort((left, right) => right.total - left.total);
 
             return (
-              <Fragment key={agency.id}>
+              <Fragment key={agencyRow.id}>
                 <tr
-                  onClick={() => {
-                    setExpandedAgencyId(isExpanded ? null : String(agency.id));
-                    setExpandedRepresentativeId(null);
-                  }}
-                  className="cursor-pointer border-t border-zinc-800 hover:bg-zinc-900/60"
+                  onClick={() => setExpandedAgencyId(isExpanded ? null : agencyRow.id)}
+                  className="cursor-pointer hover:bg-zinc-900/60"
                 >
-                  <td className="px-4 py-4 text-sm text-white">{agency.name}</td>
-                  <td className="px-4 py-4 text-sm text-zinc-200">{money(revenue)}</td>
-                  <td className="px-4 py-4 text-sm text-zinc-200">{bookingsCount}</td>
-                  <td className="px-4 py-4 text-sm text-zinc-200">{money(averageBooking)}</td>
-                </tr>
-                {isExpanded && (
-                  <tr className="border-t border-zinc-800 bg-zinc-950/80">
-                    <td colSpan={4} className="p-4">
-                      <div className="overflow-hidden rounded-2xl border border-zinc-800">
-                        <table className="w-full text-left">
-                          <thead className="bg-zinc-900/70">
-                            <tr>
-                              <th className="px-4 py-3 text-sm text-zinc-400">Representative</th>
-                              <th className="px-4 py-3 text-sm text-zinc-400">Τζίρος</th>
-                              <th className="px-4 py-3 text-sm text-zinc-400">Κρατήσεις</th>
-                              <th className="px-4 py-3 text-sm text-zinc-400">Μέσο Booking</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {agencyRepresentatives.map((representative) => {
-                              const repTransactions = agencyTransactions(transactions, representative.id);
-                              const repBookings = bookings.filter(
-                                (booking) => booking.representative_id === representative.id
-                              );
-                              const repRevenue = repTransactions.reduce(
-                                (sum, transaction) => sum + transaction.amount,
-                                0
-                              );
-                              const repExpanded =
-                                expandedRepresentativeId === String(representative.id);
-
-                              return (
-                                <Fragment key={representative.id}>
-                                  <tr
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      setExpandedRepresentativeId(
-                                        repExpanded ? null : String(representative.id)
-                                      );
-                                    }}
-                                    className="cursor-pointer border-t border-zinc-800 hover:bg-zinc-900/60"
-                                  >
-                                    <td className="px-4 py-3 text-sm text-white">{representative.name}</td>
-                                    <td className="px-4 py-3 text-sm text-zinc-200">{money(repRevenue)}</td>
-                                    <td className="px-4 py-3 text-sm text-zinc-200">{repBookings.length}</td>
-                                    <td className="px-4 py-3 text-sm text-zinc-200">
-                                      {money(repBookings.length ? repRevenue / repBookings.length : 0)}
-                                    </td>
-                                  </tr>
-                                  {repExpanded && (
-                                    <tr className="border-t border-zinc-800 bg-zinc-950">
-                                      <td colSpan={4} className="p-4">
-                                        <div className="space-y-2">
-                                          {repTransactions
-                                            .slice()
-                                            .sort((left, right) => right.date.localeCompare(left.date))
-                                            .map((transaction) => (
-                                              <div
-                                                key={transaction.id}
-                                                className="grid gap-2 rounded-xl border border-zinc-800 px-4 py-3 text-sm text-zinc-300 md:grid-cols-[120px_120px_1fr]"
-                                              >
-                                                <span>{transaction.date}</span>
-                                                <span>{money(transaction.amount)}</span>
-                                                <span>{transaction.contract_number || transaction.notes || '-'}</span>
-                                              </div>
-                                            ))}
-                                          {repTransactions.length === 0 && (
-                                            <p className="text-sm text-zinc-500">Δεν υπάρχουν κινήσεις.</p>
-                                          )}
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  )}
-                                </Fragment>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                  <td className="sticky left-0 z-[1] border-b border-zinc-800 bg-zinc-950 px-4 py-4 text-sm font-medium text-white">
+                    {agencyRow.name}
+                  </td>
+                  {agencyRow.months.map((value, index) => (
+                    <td key={`${agencyRow.id}-${months[index]}`} className="border-b border-zinc-800 px-4 py-4 text-sm text-zinc-200">
+                      {money(value)}
                     </td>
-                  </tr>
-                )}
+                  ))}
+                  <td className="border-b border-zinc-800 bg-zinc-900/70 px-4 py-4 text-sm font-semibold text-white">
+                    {money(agencyRow.total)}
+                  </td>
+                </tr>
+                {isExpanded &&
+                  representativeRows.map((representativeRow) => (
+                    <tr key={representativeRow.id} className="bg-zinc-950/80">
+                      <td className="sticky left-0 z-[1] border-b border-zinc-800 bg-zinc-950/95 px-4 py-3 pl-8 text-sm text-zinc-300">
+                        {representativeRow.name}
+                      </td>
+                      {representativeRow.months.map((value, index) => (
+                        <td
+                          key={`${representativeRow.id}-${months[index]}`}
+                          className="border-b border-zinc-800 px-4 py-3 text-sm text-zinc-300"
+                        >
+                          {money(value)}
+                        </td>
+                      ))}
+                      <td className="border-b border-zinc-800 bg-zinc-900/40 px-4 py-3 text-sm font-medium text-zinc-100">
+                        {money(representativeRow.total)}
+                      </td>
+                    </tr>
+                  ))}
               </Fragment>
             );
           })}
         </tbody>
+        <tfoot>
+          <tr className="bg-zinc-900/95">
+            <td className="sticky left-0 z-10 border-t border-zinc-700 bg-zinc-900/95 px-4 py-4 text-sm font-semibold text-white">
+              Σύνολο
+            </td>
+            {totalsRow.months.map((value, index) => (
+              <td key={`total-${months[index]}`} className="border-t border-zinc-700 px-4 py-4 text-sm font-semibold text-white">
+                {money(value)}
+              </td>
+            ))}
+            <td className="border-t border-zinc-700 bg-zinc-800 px-4 py-4 text-sm font-semibold text-white">
+              {money(totalsRow.total)}
+            </td>
+          </tr>
+        </tfoot>
       </table>
-      {rows.length === 0 && <p className="p-6 text-sm text-zinc-500">Δεν βρέθηκαν δεδομένα.</p>}
+      {agencyRows.length === 0 && <p className="p-6 text-sm text-zinc-500">Δεν βρέθηκαν έσοδα πρακτορείων.</p>}
     </div>
   );
 }
 
-const agencyTransactions = (transactions: ReportTransaction[], representativeId: number) =>
-  transactions.filter(
-    (transaction) =>
-      transaction.type === 'income' &&
-      transaction.representative_id === String(representativeId)
-  );
+function buildMonthlyRow(
+  id: string,
+  name: string,
+  transactions: ReportTransaction[],
+  key: 'agency_id' | 'representative_id'
+): MonthlyRow {
+  const rowTransactions = transactions.filter((transaction) => transaction[key] === id);
+  const monthlyRevenue = Array.from({ length: 12 }, () => 0);
+
+  rowTransactions.forEach((transaction) => {
+    const date = new Date(transaction.date);
+    if (Number.isNaN(date.getTime())) return;
+    monthlyRevenue[date.getMonth()] += transaction.amount;
+  });
+
+  return {
+    id,
+    name,
+    months: monthlyRevenue,
+    total: monthlyRevenue.reduce((sum, value) => sum + value, 0),
+  };
+}
