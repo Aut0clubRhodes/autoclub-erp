@@ -24,7 +24,7 @@ export default function Window({
           fullscreen
             ? 'max-w-[1480px] h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)]'
             : wide
-              ? 'w-[min(1180px,90vw)] max-w-none h-[min(760px,86vh)] max-h-[86vh]'
+              ? 'w-[min(1180px,90vw)] max-w-none h-[min(700px,78vh)] max-h-[78vh]'
               : 'max-w-[1100px] h-[700px] max-h-[90vh]'
         }`}
       >
