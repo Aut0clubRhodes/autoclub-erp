@@ -72,58 +72,65 @@ export default function FinanceExpenses({
       </div>
 
       <div className="overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
-        <table className="min-w-[980px] w-full text-left">
+        <table className="w-full min-w-[940px] table-fixed text-left">
+          <colgroup>
+            <col className="w-[92px]" />
+            <col className="w-[145px]" />
+            <col className="w-[90px]" />
+            <col className="w-[120px]" />
+            <col className="w-[120px]" />
+            <col className="w-[95px]" />
+            <col className="w-[120px]" />
+            <col />
+            <col className="w-[150px]" />
+          </colgroup>
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-900/80">
-              <th className="px-4 py-3 text-sm text-zinc-400">Ημερομηνία</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Τύπος Κίνησης</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Ποσό</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Τρόπος Πληρωμής</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Προμηθευτής</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Αυτοκίνητο</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Κατηγορία</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Σημειώσεις</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Ενέργειες</th>
+              {['Ημερομηνία', 'Τύπος Κίνησης', 'Ποσό', 'Τρόπος Πληρωμής', 'Προμηθευτής', 'Αυτοκίνητο', 'Κατηγορία', 'Σημειώσεις', 'Ενέργειες'].map((label) => (
+                <th key={label} className="px-3 py-3 text-xs font-medium text-zinc-400">
+                  {label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {expenseTransactions.map((transaction) => (
               <tr key={transaction.id} className="border-b border-zinc-800 hover:bg-zinc-900/60">
-                <td className="px-4 py-4 text-sm text-zinc-200">{formatDate(transaction.date)}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">
+                <td className="px-3 py-3 text-xs text-zinc-200">{formatDate(transaction.date)}</td>
+                <td className="px-3 py-3 text-xs text-zinc-200">
                   <span
                     className={
                       transaction.type === 'supplier_payment'
-                        ? 'rounded-full border border-sky-700 bg-sky-950/40 px-3 py-1 text-xs text-sky-200'
+                        ? 'rounded-full border border-sky-700 bg-sky-950/40 px-2.5 py-1 text-[11px] text-sky-200'
                         : ''
                     }
                   >
                     {transaction.type === 'supplier_payment' ? 'Πληρωμή Προμηθευτή' : 'Έξοδο'}
                   </span>
                 </td>
-                <td className="px-4 py-4 text-sm text-white">{formatMoney(transaction.amount)}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.payment_method || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.supplier_name || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">
+                <td className="px-3 py-3 text-xs font-medium text-white">{formatMoney(transaction.amount)}</td>
+                <td className="px-3 py-3 text-xs text-zinc-200">{transaction.payment_method || '-'}</td>
+                <td className="px-3 py-3 text-xs text-zinc-200">{transaction.supplier_name || '-'}</td>
+                <td className="px-3 py-3 text-xs text-zinc-200">
                   {transaction.type === 'supplier_payment' ? '-' : transaction.car_plate || '-'}
                 </td>
-                <td className="px-4 py-4 text-sm text-zinc-200">
+                <td className="px-3 py-3 text-xs text-zinc-200">
                   {transaction.type === 'supplier_payment' ? '-' : transaction.category || '-'}
                 </td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.notes || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">
-                  <div className="flex gap-2">
+                <td className="whitespace-normal break-words px-3 py-3 text-xs text-zinc-200">{transaction.notes || '-'}</td>
+                <td className="px-3 py-3 text-xs text-zinc-200">
+                  <div className="flex gap-1.5">
                     <button
                       type="button"
                       onClick={() => onEditExpense(transaction)}
-                      className="rounded-xl border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900"
+                      className="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] text-zinc-200 hover:bg-zinc-900"
                     >
                       Επεξεργασία
                     </button>
                     <button
                       type="button"
                       onClick={() => onDeleteExpense(transaction)}
-                      className="rounded-xl border border-red-700 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40"
+                      className="rounded-lg border border-red-700 px-2.5 py-1.5 text-[11px] text-red-300 hover:bg-red-950/40"
                     >
                       Διαγραφή
                     </button>

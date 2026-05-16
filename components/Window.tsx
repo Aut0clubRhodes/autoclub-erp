@@ -6,14 +6,26 @@ interface WindowProps {
   children: React.ReactNode;
   titleActions?: React.ReactNode;
   fullscreen?: boolean;
+  wide?: boolean;
 }
 
-export default function Window({ title, onClose, children, titleActions, fullscreen = false }: WindowProps) {
+export default function Window({
+  title,
+  onClose,
+  children,
+  titleActions,
+  fullscreen = false,
+  wide = false,
+}: WindowProps) {
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
       <div
         className={`bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-xl shadow-2xl w-full flex flex-col overflow-hidden ${
-          fullscreen ? 'max-w-[1480px] h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)]' : 'max-w-[1100px] h-[700px] max-h-[90vh]'
+          fullscreen
+            ? 'max-w-[1480px] h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)]'
+            : wide
+              ? 'w-[min(1180px,92vw)] max-w-none h-[min(760px,86vh)] max-h-[86vh]'
+              : 'max-w-[1100px] h-[700px] max-h-[90vh]'
         }`}
       >
         {/* Title Bar */}

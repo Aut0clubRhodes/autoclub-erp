@@ -61,44 +61,51 @@ export default function FinanceIncome({
       </div>
 
       <div className="overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
-        <table className="min-w-[980px] w-full text-left">
+        <table className="w-full min-w-[920px] table-fixed text-left">
+          <colgroup>
+            <col className="w-[92px]" />
+            <col className="w-[105px]" />
+            <col className="w-[94px]" />
+            <col className="w-[120px]" />
+            <col className="w-[95px]" />
+            <col className="w-[120px]" />
+            <col className="w-[125px]" />
+            <col />
+            <col className="w-[150px]" />
+          </colgroup>
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-900/80">
-              <th className="px-4 py-3 text-sm text-zinc-400">Ημερομηνία</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Συμβόλαιο</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Ποσό</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Τρόπος Πληρωμής</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Αυτοκίνητο</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Πρακτορείο</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Αντιπρόσωπος</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Σημειώσεις</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Ενέργειες</th>
+              {['Ημερομηνία', 'Συμβόλαιο', 'Ποσό', 'Τρόπος Πληρωμής', 'Αυτοκίνητο', 'Πρακτορείο', 'Αντιπρόσωπος', 'Σημειώσεις', 'Ενέργειες'].map((label) => (
+                <th key={label} className="px-3 py-3 text-xs font-medium text-zinc-400">
+                  {label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {incomeTransactions.map((transaction) => (
               <tr key={transaction.id} className="border-b border-zinc-800 hover:bg-zinc-900/60">
-                <td className="px-4 py-4 text-sm text-zinc-200">{formatDate(transaction.date)}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.contract_number || '-'}</td>
-                <td className="px-4 py-4 text-sm text-white">{formatMoney(transaction.amount)}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{formatPaymentMethod(transaction.payment_method)}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.car_plate || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.agency || formatRelatedValue('Πρακτορείο', transaction.agency_id)}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.representative || formatRelatedValue('Αντιπρόσωπος', transaction.representative_id)}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.notes || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">
-                  <div className="flex gap-2">
+                <td className="px-3 py-3 text-xs text-zinc-200">{formatDate(transaction.date)}</td>
+                <td className="px-3 py-3 text-xs text-zinc-200">{transaction.contract_number || '-'}</td>
+                <td className="px-3 py-3 text-xs font-medium text-white">{formatMoney(transaction.amount)}</td>
+                <td className="px-3 py-3 text-xs text-zinc-200">{formatPaymentMethod(transaction.payment_method)}</td>
+                <td className="px-3 py-3 text-xs text-zinc-200">{transaction.car_plate || '-'}</td>
+                <td className="px-3 py-3 text-xs text-zinc-200">{transaction.agency || formatRelatedValue('Πρακτορείο', transaction.agency_id)}</td>
+                <td className="px-3 py-3 text-xs text-zinc-200">{transaction.representative || formatRelatedValue('Αντιπρόσωπος', transaction.representative_id)}</td>
+                <td className="whitespace-normal break-words px-3 py-3 text-xs text-zinc-200">{transaction.notes || '-'}</td>
+                <td className="px-3 py-3 text-xs text-zinc-200">
+                  <div className="flex gap-1.5">
                     <button
                       type="button"
                       onClick={() => onEditIncome(transaction)}
-                      className="rounded-xl border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900"
+                      className="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] text-zinc-200 hover:bg-zinc-900"
                     >
                       Επεξεργασία
                     </button>
                     <button
                       type="button"
                       onClick={() => onDeleteIncome(transaction)}
-                      className="rounded-xl border border-red-700 px-3 py-2 text-xs text-red-300 hover:bg-red-950/40"
+                      className="rounded-lg border border-red-700 px-2.5 py-1.5 text-[11px] text-red-300 hover:bg-red-950/40"
                     >
                       Διαγραφή
                     </button>

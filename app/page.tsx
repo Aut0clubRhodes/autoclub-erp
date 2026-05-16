@@ -1063,6 +1063,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const totalExpensesCredit = sumMethod(expenseTransactions, 'credit');
   const totalIncome = sumAmount(incomeTransactions);
   const totalExpenses = sumAmount(financeTransactions.filter((transaction) => transaction.type === 'expense'));
+  const totalPaidOperationalExpenses = sumAmount(
+    financeTransactions.filter(
+      (transaction) =>
+        transaction.type === 'expense' &&
+        ['cash', 'card', 'bank'].includes(String(transaction.payment_method).toLowerCase())
+    )
+  );
+  const totalSupplierPayments = sumAmount(supplierPaymentTransactions);
   const totalPaidExpenses = sumAmount(paidExpenseTransactions);
   const totalSupplierCredits =
     sumAmount(supplierCreditTransactions) - sumAmount(supplierPaymentTransactions);
@@ -1159,7 +1167,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             setFromDate={setFromDate}
             setToDate={setToDate}
             totalIncome={totalIncome}
-            totalPaidExpenses={totalPaidExpenses}
+            totalPaidOperationalExpenses={totalPaidOperationalExpenses}
+            totalSupplierPayments={totalSupplierPayments}
             totalSupplierCredits={totalSupplierCredits}
             netTotal={netTotal}
           />
@@ -1274,6 +1283,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             onClose={handleWindowClose}
             titleActions={getWindowActions()}
             fullscreen={activeWindow === 'Αναφορές'}
+            wide={activeWindow === 'Ταμείο' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα'}
           >
             {renderWindowContent()}
           </Window>
