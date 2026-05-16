@@ -104,8 +104,12 @@ export default function FinanceExpenses({
                 <td className="px-4 py-4 text-sm text-white">{formatMoney(transaction.amount)}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{transaction.payment_method || '-'}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{transaction.supplier_name || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.car_plate || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{transaction.category || '-'}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">
+                  {transaction.type === 'supplier_payment' ? '-' : transaction.car_plate || '-'}
+                </td>
+                <td className="px-4 py-4 text-sm text-zinc-200">
+                  {transaction.type === 'supplier_payment' ? '-' : transaction.category || '-'}
+                </td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{transaction.notes || '-'}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">
                   <div className="flex gap-2">

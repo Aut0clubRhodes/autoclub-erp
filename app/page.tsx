@@ -621,8 +621,6 @@ const handleSaveSupplierPayment = async () => {
       date: supplierPaymentForm.date,
       payment_method: supplierPaymentForm.payment_method,
       supplier_id: Number(supplierPaymentForm.supplier_id),
-      car_id: null,
-      category: 'supplier_payment',
       notes: supplierPaymentForm.notes || null,
     });
 
@@ -639,7 +637,7 @@ const handleSaveSupplierPayment = async () => {
       payment_method: supplierPaymentForm.payment_method,
       supplier_id: Number(supplierPaymentForm.supplier_id),
       car_id: null,
-      category: 'supplier_payment',
+      category: null,
       notes: supplierPaymentForm.notes || null,
     });
 
@@ -1003,15 +1001,21 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const expenseTransactions = financeTransactions.filter(
     (transaction) => transaction.type === 'expense' || transaction.type === 'supplier_payment'
   );
-  const paidExpenseTransactions = financeTransactions.filter(
-    (transaction) =>
-      transaction.type === 'expense' &&
-      ['cash', 'card', 'bank'].includes(String(transaction.payment_method).toLowerCase())
-  );
+  const paidExpenseTransactions = financeTransactions.filter((transaction) => {
+    const paymentMethod = String(transaction.payment_method).toLowerCase();
+    return (
+      (transaction.type === 'expense' && ['cash', 'card', 'bank'].includes(paymentMethod)) ||
+      (transaction.type === 'supplier_payment' &&
+        ['cash', 'card', 'bank'].includes(paymentMethod))
+    );
+  });
   const supplierCreditTransactions = financeTransactions.filter(
     (transaction) =>
       transaction.type === 'expense' &&
       String(transaction.payment_method).toLowerCase() === 'credit'
+  );
+  const supplierPaymentTransactions = financeTransactions.filter(
+    (transaction) => transaction.type === 'supplier_payment'
   );
 
   const sumAmount = (items: Transaction[]) => items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -1028,7 +1032,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const totalIncome = sumAmount(incomeTransactions);
   const totalExpenses = sumAmount(financeTransactions.filter((transaction) => transaction.type === 'expense'));
   const totalPaidExpenses = sumAmount(paidExpenseTransactions);
-  const totalSupplierCredits = sumAmount(supplierCreditTransactions);
+  const totalSupplierCredits =
+    sumAmount(supplierCreditTransactions) - sumAmount(supplierPaymentTransactions);
   const netTotal = totalIncome - totalPaidExpenses;
   const availableRepresentatives = representatives.filter(
     (representative) => String(representative.agency_id) === incomeForm.agency_id
