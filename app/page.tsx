@@ -1289,6 +1289,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             onClose={handleWindowClose}
             titleActions={getWindowActions()}
             fullscreen={activeWindow === 'Αναφορές'}
+            financeDashboard={activeWindow === 'Ταμείο'}
             wide={activeWindow === 'Ταμείο' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα'}
           >
             {renderWindowContent()}
