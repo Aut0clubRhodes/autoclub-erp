@@ -61,7 +61,7 @@ export default function FinanceIncome({
       </div>
 
       <div className="overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
-        <table className="w-full min-w-[920px] table-fixed text-left">
+        <table className="w-full min-w-[920px] text-left">
           <colgroup>
             <col className="w-[92px]" />
             <col className="w-[105px]" />
