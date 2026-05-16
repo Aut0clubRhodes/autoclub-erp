@@ -47,18 +47,25 @@ export default function AgenciesReport({
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-zinc-800">
-      <table className="min-w-[1420px] w-full border-separate border-spacing-0 text-left">
+      <table className="w-full min-w-[1060px] table-fixed border-separate border-spacing-0 text-left">
+        <colgroup>
+          <col className="w-[160px]" />
+          {months.map((month) => (
+            <col key={`col-${month}`} className="w-[70px]" />
+          ))}
+          <col className="w-[90px]" />
+        </colgroup>
         <thead className="bg-zinc-900/95">
           <tr>
-            <th className="sticky left-0 z-10 border-b border-zinc-800 bg-zinc-900/95 px-4 py-3 text-sm text-zinc-400">
+            <th className="sticky left-0 z-10 max-w-[160px] border-b border-zinc-800 bg-zinc-900/95 px-3 py-2.5 text-sm text-zinc-400">
               Πρακτορείο
             </th>
             {months.map((month) => (
-              <th key={month} className="border-b border-zinc-800 px-4 py-3 text-sm text-zinc-400">
+              <th key={month} className="border-b border-zinc-800 px-2 py-2.5 text-center text-xs text-zinc-400">
                 {month}
               </th>
             ))}
-            <th className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 text-sm font-semibold text-white">
+            <th className="border-b border-zinc-800 bg-zinc-900 px-3 py-2.5 text-right text-sm font-semibold text-white">
               Σύνολο
             </th>
           </tr>
@@ -85,33 +92,36 @@ export default function AgenciesReport({
                   onClick={() => setExpandedAgencyId(isExpanded ? null : agencyRow.id)}
                   className="cursor-pointer hover:bg-zinc-900/60"
                 >
-                  <td className="sticky left-0 z-[1] border-b border-zinc-800 bg-zinc-950 px-4 py-4 text-sm font-medium text-white">
+                  <td className="sticky left-0 z-[1] max-w-[160px] truncate border-b border-zinc-800 bg-zinc-950 px-3 py-3 text-sm font-medium text-white">
                     {agencyRow.name}
                   </td>
                   {agencyRow.months.map((value, index) => (
-                    <td key={`${agencyRow.id}-${months[index]}`} className="border-b border-zinc-800 px-4 py-4 text-sm text-zinc-200">
+                    <td
+                      key={`${agencyRow.id}-${months[index]}`}
+                      className="border-b border-zinc-800 px-2 py-3 text-right text-xs text-zinc-200"
+                    >
                       {money(value)}
                     </td>
                   ))}
-                  <td className="border-b border-zinc-800 bg-zinc-900/70 px-4 py-4 text-sm font-semibold text-white">
+                  <td className="border-b border-zinc-800 bg-zinc-900/70 px-3 py-3 text-right text-sm font-semibold text-white">
                     {money(agencyRow.total)}
                   </td>
                 </tr>
                 {isExpanded &&
                   representativeRows.map((representativeRow) => (
                     <tr key={representativeRow.id} className="bg-zinc-950/80">
-                      <td className="sticky left-0 z-[1] border-b border-zinc-800 bg-zinc-950/95 px-4 py-3 pl-8 text-sm text-zinc-300">
+                      <td className="sticky left-0 z-[1] max-w-[160px] truncate border-b border-zinc-800 bg-zinc-950/95 px-3 py-2.5 pl-6 text-sm text-zinc-300">
                         {representativeRow.name}
                       </td>
                       {representativeRow.months.map((value, index) => (
                         <td
                           key={`${representativeRow.id}-${months[index]}`}
-                          className="border-b border-zinc-800 px-4 py-3 text-sm text-zinc-300"
+                          className="border-b border-zinc-800 px-2 py-2.5 text-right text-xs text-zinc-300"
                         >
                           {money(value)}
                         </td>
                       ))}
-                      <td className="border-b border-zinc-800 bg-zinc-900/40 px-4 py-3 text-sm font-medium text-zinc-100">
+                      <td className="border-b border-zinc-800 bg-zinc-900/40 px-3 py-2.5 text-right text-sm font-medium text-zinc-100">
                         {money(representativeRow.total)}
                       </td>
                     </tr>
@@ -122,15 +132,18 @@ export default function AgenciesReport({
         </tbody>
         <tfoot>
           <tr className="bg-zinc-900/95">
-            <td className="sticky left-0 z-10 border-t border-zinc-700 bg-zinc-900/95 px-4 py-4 text-sm font-semibold text-white">
+            <td className="sticky left-0 z-10 border-t border-zinc-700 bg-zinc-900/95 px-3 py-3 text-sm font-semibold text-white">
               Σύνολο
             </td>
             {totalsRow.months.map((value, index) => (
-              <td key={`total-${months[index]}`} className="border-t border-zinc-700 px-4 py-4 text-sm font-semibold text-white">
+              <td
+                key={`total-${months[index]}`}
+                className="border-t border-zinc-700 px-2 py-3 text-right text-xs font-semibold text-white"
+              >
                 {money(value)}
               </td>
             ))}
-            <td className="border-t border-zinc-700 bg-zinc-800 px-4 py-4 text-sm font-semibold text-white">
+            <td className="border-t border-zinc-700 bg-zinc-800 px-3 py-3 text-right text-sm font-semibold text-white">
               {money(totalsRow.total)}
             </td>
           </tr>

@@ -15,8 +15,17 @@ export const fetchSupplierLedger = async (): Promise<SupplierLedgerRow[]> => {
     .order('supplier_name');
 
   if (error) {
-    console.error('Fetch supplier ledger error:', error);
+    console.error('Fetch supplier ledger error:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
     return [];
+  }
+
+  if (!data || data.length === 0) {
+    console.warn('Supplier ledger view returned no rows.');
   }
 
   return (data || []).map((row) => ({

@@ -6,7 +6,12 @@ export async function fetchCars() {
     .select('*');
 
   if (error) {
-    console.log(error);
+    console.error('Fetch cars error:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
     return [];
   }
 

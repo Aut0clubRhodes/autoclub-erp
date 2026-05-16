@@ -17,7 +17,11 @@ export default function CarsReport({ transactions, vehicles }: CarsReportProps) 
   const [expandedCarId, setExpandedCarId] = useState<string | null>(null);
   const rows = vehicles
     .map((vehicle) => {
-      const carTransactions = transactions.filter((transaction) => transaction.car_id === vehicle.id);
+      const carTransactions = transactions.filter(
+        (transaction) => transaction.car_id && String(transaction.car_id) === vehicle.id
+      );
+      // TODO: General business expenses without car_id must later be split across active fleet count:
+      // general expense / number of cars = allocated overhead per car.
       const income = carTransactions
         .filter((transaction) => transaction.type === 'income')
         .reduce((sum, transaction) => sum + transaction.amount, 0);

@@ -14,10 +14,38 @@ const money = (value: number) =>
 
 export default function SuppliersReport({ transactions, supplierLedger }: SuppliersReportProps) {
   const [expandedSupplierId, setExpandedSupplierId] = useState<number | null>(null);
-  const rows = supplierLedger
+  const suppliersFromTransactions = Array.from(
+    transactions.reduce((rows, transaction) => {
+      if (!transaction.supplier_id) return rows;
+
+      if (!rows.has(transaction.supplier_id)) {
+        rows.set(transaction.supplier_id, {
+          supplier_id: transaction.supplier_id,
+          supplier_name: transaction.supplier_name || `Προμηθευτής #${transaction.supplier_id}`,
+          total_credit_charges: 0,
+          total_payments: 0,
+          outstanding_balance: 0,
+        });
+      }
+
+      return rows;
+    }, new Map<number, SupplierLedgerRow>())
+  ).map(([, supplier]) => supplier);
+
+  const supplierRows =
+    supplierLedger.length > 0
+      ? supplierLedger
+      : suppliersFromTransactions;
+
+  const rows = supplierRows
     .map((supplier) => {
       const supplierTransactions = transactions.filter(
         (transaction) => transaction.supplier_id === supplier.supplier_id
+      );
+      const hasFilteredSupplierActivity = supplierTransactions.some(
+        (transaction) =>
+          (transaction.type === 'expense' && transaction.payment_method === 'credit') ||
+          transaction.type === 'supplier_payment'
       );
       const totalPayments = supplierTransactions
         .filter((transaction) => transaction.type === 'supplier_payment')
@@ -36,15 +64,16 @@ export default function SuppliersReport({ transactions, supplierLedger }: Suppli
 
       return {
         ...supplier,
-        total_payments: totalPayments,
-        outstanding_balance: outstandingBalance,
+        total_payments: hasFilteredSupplierActivity ? totalPayments : supplier.total_payments,
+        outstanding_balance: hasFilteredSupplierActivity
+          ? outstandingBalance
+          : supplier.outstanding_balance,
       };
     })
     .filter(
       (supplier) =>
         supplier.total_payments !== 0 ||
-        supplier.outstanding_balance !== 0 ||
-        transactions.some((transaction) => transaction.supplier_id === supplier.supplier_id)
+        supplier.outstanding_balance !== 0
     );
 
   return (
