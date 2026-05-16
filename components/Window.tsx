@@ -20,12 +20,12 @@ export default function Window({
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
       <div
-        className={`bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-xl shadow-2xl w-full flex flex-col overflow-hidden ${
+        className={`bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-xl shadow-2xl flex flex-col overflow-hidden ${
           fullscreen
-            ? 'max-w-[1480px] h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)]'
+            ? 'w-full max-w-[1480px] h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)]'
             : wide
-              ? 'w-[min(1180px,90vw)] max-w-none h-[min(700px,78vh)] max-h-[78vh]'
-              : 'max-w-[1100px] h-[700px] max-h-[90vh]'
+              ? 'w-fit max-w-[min(1220px,92vw)] h-[min(700px,78vh)] max-h-[78vh]'
+              : 'w-full max-w-[1100px] h-[700px] max-h-[90vh]'
         }`}
       >
         {/* Title Bar */}

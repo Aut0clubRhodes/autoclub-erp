@@ -71,7 +71,7 @@ export default function FinanceExpenses({
         </div>
       </div>
 
-      <div className="max-w-[1180px] overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
+      <div className="w-fit max-w-full overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
         <table className="w-max min-w-[1170px] text-left">
           <colgroup>
             <col className="w-[95px]" />
