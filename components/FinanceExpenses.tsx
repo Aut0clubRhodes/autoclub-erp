@@ -71,18 +71,18 @@ export default function FinanceExpenses({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
-        <table className="w-full min-w-[980px] text-left">
+      <div className="max-w-[1180px] overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
+        <table className="w-max min-w-[1170px] text-left">
           <colgroup>
-            <col className="w-[96px]" />
-            <col className="w-[145px]" />
-            <col className="w-[96px]" />
-            <col className="w-[128px]" />
-            <col className="w-[140px]" />
+            <col className="w-[95px]" />
+            <col className="w-[170px]" />
             <col className="w-[95px]" />
             <col className="w-[120px]" />
-            <col />
-            <col className="w-[138px]" />
+            <col className="w-[150px]" />
+            <col className="w-[110px]" />
+            <col className="w-[120px]" />
+            <col className="w-[120px]" />
+            <col className="w-[170px]" />
           </colgroup>
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-900/80">
@@ -96,8 +96,8 @@ export default function FinanceExpenses({
           <tbody>
             {expenseTransactions.map((transaction) => (
               <tr key={transaction.id} className="border-b border-zinc-800 hover:bg-zinc-900/60">
-                <td className="px-3 py-3 text-xs text-zinc-200">{formatDate(transaction.date)}</td>
-                <td className="px-3 py-3 text-xs text-zinc-200">
+                <td className="px-3 py-3.5 text-[13px] text-zinc-200">{formatDate(transaction.date)}</td>
+                <td className="whitespace-nowrap px-3 py-3.5 text-[13px] text-zinc-200">
                   <span
                     className={
                       transaction.type === 'supplier_payment'
@@ -108,17 +108,17 @@ export default function FinanceExpenses({
                     {transaction.type === 'supplier_payment' ? 'Πληρωμή Προμηθευτή' : 'Έξοδο'}
                   </span>
                 </td>
-                <td className="px-3 py-3 text-xs font-medium text-white">{formatMoney(transaction.amount)}</td>
-                <td className="px-3 py-3 text-xs text-zinc-200">{transaction.payment_method || '-'}</td>
-                <td className="px-3 py-3 text-xs text-zinc-200">{transaction.supplier_name || '-'}</td>
-                <td className="px-3 py-3 text-xs text-zinc-200">
+                <td className="px-3 py-3.5 text-[13px] font-medium text-white">{formatMoney(transaction.amount)}</td>
+                <td className="px-3 py-3.5 text-[13px] text-zinc-200">{transaction.payment_method || '-'}</td>
+                <td className="px-3 py-3.5 text-[13px] text-zinc-200">{transaction.supplier_name || '-'}</td>
+                <td className="px-3 py-3.5 text-[13px] text-zinc-200">
                   {transaction.type === 'supplier_payment' ? '-' : transaction.car_plate || '-'}
                 </td>
-                <td className="px-3 py-3 text-xs text-zinc-200">
+                <td className="px-3 py-3.5 text-[13px] text-zinc-200">
                   {transaction.type === 'supplier_payment' ? '-' : transaction.category || '-'}
                 </td>
-                <td className="whitespace-normal break-words px-3 py-3 text-xs text-zinc-200">{transaction.notes || '-'}</td>
-                <td className="px-3 py-3 text-xs text-zinc-200">
+                <td className="whitespace-normal break-words px-3 py-3.5 text-[13px] text-zinc-200">{transaction.notes || '-'}</td>
+                <td className="px-3 py-3.5 text-[13px] text-zinc-200">
                   <div className="flex gap-1.5">
                     <button
                       type="button"

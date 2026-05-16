@@ -60,18 +60,18 @@ export default function FinanceIncome({
         <p className="mt-1 text-sm text-zinc-500">Πλήρης λίστα καταχωρήσεων εσόδων.</p>
       </div>
 
-      <div className="overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
-        <table className="w-full min-w-[960px] text-left">
+      <div className="max-w-[1180px] overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
+        <table className="w-max min-w-[1090px] text-left">
           <colgroup>
-            <col className="w-[96px]" />
-            <col className="w-[118px]" />
-            <col className="w-[96px]" />
-            <col className="w-[128px]" />
-            <col className="w-[108px]" />
+            <col className="w-[95px]" />
+            <col className="w-[110px]" />
+            <col className="w-[95px]" />
+            <col className="w-[130px]" />
             <col className="w-[120px]" />
-            <col className="w-[125px]" />
-            <col />
-            <col className="w-[138px]" />
+            <col className="w-[120px]" />
+            <col className="w-[130px]" />
+            <col className="w-[120px]" />
+            <col className="w-[170px]" />
           </colgroup>
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-900/80">
@@ -85,15 +85,15 @@ export default function FinanceIncome({
           <tbody>
             {incomeTransactions.map((transaction) => (
               <tr key={transaction.id} className="border-b border-zinc-800 hover:bg-zinc-900/60">
-                <td className="px-3 py-3 text-xs text-zinc-200">{formatDate(transaction.date)}</td>
-                <td className="px-3 py-3 text-xs text-zinc-200">{transaction.contract_number || '-'}</td>
-                <td className="px-3 py-3 text-xs font-medium text-white">{formatMoney(transaction.amount)}</td>
-                <td className="px-3 py-3 text-xs text-zinc-200">{formatPaymentMethod(transaction.payment_method)}</td>
-                <td className="px-3 py-3 text-xs text-zinc-200">{transaction.car_plate || '-'}</td>
-                <td className="px-3 py-3 text-xs text-zinc-200">{transaction.agency || formatRelatedValue('Πρακτορείο', transaction.agency_id)}</td>
-                <td className="px-3 py-3 text-xs text-zinc-200">{transaction.representative || formatRelatedValue('Αντιπρόσωπος', transaction.representative_id)}</td>
-                <td className="whitespace-normal break-words px-3 py-3 text-xs text-zinc-200">{transaction.notes || '-'}</td>
-                <td className="px-3 py-3 text-xs text-zinc-200">
+                <td className="px-3 py-3.5 text-[13px] text-zinc-200">{formatDate(transaction.date)}</td>
+                <td className="px-3 py-3.5 text-[13px] text-zinc-200">{transaction.contract_number || '-'}</td>
+                <td className="px-3 py-3.5 text-[13px] font-medium text-white">{formatMoney(transaction.amount)}</td>
+                <td className="px-3 py-3.5 text-[13px] text-zinc-200">{formatPaymentMethod(transaction.payment_method)}</td>
+                <td className="px-3 py-3.5 text-[13px] text-zinc-200">{transaction.car_plate || '-'}</td>
+                <td className="px-3 py-3.5 text-[13px] text-zinc-200">{transaction.agency || formatRelatedValue('Πρακτορείο', transaction.agency_id)}</td>
+                <td className="px-3 py-3.5 text-[13px] text-zinc-200">{transaction.representative || formatRelatedValue('Αντιπρόσωπος', transaction.representative_id)}</td>
+                <td className="whitespace-normal break-words px-3 py-3.5 text-[13px] text-zinc-200">{transaction.notes || '-'}</td>
+                <td className="px-3 py-3.5 text-[13px] text-zinc-200">
                   <div className="flex gap-1.5">
                     <button
                       type="button"
