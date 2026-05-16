@@ -1,5 +1,7 @@
 'use client';
 
+import { useMemo, useState } from 'react';
+
 type FinanceTransaction = {
   id: string;
   date: string;
@@ -27,11 +29,24 @@ interface FinanceIncomeProps {
   onDeleteIncome: (transaction: FinanceTransaction) => void;
 }
 
+type IncomeSortKey =
+  | 'date'
+  | 'contract_number'
+  | 'amount'
+  | 'payment_method'
+  | 'car_plate'
+  | 'agency'
+  | 'representative';
+
+type SortDirection = 'asc' | 'desc';
+
 export default function FinanceIncome({
   incomeTransactions,
   onEditIncome,
   onDeleteIncome,
 }: FinanceIncomeProps) {
+  const [sortKey, setSortKey] = useState<IncomeSortKey>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const formatMoney = (value: number) =>
     `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -53,6 +68,37 @@ export default function FinanceIncome({
 
   const formatRelatedValue = (label: string, id: string) =>
     id ? `${label} #${id}` : '-';
+
+  const sortedTransactions = useMemo(
+    () =>
+      [...incomeTransactions].sort((left, right) => {
+        const comparison = compareIncomeTransactions(left, right, sortKey);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }),
+    [incomeTransactions, sortDirection, sortKey]
+  );
+
+  const handleSort = (key: IncomeSortKey) => {
+    if (sortKey === key) {
+      setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection('asc');
+  };
+
+  const headers: { label: string; key?: IncomeSortKey }[] = [
+    { label: 'Ημερομηνία', key: 'date' },
+    { label: 'Συμβόλαιο', key: 'contract_number' },
+    { label: 'Ποσό', key: 'amount' },
+    { label: 'Τρόπος Πληρωμής', key: 'payment_method' },
+    { label: 'Αυτοκίνητο', key: 'car_plate' },
+    { label: 'Πρακτορείο', key: 'agency' },
+    { label: 'Αντιπρόσωπος', key: 'representative' },
+    { label: 'Σημειώσεις' },
+    { label: 'Ενέργειες' },
+  ];
   return (
     <div className="space-y-5">
       <div>
@@ -75,15 +121,26 @@ export default function FinanceIncome({
           </colgroup>
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-900/80">
-              {['Ημερομηνία', 'Συμβόλαιο', 'Ποσό', 'Τρόπος Πληρωμής', 'Αυτοκίνητο', 'Πρακτορείο', 'Αντιπρόσωπος', 'Σημειώσεις', 'Ενέργειες'].map((label) => (
+              {headers.map(({ label, key }) => (
                 <th key={label} className="px-3 py-3 text-xs font-medium text-zinc-400">
-                  {label}
+                  {key ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSort(key)}
+                      className="inline-flex items-center gap-1 cursor-pointer transition hover:text-zinc-200"
+                    >
+                      <span>{label}</span>
+                      {sortKey === key && <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>}
+                    </button>
+                  ) : (
+                    label
+                  )}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {incomeTransactions.map((transaction) => (
+            {sortedTransactions.map((transaction) => (
               <tr key={transaction.id} className="border-b border-zinc-800 hover:bg-zinc-900/60">
                 <td className="px-3 py-3.5 text-[13px] text-zinc-200">{formatDate(transaction.date)}</td>
                 <td className="px-3 py-3.5 text-[13px] text-zinc-200">{transaction.contract_number || '-'}</td>
@@ -125,4 +182,51 @@ export default function FinanceIncome({
       </div>
     </div>
   );
+}
+
+function compareIncomeTransactions(
+  left: FinanceTransaction,
+  right: FinanceTransaction,
+  key: IncomeSortKey
+) {
+  switch (key) {
+    case 'date':
+      return new Date(left.date).getTime() - new Date(right.date).getTime();
+    case 'contract_number':
+      return compareContracts(left.contract_number, right.contract_number);
+    case 'amount':
+      return Number(left.amount || 0) - Number(right.amount || 0);
+    case 'payment_method':
+      return compareText(left.payment_method, right.payment_method);
+    case 'car_plate':
+      return compareText(left.car_plate, right.car_plate);
+    case 'agency':
+      return compareText(left.agency || left.agency_id, right.agency || right.agency_id);
+    case 'representative':
+      return compareText(
+        left.representative || left.representative_id,
+        right.representative || right.representative_id
+      );
+  }
+}
+
+function compareContracts(left?: string, right?: string) {
+  const leftNumeric = contractNumberValue(left);
+  const rightNumeric = contractNumberValue(right);
+
+  if (leftNumeric !== null && rightNumeric !== null && leftNumeric !== rightNumeric) {
+    return leftNumeric - rightNumeric;
+  }
+
+  return compareText(left, right);
+}
+
+function contractNumberValue(value?: string) {
+  const matches = String(value || '').match(/\d+/g);
+  if (!matches?.length) return null;
+  return Number(matches[matches.length - 1]);
+}
+
+function compareText(left?: string, right?: string) {
+  return String(left || '').localeCompare(String(right || ''), 'el', { numeric: true });
 }

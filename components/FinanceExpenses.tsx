@@ -1,5 +1,7 @@
 'use client';
 
+import { useMemo, useState } from 'react';
+
 type FinanceTransaction = {
   id: string;
   date: string;
@@ -31,6 +33,16 @@ interface FinanceExpensesProps {
   onDeleteExpense: (transaction: FinanceTransaction) => void;
 }
 
+type ExpenseSortKey =
+  | 'date'
+  | 'amount'
+  | 'payment_method'
+  | 'supplier_name'
+  | 'car_plate'
+  | 'category';
+
+type SortDirection = 'asc' | 'desc';
+
 export default function FinanceExpenses({
   expenseTransactions,
   onAddExpense,
@@ -38,6 +50,8 @@ export default function FinanceExpenses({
   onEditExpense,
   onDeleteExpense,
 }: FinanceExpensesProps) {
+  const [sortKey, setSortKey] = useState<ExpenseSortKey>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const formatMoney = (value: number) =>
     `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -45,6 +59,37 @@ export default function FinanceExpenses({
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('el-GR');
   };
+
+  const sortedTransactions = useMemo(
+    () =>
+      [...expenseTransactions].sort((left, right) => {
+        const comparison = compareExpenseTransactions(left, right, sortKey);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }),
+    [expenseTransactions, sortDirection, sortKey]
+  );
+
+  const handleSort = (key: ExpenseSortKey) => {
+    if (sortKey === key) {
+      setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection('asc');
+  };
+
+  const headers: { label: string; key?: ExpenseSortKey }[] = [
+    { label: 'Ημερομηνία', key: 'date' },
+    { label: 'Τύπος Κίνησης' },
+    { label: 'Ποσό', key: 'amount' },
+    { label: 'Τρόπος Πληρωμής', key: 'payment_method' },
+    { label: 'Προμηθευτής', key: 'supplier_name' },
+    { label: 'Αυτοκίνητο', key: 'car_plate' },
+    { label: 'Κατηγορία', key: 'category' },
+    { label: 'Σημειώσεις' },
+    { label: 'Ενέργειες' },
+  ];
 
   return (
     <div className="space-y-5">
@@ -86,15 +131,26 @@ export default function FinanceExpenses({
           </colgroup>
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-900/80">
-              {['Ημερομηνία', 'Τύπος Κίνησης', 'Ποσό', 'Τρόπος Πληρωμής', 'Προμηθευτής', 'Αυτοκίνητο', 'Κατηγορία', 'Σημειώσεις', 'Ενέργειες'].map((label) => (
+              {headers.map(({ label, key }) => (
                 <th key={label} className="px-3 py-3 text-xs font-medium text-zinc-400">
-                  {label}
+                  {key ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSort(key)}
+                      className="inline-flex items-center gap-1 cursor-pointer transition hover:text-zinc-200"
+                    >
+                      <span>{label}</span>
+                      {sortKey === key && <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>}
+                    </button>
+                  ) : (
+                    label
+                  )}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {expenseTransactions.map((transaction) => (
+            {sortedTransactions.map((transaction) => (
               <tr key={transaction.id} className="border-b border-zinc-800 hover:bg-zinc-900/60">
                 <td className="px-3 py-3.5 text-[13px] text-zinc-200">{formatDate(transaction.date)}</td>
                 <td className="whitespace-nowrap px-3 py-3.5 text-[13px] text-zinc-200">
@@ -150,4 +206,29 @@ export default function FinanceExpenses({
       </div>
     </div>
   );
+}
+
+function compareExpenseTransactions(
+  left: FinanceTransaction,
+  right: FinanceTransaction,
+  key: ExpenseSortKey
+) {
+  switch (key) {
+    case 'date':
+      return new Date(left.date).getTime() - new Date(right.date).getTime();
+    case 'amount':
+      return Number(left.amount || 0) - Number(right.amount || 0);
+    case 'payment_method':
+      return compareText(left.payment_method, right.payment_method);
+    case 'supplier_name':
+      return compareText(left.supplier_name, right.supplier_name);
+    case 'car_plate':
+      return compareText(left.car_plate, right.car_plate);
+    case 'category':
+      return compareText(left.category, right.category);
+  }
+}
+
+function compareText(left?: string, right?: string) {
+  return String(left || '').localeCompare(String(right || ''), 'el', { numeric: true });
 }
