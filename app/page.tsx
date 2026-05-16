@@ -17,6 +17,8 @@ import {
   deleteIncomeFull,
 } from '@/lib/financeApi';
 import AgenciesManager from '@/components/AgenciesManager';
+import SuppliersManager from '@/components/SuppliersManager';
+import ExpenseCategoriesManager from '@/components/ExpenseCategoriesManager';
 import { supabase } from '@/lib/supabaseClient';
 import {
   addIncomeEntry,
@@ -24,12 +26,19 @@ import {
   updateIncomeTransactionLink,
 } from '@/lib/incomeApi';
 import { addBooking, updateBookingTransactionLink } from '@/lib/bookingsApi';
+import { fetchSuppliers, type SupplierRecord } from '@/lib/suppliersApi';
+import {
+  fetchExpenseCategories,
+  seedDefaultExpenseCategories,
+  type ExpenseCategory,
+} from '@/lib/expenseCategoriesApi';
 type WindowType =
   | 'Αυτοκίνητα'
   | 'Ταμείο'
   | 'Έσοδα'
   | 'Έξοδα'
   | 'Προμηθευτές'
+  | 'Κατηγορίες Εξόδων'
   | 'Αναφορές'
   | 'Πρακτορεία'
   | null;
@@ -61,7 +70,9 @@ type Transaction = {
   car_plate: string;
   agency_id: string;
   representative_id: string;
+  supplier_id?: number | null;
   supplier: string;
+  supplier_name?: string;
   category: string;
   notes: string;
   contract_number?: string;
@@ -167,7 +178,7 @@ export default function Home() {
     amount: '',
     date: new Date().toISOString().split('T')[0],
     payment_method: 'cash',
-    supplier: '',
+    supplier_id: '',
     car_id: '',
     category: '',
     notes: '',
@@ -175,6 +186,8 @@ export default function Home() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [representatives, setRepresentatives] = useState<Representative[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierRecord[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [newVehicle, setNewVehicle] = useState<Vehicle>({
     id: '',
     plate: '',
@@ -294,6 +307,7 @@ if (newTransaction?.id) {
   : '-',
           agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
           representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
+          supplier_id: transaction.supplier_id ? Number(transaction.supplier_id) : null,
           supplier: String(transaction.supplier ?? ''),
           category: String(transaction.category ?? ''),
           notes: String(transaction.notes ?? ''),
@@ -343,6 +357,7 @@ const reloadTransactions = async () => {
         : '-',
       agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
       representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
+      supplier_id: transaction.supplier_id ? Number(transaction.supplier_id) : null,
       supplier: String(transaction.supplier ?? ''),
       category: String(transaction.category ?? ''),
       notes: String(transaction.notes ?? ''),
@@ -425,7 +440,7 @@ const handleAddExpense = async () => {
     return;
   }
 
-  if (expenseForm.movement_type === 'supplier_payment' && !expenseForm.supplier.trim()) {
+  if (expenseForm.movement_type === 'supplier_payment' && !expenseForm.supplier_id) {
     console.warn('Supplier is required');
     return;
   }
@@ -437,7 +452,7 @@ const handleAddExpense = async () => {
     amount: Number(expenseForm.amount),
     date: expenseForm.date,
     payment_method: expenseForm.payment_method,
-    supplier: expenseForm.supplier || null,
+    supplier_id: expenseForm.supplier_id ? Number(expenseForm.supplier_id) : null,
     car_id:
       expenseForm.movement_type === 'expense' && expenseForm.car_id
         ? Number(expenseForm.car_id)
@@ -469,6 +484,7 @@ const handleAddExpense = async () => {
         : '-',
       agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
       representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
+      supplier_id: transaction.supplier_id ? Number(transaction.supplier_id) : null,
       supplier: String(transaction.supplier ?? ''),
       category: String(transaction.category ?? ''),
       notes: String(transaction.notes ?? ''),
@@ -483,7 +499,7 @@ const handleAddExpense = async () => {
     amount: '',
     date: new Date().toISOString().split('T')[0],
     payment_method: 'cash',
-    supplier: '',
+    supplier_id: '',
     car_id: '',
     category: '',
     notes: '',
@@ -499,7 +515,7 @@ const handleEditExpense = (transaction: Transaction) => {
     amount: String(transaction.amount || ''),
     date: transaction.date || new Date().toISOString().split('T')[0],
     payment_method: transaction.payment_method || 'cash',
-    supplier: transaction.supplier || '',
+    supplier_id: transaction.supplier_id ? String(transaction.supplier_id) : '',
     car_id: transaction.car_id ? String(transaction.car_id) : '',
     category: transaction.category || '',
     notes: transaction.notes || '',
@@ -514,7 +530,7 @@ const openAddExpenseModal = () => {
     amount: '',
     date: new Date().toISOString().split('T')[0],
     payment_method: 'cash',
-    supplier: '',
+    supplier_id: '',
     car_id: '',
     category: '',
     notes: '',
@@ -541,7 +557,7 @@ const handleSaveExpense = async () => {
     amount: Number(expenseForm.amount),
     date: expenseForm.date,
     payment_method: expenseForm.payment_method,
-    supplier: expenseForm.supplier || null,
+    supplier_id: expenseForm.supplier_id ? Number(expenseForm.supplier_id) : null,
     car_id:
       expenseForm.movement_type === 'expense' && expenseForm.car_id
         ? Number(expenseForm.car_id)
@@ -600,6 +616,23 @@ const handleSaveExpense = async () => {
   }, []);
 
   useEffect(() => {
+    const loadExpenseReferences = async () => {
+      const loadedSuppliers = await fetchSuppliers();
+      const loadedCategories = await fetchExpenseCategories();
+
+      setSuppliers(loadedSuppliers);
+      if (loadedCategories.length === 0) {
+        setExpenseCategories(await seedDefaultExpenseCategories());
+        return;
+      }
+
+      setExpenseCategories(loadedCategories);
+    };
+
+    loadExpenseReferences();
+  }, []);
+
+  useEffect(() => {
     if (
       activeWindow !== 'Ταμείο' &&
       activeWindow !== 'Έσοδα' &&
@@ -625,6 +658,7 @@ const handleSaveExpense = async () => {
   : '-',
           agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
           representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
+          supplier_id: transaction.supplier_id ? Number(transaction.supplier_id) : null,
           supplier: String(transaction.supplier ?? ''),
           category: String(transaction.category ?? ''),
           notes: String(transaction.notes ?? ''),
@@ -865,6 +899,10 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       representatives.find(
         (representative) => String(representative.id) === transaction.representative_id
       )?.name,
+    supplier_name:
+      transaction.supplier_id
+        ? suppliers.find((supplier) => supplier.id === transaction.supplier_id)?.name
+        : undefined,
   }));
 
   const financeTransactions = transactionsWithAgencyNames.filter((transaction) => {
@@ -1032,13 +1070,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           />
         );
       case 'Προμηθευτές':
-        return (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <p className="text-zinc-400 text-lg">Οι προμηθευτές θα εμφανίζονται εδώ</p>
-            </div>
-          </div>
-        );
+        return <SuppliersManager />;
+      case 'Κατηγορίες Εξόδων':
+        return <ExpenseCategoriesManager />;
       case 'Αναφορές':
         return (
           <div className="space-y-5">
@@ -1127,6 +1161,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return 'Έξοδα';
       case 'Προμηθευτές':
         return 'Προμηθευτές';
+      case 'Κατηγορίες Εξόδων':
+        return 'Κατηγορίες Εξόδων';
       case 'Αναφορές':
         return 'Αναφορές';
        case 'Πρακτορεία':
@@ -1430,11 +1466,18 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
         <label className="space-y-2 text-sm text-zinc-300 block">
           <span>Προμηθευτής</span>
-          <input
-            value={expenseForm.supplier}
-            onChange={(event) => setExpenseForm({ ...expenseForm, supplier: event.target.value })}
+          <select
+            value={expenseForm.supplier_id}
+            onChange={(event) => setExpenseForm({ ...expenseForm, supplier_id: event.target.value })}
             className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
-          />
+          >
+            <option value="">Επιλογή προμηθευτή</option>
+            {suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.name}
+              </option>
+            ))}
+          </select>
         </label>
 
         {expenseForm.movement_type === 'expense' && (
@@ -1463,16 +1506,11 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500"
               >
                 <option value="">Επιλογή κατηγορίας</option>
-                <option value="Service">Service</option>
-                <option value="Insurance">Ασφάλεια</option>
-                <option value="KTEO">ΚΤΕΟ</option>
-                <option value="Tyres">Λάστιχα</option>
-                <option value="Road Tax">Τέλη Κυκλοφορίας</option>
-                <option value="Rent">Ενοίκιο</option>
-                <option value="Office Supplies">Αναλώσιμα Γραφείου</option>
-                <option value="Accountant">Λογιστής</option>
-                <option value="Public Fees">Δημόσιο / Παράβολα</option>
-                <option value="Other">Άλλο</option>
+                {expenseCategories.map((category) => (
+                  <option key={category.id} value={category.name}>
+                    {category.name}
+                  </option>
+                ))}
               </select>
             </label>
           </>

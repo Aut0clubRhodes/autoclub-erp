@@ -43,12 +43,13 @@ const NAV_SECTIONS: NavSection[] = [
    items: [
   { label: 'Πρακτορεία', href: '/agencies', icon: '🏢' },
   { label: 'Προμηθευτές', href: '/suppliers', icon: '🏢' },
+  { label: 'Κατηγορίες Εξόδων', href: '/expense-categories', icon: '🏷️' },
   { label: 'Ρυθμίσεις', href: '/settings', icon: '⚙️' },
 ],
   },
 ];
 
-const WINDOW_ITEMS = ['Αυτοκίνητα', 'Ταμείο', 'Έσοδα', 'Έξοδα', 'Προμηθευτές', 'Αναφορές', 'Πρακτορεία'];
+const WINDOW_ITEMS = ['Αυτοκίνητα', 'Ταμείο', 'Έσοδα', 'Έξοδα', 'Προμηθευτές', 'Αναφορές', 'Πρακτορεία', 'Κατηγορίες Εξόδων'];
 
 export default function Sidebar({ onWindowOpen, activeWindow }: SidebarProps) {
   const pathname = usePathname();

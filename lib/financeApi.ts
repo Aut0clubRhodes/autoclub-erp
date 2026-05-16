@@ -4,7 +4,7 @@ export async function fetchTransactions() {
   const { data, error } = await supabase
     .from('transactions')
     .select(
-      'id, date, amount, payment_method, type, source, car_id, agency_id, representative_id, supplier, category, notes, contract_number, income_entry_id, booking_id'
+      'id, date, amount, payment_method, type, source, car_id, agency_id, representative_id, supplier, supplier_id, category, notes, contract_number, income_entry_id, booking_id'
     )
     .order('date', { ascending: false });
 
@@ -81,6 +81,7 @@ export async function updateTransaction(
     agency_id?: number | null;
     representative_id?: number | null;
     supplier?: string | null;
+    supplier_id?: number | null;
     category?: string | null;
     contract_number?: string | null;
     notes?: string | null;
