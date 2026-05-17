@@ -39,6 +39,7 @@ import {
   seedDefaultExpenseCategories,
   type ExpenseCategory,
 } from '@/lib/expenseCategoriesApi';
+import { fetchServicesByCarId, type ServiceRecord } from '@/lib/servicesApi';
 type WindowType =
   | 'Αυτοκίνητα'
   | 'Ταμείο'
@@ -1911,6 +1912,13 @@ function VehiclesTable({
                     </button>
                     <button
                       type="button"
+                      onClick={() => onView(vehicle.plate)}
+                      className="service-history-btn"
+                    >
+                      Ιστορικό Service
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => onEdit(vehicle.plate)}
                       className="rounded-2xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-white transition hover:bg-zinc-800"
                     >
@@ -1941,6 +1949,12 @@ function VehicleViewModal({
   vehicle: Vehicle;
   onClose: () => void;
 }) {
+  const [services, setServices] = useState<ServiceRecord[]>([]);
+
+  useEffect(() => {
+    fetchServicesByCarId(Number(vehicle.id)).then(setServices);
+  }, [vehicle.id]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-4xl rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl shadow-black/30 overflow-hidden max-h-[70vh] flex flex-col">
@@ -2024,7 +2038,24 @@ function VehicleViewModal({
             <div>
               <h4 className="text-sm font-semibold text-white mb-3">Ιστορικό Service</h4>
               <div className="bg-zinc-900 rounded-2xl p-3 border border-zinc-800">
-                <p className="text-xs text-zinc-400">Δεν υπάρχουν ακόμα καταχωρήσεις service για αυτό το όχημα.</p>
+                {services.length === 0 ? (
+                  <p className="text-xs text-zinc-400">Δεν υπάρχουν ακόμα καταχωρήσεις service για αυτό το όχημα.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {services.map((service) => (
+                      <div key={service.id} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2">
+                        <div className="grid gap-2 text-xs text-zinc-300 sm:grid-cols-3">
+                          <span>{service.service_date}</span>
+                          <span>{service.km ? `${service.km} χλμ` : '-'}</span>
+                          <span>{service.description || '-'}</span>
+                          <span>Κόστος: {service.cost ?? 0}</span>
+                          <span>Επόμενο service: {service.next_service_km || '-'}</span>
+                          <span>{service.notes || '-'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

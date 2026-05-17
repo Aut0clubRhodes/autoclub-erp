@@ -64,3 +64,18 @@ body {
   color: #f1f5f9;
   border-color: #475569;
 }
+
+.input {
+  width: 100%;
+  border: 1px solid #3f3f46;
+  border-radius: 1rem;
+  background: #18181b;
+  padding: 0.75rem 1rem;
+  color: white;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.input:focus {
+  border-color: #f97316;
+}
