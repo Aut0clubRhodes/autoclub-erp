@@ -20,9 +20,9 @@ export default function Window({
   financeDashboard = false,
 }: WindowProps) {
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[2px]">
       <div
-        className={`bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-xl shadow-2xl flex flex-col overflow-hidden ${
+        className={`flex flex-col overflow-hidden rounded-[24px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(24,24,27,0.98),rgba(10,10,12,0.98))] shadow-[0_24px_90px_rgba(0,0,0,0.58)] backdrop-blur-xl ${
           fullscreen
             ? 'w-full max-w-[1480px] h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)]'
             : financeDashboard
@@ -33,13 +33,13 @@ export default function Window({
         }`}
       >
         {/* Title Bar */}
-        <div className={`flex items-center justify-between px-6 border-b border-zinc-700 ${financeDashboard ? 'py-3' : 'py-4'}`}>
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
+        <div className={`flex items-center justify-between border-b border-white/[0.07] px-6 ${financeDashboard ? 'py-3' : 'py-4'}`}>
+          <h2 className="text-base font-semibold tracking-tight text-white">{title}</h2>
           <div className="flex items-center gap-3">
             {titleActions}
             <button
               onClick={onClose}
-              className="text-zinc-400 hover:text-white transition-colors p-2 hover:bg-zinc-800 rounded-lg"
+              className="rounded-xl border border-transparent p-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white"
               aria-label="Close window"
             >
               ✕

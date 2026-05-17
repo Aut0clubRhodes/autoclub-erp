@@ -40,7 +40,7 @@ export default function FinanceOverview({
 
   return (
     <div className="space-y-2">
-      <section className="rounded-3xl border border-zinc-800 bg-zinc-950/90 p-3">
+      <section className="rounded-3xl border border-white/[0.08] bg-black/20 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-sm font-semibold text-white">Φίλτρο Ημερομηνίας</h2>
@@ -91,7 +91,7 @@ export default function FinanceOverview({
         ]}
       />
 
-      <section className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-3.5">
+      <section className="rounded-3xl border border-white/[0.08] bg-black/20 p-3.5 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
         <h2 className="text-sm font-semibold text-white">Προμηθευτές / Αποτέλεσμα</h2>
         <div className="mt-2 grid gap-2 md:grid-cols-3">
           <CompactCard label="Πληρωμές Προμηθευτών" value={totalSupplierPayments} />
@@ -120,11 +120,11 @@ function SummarySection({
     `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
-    <section className="rounded-3xl border border-zinc-800 bg-zinc-950/80 p-3.5">
+    <section className="rounded-3xl border border-white/[0.08] bg-black/20 p-3.5 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
       <h2 className="text-sm font-semibold text-white">{title}</h2>
       <div className={`mt-2 grid gap-2 ${columns}`}>
         {items.map((item) => (
-          <div key={item.label} className="min-h-[82px] rounded-3xl border border-zinc-800 bg-zinc-900/90 p-3">
+          <div key={item.label} className="min-h-[82px] rounded-3xl border border-white/[0.06] bg-white/[0.025] p-3">
             <p className="text-sm text-zinc-400">{item.label}</p>
             <p className="mt-2 text-2xl font-semibold text-white">{formatMoney(item.value)}</p>
           </div>
@@ -148,7 +148,7 @@ function CompactCard({
 
   return (
     <div
-      className={`min-h-[82px] rounded-3xl border border-zinc-800 bg-zinc-900/90 p-3 ${
+      className={`min-h-[82px] rounded-3xl border border-white/[0.06] bg-white/[0.025] p-3 ${
         tone === 'positive' ? 'text-emerald-300' : tone === 'negative' ? 'text-rose-300' : 'text-white'
       }`}
     >

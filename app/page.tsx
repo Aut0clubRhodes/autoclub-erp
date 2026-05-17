@@ -1265,18 +1265,18 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   return (
     <>
       <Sidebar onWindowOpen={handleWindowOpen} activeWindow={activeWindow} />
-      <main className="flex-1 relative bg-zinc-950">
+      <main className="relative flex-1 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.08),transparent_34%),linear-gradient(180deg,#0d1015_0%,#090a0d_100%)]">
         {/* Homepage with centered logo */}
         {!activeWindow && (
-          <div className="w-full h-full bg-zinc-950 flex items-center justify-center">
-            <div className="relative w-[500px] h-[500px] flex items-center justify-center">
+          <div className="flex h-full w-full items-center justify-center">
+            <div className="relative flex h-[360px] w-[min(560px,72vw)] items-center justify-center overflow-hidden rounded-[36px] border border-white/[0.05] bg-white/[0.015] shadow-[0_30px_120px_rgba(0,0,0,0.35)]">
               <Image
                 src="/logo.png"
                 alt="AUTOCLUB"
                 fill
                 priority
-                className="object-contain opacity-60 drop-shadow-2xl"
-                sizes="500px"
+                className="object-cover object-center opacity-90"
+                sizes="560px"
               />
             </div>
           </div>

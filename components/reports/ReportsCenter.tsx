@@ -85,8 +85,8 @@ export default function ReportsCenter({
     : representatives;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-zinc-950/60">
-      <div className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950/95 px-6 py-5 backdrop-blur">
+    <div className="flex h-full min-h-0 flex-col bg-black/20">
+      <div className="sticky top-0 z-10 border-b border-white/[0.07] bg-black/30 px-6 py-5 backdrop-blur">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
           <FilterInput
             label="Από Ημερομηνία"
@@ -160,7 +160,7 @@ export default function ReportsCenter({
       </div>
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="border-b border-zinc-800 p-4 lg:border-b-0 lg:border-r">
+        <aside className="border-b border-white/[0.07] bg-white/[0.015] p-4 lg:border-b-0 lg:border-r">
           <nav className="flex gap-2 overflow-x-auto lg:flex-col">
             {sections.map((section) => (
               <button
@@ -169,8 +169,8 @@ export default function ReportsCenter({
                 onClick={() => setActiveSection(section.id)}
                 className={`rounded-xl px-4 py-3 text-left text-sm transition ${
                   activeSection === section.id
-                    ? 'bg-zinc-800 text-white'
-                    : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                    ? 'border border-sky-400/20 bg-sky-400/10 text-white'
+                    : 'border border-transparent text-zinc-400 hover:border-white/[0.06] hover:bg-white/[0.03] hover:text-zinc-200'
                 }`}
               >
                 {section.label}

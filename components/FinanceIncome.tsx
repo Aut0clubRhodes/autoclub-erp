@@ -106,7 +106,7 @@ export default function FinanceIncome({
         <p className="mt-1 text-sm text-zinc-500">Πλήρης λίστα καταχωρήσεων εσόδων.</p>
       </div>
 
-      <div className="w-fit max-w-full overflow-x-auto rounded-3xl border border-zinc-800 bg-zinc-950/60">
+      <div className="w-fit max-w-full overflow-x-auto rounded-3xl border border-white/[0.08] bg-black/20 shadow-[0_18px_50px_rgba(0,0,0,0.24)]">
         <table className="w-max min-w-[1090px] text-left">
           <colgroup>
             <col className="w-[95px]" />
@@ -120,7 +120,7 @@ export default function FinanceIncome({
             <col className="w-[170px]" />
           </colgroup>
           <thead>
-            <tr className="border-b border-zinc-800 bg-zinc-900/80">
+            <tr className="border-b border-white/[0.06] bg-white/[0.03]">
               {headers.map(({ label, key }) => (
                 <th key={label} className="px-3 py-3 text-xs font-medium text-zinc-400">
                   {key ? (
@@ -141,7 +141,7 @@ export default function FinanceIncome({
           </thead>
           <tbody>
             {sortedTransactions.map((transaction) => (
-              <tr key={transaction.id} className="border-b border-zinc-800 hover:bg-zinc-900/60">
+              <tr key={transaction.id} className="border-b border-white/[0.05] hover:bg-white/[0.03]">
                 <td className="px-3 py-3.5 text-[13px] text-zinc-200">{formatDate(transaction.date)}</td>
                 <td className="px-3 py-3.5 text-[13px] text-zinc-200">{transaction.contract_number || '-'}</td>
                 <td className="px-3 py-3.5 text-[13px] font-medium text-white">{formatMoney(transaction.amount)}</td>
