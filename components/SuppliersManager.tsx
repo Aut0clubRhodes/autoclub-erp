@@ -8,12 +8,18 @@ import {
   type SupplierRecord,
 } from '@/lib/suppliersApi';
 
-export default function SuppliersManager() {
+export default function SuppliersManager({
+  onSuppliersChange,
+}: {
+  onSuppliersChange?: (suppliers: SupplierRecord[]) => void;
+}) {
   const [suppliers, setSuppliers] = useState<SupplierRecord[]>([]);
   const [newSupplier, setNewSupplier] = useState('');
 
   const loadSuppliers = async () => {
-    setSuppliers(await fetchSuppliers());
+    const loadedSuppliers = await fetchSuppliers();
+    setSuppliers(loadedSuppliers);
+    onSuppliersChange?.(loadedSuppliers);
   };
 
   useEffect(() => {

@@ -35,7 +35,12 @@ export const fetchSuppliers = async (): Promise<SupplierRecord[]> => {
 
   const { data, error } = await supabase.from(tableName).select('*').order('name');
   if (error) {
-    console.error('Fetch suppliers error:', error);
+    console.error('Fetch suppliers error:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
     return [];
   }
 
@@ -53,7 +58,12 @@ export const addSupplier = async (name: string) => {
     .single();
 
   if (error) {
-    console.error('Add supplier error:', error);
+    console.error('Add supplier error:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
     return null;
   }
 
@@ -66,7 +76,12 @@ export const deleteSupplier = async (id: number) => {
 
   const { error } = await supabase.from(tableName).delete().eq('id', id);
   if (error) {
-    console.error('Delete supplier error:', error);
+    console.error('Delete supplier error:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
     return false;
   }
 

@@ -48,6 +48,12 @@ export async function addTransaction(transaction: {
   console.log('INSERT ERROR OBJECT:', error);
 
   if (error) {
+    console.error('Add transaction error:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
     return null;
   }
 

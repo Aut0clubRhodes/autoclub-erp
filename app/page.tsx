@@ -577,6 +577,16 @@ const handleDeleteExpense = async (transaction: Transaction) => {
 };
 
 const handleSaveExpense = async () => {
+  const freshSuppliers = await fetchSuppliers();
+  setSuppliers(freshSuppliers);
+  if (
+    expenseForm.supplier_id &&
+    !freshSuppliers.some((supplier) => supplier.id === Number(expenseForm.supplier_id))
+  ) {
+    alert('Ο προμηθευτής δεν υπάρχει πλέον. Κάντε ανανέωση και επιλέξτε ξανά.');
+    return;
+  }
+
   if (!editingExpenseId) {
     await handleAddExpense();
     return;
@@ -736,6 +746,12 @@ const handleSaveSupplierPayment = async () => {
 
     loadExpenseReferences();
   }, []);
+
+  useEffect(() => {
+    if (!showExpenseModal) return;
+
+    fetchSuppliers().then(setSuppliers);
+  }, [showExpenseModal]);
 
   useEffect(() => {
     if (
@@ -1198,7 +1214,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           />
         );
       case 'Προμηθευτές':
-        return <SuppliersManager />;
+        return <SuppliersManager onSuppliersChange={setSuppliers} />;
       case 'Κατηγορίες Εξόδων':
         return <ExpenseCategoriesManager />;
       case 'Αναφορές':
