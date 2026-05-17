@@ -211,7 +211,7 @@ export default function ServicesManager() {
   };
 
   return (
-    <div className="space-y-5 p-8 text-white">
+    <div className="space-y-5 text-white">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-semibold">Service</h1>
@@ -238,7 +238,6 @@ export default function ServicesManager() {
                 'Ανταλλακτικά',
                 'Κόστος Ανταλλακτικών',
                 'Κόστος Εργασίας',
-                'Επόμενο Service',
                 'Ενέργειες',
               ].map((label) => (
                 <th key={label} className="px-4 py-3 text-xs font-medium text-zinc-400">
@@ -257,13 +256,12 @@ export default function ServicesManager() {
                 <td className="px-4 py-4 text-sm text-zinc-200">{partsDescription}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{money(partsCost)}</td>
                 <td className="px-4 py-4 text-sm text-zinc-200">{money(laborCost)}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{service.next_service_km || '-'}</td>
                 <td className="px-4 py-4 text-sm text-zinc-500">-</td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-sm text-zinc-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-sm text-zinc-500">
                   Δεν υπάρχουν καταχωρήσεις service.
                 </td>
               </tr>
@@ -298,12 +296,6 @@ export default function ServicesManager() {
                 </Field>
                 <Field label="Χλμ">
                   <input value={form.km} onChange={(event) => setForm({ ...form, km: event.target.value })} className="input" />
-                </Field>
-                <Field label="Επόμενο Service Χλμ">
-                  <input value={form.next_service_km} onChange={(event) => setForm({ ...form, next_service_km: event.target.value })} className="input" />
-                </Field>
-                <Field label="Επόμενο Service Ημερομηνία">
-                  <input type="date" value={form.next_service_date} onChange={(event) => setForm({ ...form, next_service_date: event.target.value })} className="input" />
                 </Field>
               </div>
               <Field label="Περιγραφή εργασίας">

@@ -20,6 +20,7 @@ import {
 import AgenciesManager from '@/components/AgenciesManager';
 import SuppliersManager from '@/components/SuppliersManager';
 import ExpenseCategoriesManager from '@/components/ExpenseCategoriesManager';
+import ServicesManager from '@/components/ServicesManager';
 import { supabase } from '@/lib/supabaseClient';
 import {
   addIncomeEntry,
@@ -42,6 +43,7 @@ import {
 import { fetchServicesByCarId, type ServiceRecord } from '@/lib/servicesApi';
 type WindowType =
   | 'Αυτοκίνητα'
+  | 'Service'
   | 'Ταμείο'
   | 'Έσοδα'
   | 'Έξοδα'
@@ -1157,6 +1159,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       <AgenciesManager />
     );
 
+  case 'Service':
+    return <ServicesManager />;
+
   case 'Αυτοκίνητα':
     return (
           <div className="space-y-4">
@@ -1238,6 +1243,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     switch (activeWindow) {
       case 'Αυτοκίνητα':
         return 'Διαχείριση Αυτοκινήτων';
+      case 'Service':
+        return 'Service';
       case 'Ταμείο':
         return 'Ταμείο';
       case 'Έσοδα':
@@ -1313,7 +1320,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             titleActions={getWindowActions()}
             fullscreen={activeWindow === 'Αναφορές'}
             financeDashboard={activeWindow === 'Ταμείο'}
-            wide={activeWindow === 'Ταμείο' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα'}
+            wide={activeWindow === 'Ταμείο' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα' || activeWindow === 'Service'}
           >
             {renderWindowContent()}
           </Window>
@@ -2049,7 +2056,6 @@ function VehicleViewModal({
                           <span>{service.km ? `${service.km} χλμ` : '-'}</span>
                           <span>{service.description || '-'}</span>
                           <span>Κόστος: {service.cost ?? 0}</span>
-                          <span>Επόμενο service: {service.next_service_km || '-'}</span>
                           <span>{service.notes || '-'}</span>
                         </div>
                       </div>
