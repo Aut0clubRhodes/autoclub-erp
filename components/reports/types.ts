@@ -35,6 +35,9 @@ export type ReportRepresentative = {
 export type ReportVehicle = {
   id: string;
   plate: string;
+  brand: string;
+  model: string;
+  kteo_expiry?: string;
 };
 
 export type ReportsData = {
@@ -44,6 +47,7 @@ export type ReportsData = {
   representatives: ReportRepresentative[];
   supplierLedger: SupplierLedgerRow[];
   vehicles: ReportVehicle[];
+  onUpdateKteo: (vehicleId: string, kteoExpiry: string) => Promise<boolean>;
 };
 
 export type ReportsFilters = {

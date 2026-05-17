@@ -851,6 +851,34 @@ const handleSaveSupplierPayment = async () => {
     setViewingPlate(null);
   };
 
+  const handleUpdateVehicleKteo = async (vehicleId: string, kteoExpiry: string) => {
+    const vehicle = vehicles.find((item) => item.id === vehicleId);
+    if (!vehicle) return false;
+
+    const updatedCar = await updateCar(vehicle.id, {
+      plate: vehicle.plate,
+      category: vehicle.category,
+      brand: vehicle.brand,
+      model: vehicle.model,
+      year: Number(vehicle.year || 0),
+      current_km: Number(vehicle.km || 0),
+      purchase_price: Number(String(vehicle.price).replace(/[^\d]/g, '')),
+      vin: vehicle.vin,
+      fuel: vehicle.fuel,
+      engine_cc: vehicle.engine_cc,
+      kteo_expiry: kteoExpiry,
+      insurance_expiry: vehicle.insurance_expiry || undefined,
+      road_tax_expiry: vehicle.road_tax_expiry || undefined,
+    });
+
+    if (!updatedCar) return false;
+
+    setVehicles((current) =>
+      current.map((item) => (item.id === vehicleId ? { ...item, kteo_expiry: kteoExpiry } : item))
+    );
+    return true;
+  };
+
   const deleteVehicle = async (id: string) => {
   if (!window.confirm('Σίγουρα θέλετε να διαγράψετε αυτό το όχημα;')) return;
 
@@ -1231,7 +1259,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             agencies={agencies}
             representatives={representatives}
             supplierLedger={supplierLedger}
-            vehicles={vehicles.map((vehicle) => ({ id: vehicle.id, plate: vehicle.plate }))}
+            vehicles={vehicles.map((vehicle) => ({
+              id: vehicle.id,
+              plate: vehicle.plate,
+              brand: vehicle.brand,
+              model: vehicle.model,
+              kteo_expiry: vehicle.kteo_expiry,
+            }))}
+            onUpdateKteo={handleUpdateVehicleKteo}
           />
         );
       default:
@@ -1320,7 +1355,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             titleActions={getWindowActions()}
             fullscreen={activeWindow === 'Αναφορές'}
             financeDashboard={activeWindow === 'Ταμείο'}
-            wide={activeWindow === 'Ταμείο' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα' || activeWindow === 'Service'}
+            wide={activeWindow === 'Αυτοκίνητα' || activeWindow === 'Ταμείο' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα' || activeWindow === 'Service'}
           >
             {renderWindowContent()}
           </Window>
@@ -1827,6 +1862,15 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                     />
                   </label>
                   <label className="space-y-2 text-sm text-zinc-300">
+                    <span>Ημερομηνία ΚΤΕΟ</span>
+                    <input
+                      type="date"
+                      value={newVehicle.kteo_expiry || ''}
+                      onChange={(event) => setNewVehicle({ ...newVehicle, kteo_expiry: event.target.value })}
+                      className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+                    />
+                  </label>
+                  <label className="space-y-2 text-sm text-zinc-300">
                     <span>Τιμή Αγοράς</span>
                     <input
                       value={newVehicle.price}
@@ -1856,6 +1900,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           <VehicleViewModal
             vehicle={vehicles.find((v) => v.plate === viewingPlate)!}
             onClose={closeViewCarModal}
+            onUpdateKteo={handleUpdateVehicleKteo}
+            transactions={transactions}
           />
         )}
       </main>
@@ -1908,8 +1954,8 @@ function VehiclesTable({
                 <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.year}</td>
                 <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.km}</td>
                 <td className="py-4 px-4 text-sm text-zinc-200 font-medium">{formatEuro(vehicle.price)}</td>
-                <td className="py-4 px-4 text-sm">
-                  <div className="flex flex-wrap items-center gap-2">
+                <td className="min-w-[300px] py-4 px-4 text-sm">
+                  <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
                     <button
                       type="button"
                       onClick={() => onView(vehicle.plate)}
@@ -1952,15 +1998,66 @@ function VehiclesTable({
 function VehicleViewModal({
   vehicle,
   onClose,
+  onUpdateKteo,
+  transactions,
 }: {
   vehicle: Vehicle;
   onClose: () => void;
+  onUpdateKteo: (vehicleId: string, kteoExpiry: string) => Promise<boolean>;
+  transactions: Transaction[];
 }) {
   const [services, setServices] = useState<ServiceRecord[]>([]);
+  const [showLicenseModal, setShowLicenseModal] = useState(false);
+  const [showLicenseRegistrationModal, setShowLicenseRegistrationModal] = useState(false);
+  const [showKteoModal, setShowKteoModal] = useState(false);
+  const [showServiceHistoryModal, setShowServiceHistoryModal] = useState(false);
+  const [nextKteoExpiry, setNextKteoExpiry] = useState(vehicle.kteo_expiry || '');
+  const [savingKteo, setSavingKteo] = useState(false);
+  const [selectedLicenseFile, setSelectedLicenseFile] = useState<File | null>(null);
 
   useEffect(() => {
     fetchServicesByCarId(Number(vehicle.id)).then(setServices);
   }, [vehicle.id]);
+
+  useEffect(() => {
+    setNextKteoExpiry(vehicle.kteo_expiry || '');
+  }, [vehicle.kteo_expiry]);
+
+  const saveKteoExpiry = async () => {
+    if (!nextKteoExpiry) return;
+
+    setSavingKteo(true);
+    const updated = await onUpdateKteo(vehicle.id, nextKteoExpiry);
+    setSavingKteo(false);
+
+    if (updated) {
+      setShowKteoModal(false);
+    }
+  };
+
+  const serviceRowsByYear = services.reduce<Record<string, ServiceRecord[]>>((groups, service) => {
+    const year = service.service_date?.slice(0, 4) || '-';
+    groups[year] = groups[year] ? [...groups[year], service] : [service];
+    return groups;
+  }, {});
+
+  const serviceYears = Object.keys(serviceRowsByYear).sort((left, right) => right.localeCompare(left));
+
+  const getServiceCosts = (service: ServiceRecord) => {
+    const matchingTransactions = transactions.filter(
+      (transaction) =>
+        String(transaction.car_id || '') === vehicle.id && transaction.date === service.service_date
+    );
+
+    const partsTransaction = matchingTransactions.find((transaction) => transaction.source === 'service_parts');
+    const laborTransaction = matchingTransactions.find((transaction) => transaction.source === 'service_labor');
+
+    return {
+      partsDescription: partsTransaction?.notes || '-',
+      partsCost: partsTransaction?.amount || 0,
+      laborCost: laborTransaction?.amount || 0,
+    };
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -2027,16 +2124,34 @@ function VehicleViewModal({
             {/* Έγγραφα Section */}
             <div>
               <h4 className="text-sm font-semibold text-white mb-3">Έγγραφα</h4>
-              <div className="space-y-2 bg-zinc-900 rounded-2xl p-3 border border-zinc-800">
-                <button className="w-full rounded-2xl border border-zinc-700 bg-zinc-850 px-3 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800">
-                  Άδεια Κυκλοφορίας
-                </button>
-                <button className="w-full rounded-2xl border border-zinc-700 bg-zinc-850 px-3 py-2 text-xs text-zinc-300 transition hover:bg-zinc-800">
-                  ΚΤΕΟ
-                </button>
-                <div className="pt-2 border-t border-zinc-700">
-                  <p className="text-xs text-zinc-400 mb-1">ΚΤΕΟ Λήξη</p>
-                  <p className="text-xs text-zinc-400">-</p>
+              <div className="space-y-3 bg-zinc-900 rounded-2xl p-3 border border-zinc-800">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLicenseModal(true)}
+                    className="h-10 rounded-xl border border-sky-500/25 bg-sky-500/[0.08] px-3.5 text-[13px] font-medium text-sky-100 transition hover:bg-sky-500/[0.14]"
+                  >
+                    Άδεια Κυκλοφορίας
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowLicenseRegistrationModal(true)}
+                    className="h-10 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.08] px-3.5 text-[13px] font-medium text-emerald-100 transition hover:bg-emerald-500/[0.14]"
+                  >
+                    Καταχώρηση Άδειας
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-700 pt-3">
+                  <p className="text-xs text-zinc-400">
+                    ΚΤΕΟ Λήξη: <span className="text-white">{vehicle.kteo_expiry || '-'}</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowKteoModal(true)}
+                    className="h-10 rounded-xl border border-amber-500/25 bg-amber-500/[0.08] px-3.5 text-[13px] font-medium text-amber-100 transition hover:bg-amber-500/[0.14]"
+                  >
+                    Ενημέρωση ΚΤΕΟ
+                  </button>
                 </div>
               </div>
             </div>
@@ -2045,28 +2160,193 @@ function VehicleViewModal({
             <div>
               <h4 className="text-sm font-semibold text-white mb-3">Ιστορικό Service</h4>
               <div className="bg-zinc-900 rounded-2xl p-3 border border-zinc-800">
-                {services.length === 0 ? (
-                  <p className="text-xs text-zinc-400">Δεν υπάρχουν ακόμα καταχωρήσεις service για αυτό το όχημα.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {services.map((service) => (
-                      <div key={service.id} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2">
-                        <div className="grid gap-2 text-xs text-zinc-300 sm:grid-cols-3">
-                          <span>{service.service_date}</span>
-                          <span>{service.km ? `${service.km} χλμ` : '-'}</span>
-                          <span>{service.description || '-'}</span>
-                          <span>Κόστος: {service.cost ?? 0}</span>
-                          <span>{service.notes || '-'}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setShowServiceHistoryModal(true)}
+                  className="h-10 rounded-xl border border-orange-500/25 bg-orange-500/[0.08] px-3.5 text-[13px] font-medium text-orange-100 transition hover:bg-orange-500/[0.14]"
+                >
+                  Ιστορικό Service
+                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {showLicenseModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-zinc-800 bg-zinc-950 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
+              <h3 className="text-lg font-semibold text-white">Άδεια Κυκλοφορίας — {vehicle.plate}</h3>
+              <button type="button" onClick={() => setShowLicenseModal(false)} className="text-zinc-400 transition hover:text-white">
+                ✕
+              </button>
+            </div>
+            <div className="p-6 text-sm text-zinc-300">Δεν έχει καταχωρηθεί άδεια κυκλοφορίας.</div>
+          </div>
+        </div>
+      )}
+
+      {showLicenseRegistrationModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-emerald-300/15 bg-zinc-950 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
+              <h3 className="text-lg font-semibold text-white">Καταχώρηση Άδειας Κυκλοφορίας — {vehicle.plate}</h3>
+              <button type="button" onClick={() => setShowLicenseRegistrationModal(false)} className="text-zinc-400 transition hover:text-white">
+                ✕
+              </button>
+            </div>
+            <div className="space-y-5 p-6">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block cursor-pointer rounded-2xl border border-sky-500/25 bg-sky-500/10 px-4 py-4 text-sm text-sky-100 transition hover:bg-sky-500/20">
+                  <span className="block font-medium">Upload αρχείου</span>
+                  <span className="mt-1 block text-xs text-sky-100/70">PDF ή εικόνα</span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(event) => setSelectedLicenseFile(event.target.files?.[0] || null)}
+                    className="sr-only"
+                  />
+                </label>
+                <label className="block cursor-pointer rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-100 transition hover:bg-emerald-500/20">
+                  <span className="block font-medium">Camera / Λήψη φωτογραφίας</span>
+                  <span className="mt-1 block text-xs text-emerald-100/70">Χρήση κάμερας συσκευής</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(event) => setSelectedLicenseFile(event.target.files?.[0] || null)}
+                    className="sr-only"
+                  />
+                </label>
+              </div>
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-300">
+                {selectedLicenseFile ? (
+                  <span>Επιλεγμένο αρχείο: {selectedLicenseFile.name}</span>
+                ) : (
+                  <span>Δεν έχει επιλεγεί αρχείο.</span>
+                )}
+              </div>
+              {/* TODO: Upload the selected license file to storage once document storage is introduced. */}
+              <p className="text-xs text-zinc-500">
+                Η αποθήκευση αρχείου θα συνδεθεί σε επόμενο βήμα με αποθηκευτικό χώρο εγγράφων.
+              </p>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowLicenseRegistrationModal(false)}
+                  className="rounded-2xl border border-zinc-700 px-5 py-3 text-sm text-zinc-300 transition hover:bg-zinc-800"
+                >
+                  Κλείσιμο
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showKteoModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-sky-300/15 bg-zinc-950 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
+              <h3 className="text-lg font-semibold text-white">Ενημέρωση ΚΤΕΟ — {vehicle.plate}</h3>
+              <button type="button" onClick={() => setShowKteoModal(false)} className="text-zinc-400 transition hover:text-white">
+                ✕
+              </button>
+            </div>
+            <div className="space-y-5 p-6">
+              <label className="block space-y-2 text-sm text-zinc-300">
+                <span>Νέα ημερομηνία λήξης ΚΤΕΟ</span>
+                <input
+                  type="date"
+                  value={nextKteoExpiry}
+                  onChange={(event) => setNextKteoExpiry(event.target.value)}
+                  className="input"
+                />
+              </label>
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={() => setShowKteoModal(false)} className="rounded-2xl border border-zinc-700 px-5 py-3 text-sm text-zinc-300">
+                  Ακύρωση
+                </button>
+                <button
+                  type="button"
+                  onClick={saveKteoExpiry}
+                  disabled={!nextKteoExpiry || savingKteo}
+                  className="rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Αποθήκευση
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showServiceHistoryModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[82vh] w-full max-w-4xl flex-col overflow-hidden rounded-[28px] border border-orange-300/15 bg-zinc-950 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
+              <h3 className="text-lg font-semibold text-white">Ιστορικό Service — {vehicle.plate}</h3>
+              <button type="button" onClick={() => setShowServiceHistoryModal(false)} className="text-zinc-400 transition hover:text-white">
+                ✕
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
+              {services.length === 0 ? (
+                <p className="text-sm text-zinc-400">Δεν υπάρχει ιστορικό service για αυτό το αυτοκίνητο.</p>
+              ) : (
+                <div className="space-y-4">
+                  {serviceYears.map((year) => (
+                    <section key={year} className="overflow-hidden rounded-2xl border border-zinc-800">
+                      <div className="border-b border-zinc-800 bg-zinc-900/80 px-4 py-3 text-sm font-semibold text-white">
+                        {year}
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[860px] text-left">
+                          <thead className="bg-zinc-900/50">
+                            <tr>
+                              {[
+                                'Ημερομηνία',
+                                'Χλμ',
+                                'Εργασία',
+                                'Ανταλλακτικά',
+                                'Κόστος Ανταλλακτικών',
+                                'Κόστος Εργασίας',
+                                'Σύνολο',
+                              ].map((label) => (
+                                <th key={label} className="px-4 py-3 text-xs font-medium text-zinc-400">
+                                  {label}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {serviceRowsByYear[year].map((service) => {
+                              const { partsDescription, partsCost, laborCost } = getServiceCosts(service);
+
+                              return (
+                                <tr key={service.id} className="border-t border-zinc-800">
+                                  <td className="px-4 py-3 text-sm text-zinc-200">{service.service_date}</td>
+                                  <td className="px-4 py-3 text-sm text-zinc-200">{service.km || '-'}</td>
+                                  <td className="px-4 py-3 text-sm text-zinc-200">{service.description || '-'}</td>
+                                  <td className="px-4 py-3 text-sm text-zinc-200">{partsDescription}</td>
+                                  <td className="px-4 py-3 text-sm text-zinc-200">{partsCost}</td>
+                                  <td className="px-4 py-3 text-sm text-zinc-200">{laborCost}</td>
+                                  <td className="px-4 py-3 text-sm font-semibold text-white">{partsCost + laborCost}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

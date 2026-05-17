@@ -4,16 +4,18 @@ import { useMemo, useState } from 'react';
 import AgenciesReport from './AgenciesReport';
 import CarsReport from './CarsReport';
 import ExpensesReport from './ExpensesReport';
+import KteoReport from './KteoReport';
 import SuppliersReport from './SuppliersReport';
 import type { ReportsData, ReportsFilters } from './types';
 
-type ReportSection = 'agencies' | 'expenses' | 'suppliers' | 'cars';
+type ReportSection = 'agencies' | 'expenses' | 'suppliers' | 'cars' | 'kteo';
 
 const sections: { id: ReportSection; label: string }[] = [
   { id: 'agencies', label: 'Πρακτορεία' },
   { id: 'expenses', label: 'Έξοδα' },
   { id: 'suppliers', label: 'Προμηθευτές' },
   { id: 'cars', label: 'Αυτοκίνητα' },
+  { id: 'kteo', label: 'ΚΤΕΟ' },
 ];
 
 const initialFilters: ReportsFilters = {
@@ -33,6 +35,7 @@ export default function ReportsCenter({
   representatives,
   supplierLedger,
   vehicles,
+  onUpdateKteo,
 }: ReportsData) {
   const [activeSection, setActiveSection] = useState<ReportSection>('agencies');
   const [filters, setFilters] = useState(initialFilters);
@@ -198,6 +201,14 @@ export default function ReportsCenter({
                 transactions={filteredTransactions}
                 bookings={filteredBookings}
                 vehicles={vehicles}
+              />
+            )}
+            {activeSection === 'kteo' && (
+              <KteoReport
+                vehicles={vehicles}
+                fromDate={filters.fromDate}
+                toDate={filters.toDate}
+                onUpdateKteo={onUpdateKteo}
               />
             )}
           </div>
