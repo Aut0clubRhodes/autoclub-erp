@@ -168,7 +168,11 @@ export default function FinanceExpenses({
                 <td className="px-3 py-3.5 text-[13px] text-zinc-200">{transaction.payment_method || '-'}</td>
                 <td className="px-3 py-3.5 text-[13px] text-zinc-200">{transaction.supplier_name || '-'}</td>
                 <td className="px-3 py-3.5 text-[13px] text-zinc-200">
-                  {transaction.type === 'supplier_payment' ? '-' : transaction.car_plate || '-'}
+                  {transaction.type === 'supplier_payment'
+                    ? '-'
+                    : transaction.car_id
+                      ? transaction.car_plate || `#${transaction.car_id}`
+                      : 'Γενικό έξοδο επιχείρησης'}
                 </td>
                 <td className="px-3 py-3.5 text-[13px] text-zinc-200">
                   {transaction.type === 'supplier_payment' ? '-' : transaction.category || '-'}

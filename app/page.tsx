@@ -1532,7 +1532,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
         <>
           <label className="space-y-2 text-sm text-zinc-300 block">
-              <span>Αυτοκίνητο</span>
+              <span>Αυτοκίνητο / Γενικό Έξοδο</span>
               <select
                 value={expenseForm.car_id}
                 onChange={(event) => setExpenseForm({ ...expenseForm, car_id: event.target.value })}
@@ -1545,6 +1545,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                   </option>
                 ))}
               </select>
+              <span className="block text-xs leading-relaxed text-zinc-500">
+                Επιλέξτε αυτοκίνητο για άμεσο έξοδο ή Γενικό έξοδο επιχείρησης για έξοδο που θα κατανεμηθεί μόνο στο Report Αυτοκινήτων.
+              </span>
           </label>
 
           <label className="space-y-2 text-sm text-zinc-300 block">
@@ -1569,6 +1572,11 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           <textarea
             value={expenseForm.notes}
             onChange={(event) => setExpenseForm({ ...expenseForm, notes: event.target.value })}
+            placeholder={
+              expenseForm.car_id
+                ? ''
+                : 'Περιγραφή γενικού εξόδου, π.χ. λογιστής, ενοίκιο, χαρτικά'
+            }
             className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-rose-500 min-h-24"
           />
         </label>
