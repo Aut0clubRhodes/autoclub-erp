@@ -1265,13 +1265,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   return (
     <>
       <Sidebar onWindowOpen={handleWindowOpen} activeWindow={activeWindow} />
-      <main className="relative flex-1 bg-[radial-gradient(circle_at_57%_38%,rgba(14,165,233,0.055),transparent_28%),radial-gradient(circle_at_63%_40%,rgba(34,197,94,0.035),transparent_24%),linear-gradient(180deg,#080c11_0%,#070b10_100%)]">
+      <main className="relative flex-1 bg-[radial-gradient(circle_at_45%_44%,rgba(14,165,233,0.1),transparent_24%),radial-gradient(circle_at_59%_40%,rgba(34,197,94,0.065),transparent_22%),linear-gradient(180deg,#08111a_0%,#050910_100%)]">
         {/* Homepage with centered logo */}
         {!activeWindow && (
           <div className="flex h-full w-full items-center justify-center">
-            <div className="relative flex h-[360px] w-[min(620px,72vw)] flex-col items-center justify-center">
-              <div className="absolute inset-12 rounded-full bg-sky-400/[0.045] blur-3xl" />
-              <div className="absolute inset-0 rounded-[44px] border border-white/[0.025] bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.008))] shadow-[0_22px_72px_rgba(0,0,0,0.22)] backdrop-blur-sm" />
+            <div className="relative flex h-[370px] w-[min(620px,72vw)] flex-col items-center justify-center">
+              <div className="absolute inset-8 rounded-full bg-sky-400/[0.09] blur-3xl" />
+              <div className="absolute inset-16 translate-x-12 rounded-full bg-emerald-400/[0.06] blur-3xl" />
+              <div className="absolute inset-0 rounded-[28px] border border-sky-200/[0.2] bg-[linear-gradient(135deg,rgba(56,189,248,0.08),rgba(9,18,29,0.72)_35%,rgba(34,197,94,0.06))] shadow-[0_0_50px_rgba(0,160,255,0.12),0_0_60px_rgba(75,220,100,0.08),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md" />
               <Image
                 src="/logo.png"
                 alt="AUTOCLUB"
@@ -1280,7 +1281,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 className="relative object-cover object-center opacity-95"
                 sizes="620px"
               />
-              <p className="absolute bottom-8 text-[11px] font-medium uppercase tracking-[0.34em] text-zinc-500">
+              <p className="absolute bottom-8 text-[11px] font-medium uppercase tracking-[0.28em] text-[#8e99a8]">
                 Enterprise Fleet ERP
               </p>
             </div>

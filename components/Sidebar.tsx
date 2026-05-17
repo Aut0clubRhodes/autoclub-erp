@@ -25,6 +25,7 @@ interface NavItem {
   href: string;
   icon: LucideIcon;
   tone: string;
+  chip: string;
 }
 
 interface NavSection {
@@ -42,29 +43,29 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'ΛΕΙΤΟΥΡΓΙΑ',
     items: [
-      { label: 'Πίνακας', href: '/dashboard', icon: LayoutDashboard, tone: 'text-zinc-300' },
-      { label: 'Κρατήσεις', href: '/bookings', icon: CalendarDays, tone: 'text-zinc-300' },
-      { label: 'Αυτοκίνητα', href: '/cars', icon: Car, tone: 'text-sky-200' },
-      { label: 'Service', href: '/services', icon: Wrench, tone: 'text-orange-200' },
+      { label: 'Πίνακας', href: '/dashboard', icon: LayoutDashboard, tone: 'text-sky-300', chip: 'border-sky-400/25 bg-sky-400/10' },
+      { label: 'Κρατήσεις', href: '/bookings', icon: CalendarDays, tone: 'text-violet-300', chip: 'border-violet-400/25 bg-violet-400/10' },
+      { label: 'Αυτοκίνητα', href: '/cars', icon: Car, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
+      { label: 'Service', href: '/services', icon: Wrench, tone: 'text-orange-300', chip: 'border-orange-400/25 bg-orange-400/10' },
     ],
   },
   {
     title: 'ΟΙΚΟΝΟΜΙΚΑ',
     items: [
-      { label: 'Ταμείο', href: '/finance', icon: Wallet, tone: 'text-zinc-300' },
-      { label: 'Έσοδα', href: '/finance/income', icon: TrendingUp, tone: 'text-cyan-200' },
-      { label: 'Έξοδα', href: '/finance/expenses', icon: TrendingDown, tone: 'text-rose-200' },
-      { label: 'Αναφορές', href: '/reports', icon: BarChart3, tone: 'text-amber-200' },
+      { label: 'Ταμείο', href: '/finance', icon: Wallet, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
+      { label: 'Έσοδα', href: '/finance/income', icon: TrendingUp, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
+      { label: 'Έξοδα', href: '/finance/expenses', icon: TrendingDown, tone: 'text-rose-300', chip: 'border-rose-400/25 bg-rose-400/10' },
+      { label: 'Αναφορές', href: '/reports', icon: BarChart3, tone: 'text-amber-300', chip: 'border-amber-400/25 bg-amber-400/10' },
     ],
   },
   {
     title: 'ΣΥΣΤΗΜΑ',
     collapsible: true,
     items: [
-      { label: 'Προμηθευτές', href: '/suppliers', icon: Building2, tone: 'text-zinc-300' },
-      { label: 'Πρακτορεία', href: '/agencies', icon: BriefcaseBusiness, tone: 'text-zinc-300' },
-      { label: 'Κατηγορίες Εξόδων', href: '/expense-categories', icon: Tags, tone: 'text-zinc-300' },
-      { label: 'Ρυθμίσεις', href: '/settings', icon: Settings2, tone: 'text-zinc-300' },
+      { label: 'Προμηθευτές', href: '/suppliers', icon: Building2, tone: 'text-violet-300', chip: 'border-violet-400/25 bg-violet-400/10' },
+      { label: 'Πρακτορεία', href: '/agencies', icon: BriefcaseBusiness, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
+      { label: 'Κατηγορίες Εξόδων', href: '/expense-categories', icon: Tags, tone: 'text-amber-300', chip: 'border-amber-400/25 bg-amber-400/10' },
+      { label: 'Ρυθμίσεις', href: '/settings', icon: Settings2, tone: 'text-slate-300', chip: 'border-slate-400/20 bg-slate-400/10' },
     ],
   },
 ];
@@ -96,24 +97,22 @@ export default function Sidebar({ onWindowOpen, activeWindow }: SidebarProps) {
       ? activeWindow === item.label
       : pathname === item.href || pathname.startsWith(`${item.href}/`);
     const Icon = item.icon;
-    const className = `group flex min-h-9 w-full items-center gap-3 rounded-xl border px-3 py-1.5 text-left transition duration-200 ${
+    const className = `group relative flex min-h-[50px] w-full items-center gap-3 rounded-2xl border px-3.5 py-2 text-left transition duration-200 ${
       isActive
-        ? 'border-sky-400/25 bg-sky-400/[0.08] text-white shadow-[0_0_0_1px_rgba(56,189,248,0.08),0_12px_28px_rgba(2,132,199,0.08)]'
-        : 'border-transparent text-zinc-400 hover:border-white/[0.07] hover:bg-white/[0.03] hover:text-zinc-100'
+        ? 'border-sky-300/25 bg-sky-300/[0.08] text-white shadow-[0_0_0_1px_rgba(125,211,252,0.12),0_16px_30px_rgba(14,165,233,0.12)] before:absolute before:left-0 before:top-2 before:h-[calc(100%-1rem)] before:w-1 before:rounded-full before:bg-sky-300'
+        : 'border-transparent text-zinc-300/90 hover:border-sky-100/[0.08] hover:bg-white/[0.035] hover:text-white'
     }`;
 
     const content = (
       <>
         <span
-          className={`flex h-[22px] w-[22px] items-center justify-center rounded-md border transition duration-200 ${
-            isActive
-              ? 'border-sky-400/25 bg-sky-400/[0.08]'
-              : 'border-white/[0.06] bg-white/[0.02] group-hover:border-white/[0.1] group-hover:bg-white/[0.04]'
+          className={`flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border transition duration-200 ${item.chip} ${
+            isActive ? 'shadow-[0_0_24px_rgba(56,189,248,0.14)]' : 'group-hover:shadow-[0_0_18px_rgba(255,255,255,0.08)]'
           }`}
         >
-          <Icon className={`h-3.5 w-3.5 ${item.tone}`} strokeWidth={1.75} />
+          <Icon className={`h-[18px] w-[18px] ${item.tone}`} strokeWidth={1.9} />
         </span>
-        <span className="text-sm font-medium leading-none">{item.label}</span>
+        <span className="text-[15px] font-medium leading-none tracking-[0.01em]">{item.label}</span>
       </>
     );
 
@@ -133,46 +132,56 @@ export default function Sidebar({ onWindowOpen, activeWindow }: SidebarProps) {
   };
 
   return (
-    <aside className="flex h-screen w-[248px] shrink-0 flex-col border-r border-white/[0.045] bg-[linear-gradient(180deg,#070b10_0%,#06090d_100%)] text-white shadow-[18px_0_40px_rgba(0,0,0,0.22)]">
-      <div className="border-b border-white/[0.06] px-5 py-3.5">
-        <div className="relative h-11 w-full overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
-          <Image src="/logo.png" alt="AUTOCLUB" fill priority className="object-cover object-center" sizes="208px" />
+    <aside className="flex h-screen w-[280px] shrink-0 flex-col border-r border-sky-100/[0.08] bg-[linear-gradient(180deg,#07101a_0%,#05080d_100%)] text-white shadow-[24px_0_60px_rgba(0,0,0,0.32)]">
+      <div className="border-b border-sky-100/[0.08] px-6 pb-5 pt-6">
+        <div className="relative mx-auto h-[74px] w-[176px]">
+          <div className="absolute inset-3 rounded-full bg-sky-400/[0.08] blur-2xl" />
+          <Image src="/logo.png" alt="AUTOCLUB" fill priority className="relative object-cover object-center" sizes="176px" />
         </div>
-        <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.24em] text-zinc-500/90">
+        <p className="mt-2 text-center text-[11px] font-medium uppercase tracking-[0.28em] text-[#8e99a8]">
           Enterprise Fleet ERP
         </p>
       </div>
 
-      <nav className="flex-1 space-y-3.5 overflow-y-auto px-4 py-4">
+      <nav className="flex-1 space-y-5 overflow-y-auto px-4 py-5">
         {NAV_SECTIONS.map((section) => {
           const isSystem = section.collapsible;
           const isOpen = !isSystem || systemOpen;
 
           return (
-            <div key={section.title} className="space-y-2">
+            <div key={section.title} className="space-y-2.5">
               {isSystem ? (
                 <button
                   type="button"
                   onClick={() => setSystemOpen((current) => !current)}
-                  className="flex w-full items-center justify-between px-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500/80 transition hover:text-zinc-300"
+                  className="flex w-full items-center justify-between px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8e99a8] transition hover:text-zinc-200"
                 >
                   <span>{section.title}</span>
                   <span className={`text-xs transition ${systemOpen ? 'rotate-180' : ''}`}>⌄</span>
                 </button>
               ) : (
-                <div className="px-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500/80">
+                <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8e99a8]">
                   {section.title}
                 </div>
               )}
 
-              {isOpen && <div className="space-y-1">{section.items.map(renderItem)}</div>}
+              {isOpen && <div className="space-y-1.5">{section.items.map(renderItem)}</div>}
             </div>
           );
         })}
       </nav>
 
-      <div className="border-t border-white/[0.06] px-5 py-3">
-        <p className="text-center text-[11px] uppercase tracking-[0.2em] text-zinc-600">v1.0.0</p>
+      <div className="border-t border-sky-100/[0.08] px-5 py-4">
+        <div className="flex items-center gap-3 rounded-2xl border border-white/[0.05] bg-white/[0.02] px-3 py-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-sky-300/20 bg-sky-300/[0.08] text-sm font-semibold text-white">
+            A
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-[#f4f7fb]">AutoClub</p>
+            <p className="truncate text-xs text-[#8e99a8]">Administrator</p>
+          </div>
+        </div>
+        <p className="mt-3 text-center text-[11px] uppercase tracking-[0.2em] text-zinc-600">v1.0.0</p>
       </div>
     </aside>
   );
