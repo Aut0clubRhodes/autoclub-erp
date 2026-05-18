@@ -37,6 +37,8 @@ interface NavSection {
 interface SidebarProps {
   onWindowOpen?: (windowId: string) => void;
   activeWindow?: string | null;
+  userEmail?: string | null;
+  onLogout?: () => void;
 }
 
 const NAV_SECTIONS: NavSection[] = [
@@ -82,7 +84,7 @@ const WINDOW_ITEMS = [
   'Κατηγορίες Εξόδων',
 ];
 
-export default function Sidebar({ onWindowOpen, activeWindow }: SidebarProps) {
+export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogout }: SidebarProps) {
   const pathname = usePathname();
   const [systemOpen, setSystemOpen] = useState(true);
 
@@ -179,9 +181,18 @@ export default function Sidebar({ onWindowOpen, activeWindow }: SidebarProps) {
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-[#f4f7fb]">AutoClub</p>
-            <p className="truncate text-xs text-[#8e99a8]">Administrator</p>
+            <p className="truncate text-xs text-[#8e99a8]">{userEmail || 'Administrator'}</p>
           </div>
         </div>
+        {onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="mt-3 w-full rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:border-rose-300/25 hover:bg-rose-300/[0.08] hover:text-white"
+          >
+            Αποσύνδεση
+          </button>
+        )}
         <p className="mt-3 text-center text-[11px] uppercase tracking-[0.2em] text-zinc-600">v1.0.0</p>
       </div>
     </aside>

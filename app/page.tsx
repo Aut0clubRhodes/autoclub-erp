@@ -4,6 +4,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import Image from 'next/image';
 import Sidebar from '@/components/Sidebar';
 import Window from '@/components/Window';
+import LoginScreen from '@/components/LoginScreen';
 import FinanceOverview from '@/components/FinanceOverview';
 import FinanceIncome from '@/components/FinanceIncome';
 import FinanceExpenses from '@/components/FinanceExpenses';
@@ -167,6 +168,8 @@ const initialVehicles: Vehicle[] = [
 ];
 
 export default function Home() {
+  const [authLoading, setAuthLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [activeWindow, setActiveWindow] = useState<WindowType>(null);
   const [showAddCar, setShowAddCar] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
@@ -230,6 +233,29 @@ export default function Home() {
   const [toDate, setToDate] = useState('');
   const [editingPlate, setEditingPlate] = useState<string | null>(null);
   const [viewingPlate, setViewingPlate] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+
+      setUserEmail(data.session?.user.email ?? null);
+      setAuthLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserEmail(session?.user.email ?? null);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 const handleAddIncome = async () => {
   if (!incomeForm.amount) {
     console.warn('Amount is required');
@@ -671,6 +697,10 @@ const handleSaveSupplierPayment = async () => {
   setShowSupplierPaymentModal(false);
 };
   useEffect(() => {
+    if (!userEmail) {
+      return;
+    }
+
     if (
       activeWindow === 'Αυτοκίνητα' ||
       activeWindow === 'Έσοδα' ||
@@ -699,9 +729,13 @@ const handleSaveSupplierPayment = async () => {
       };
       loadCars();
     }
-  }, [activeWindow]);
+  }, [activeWindow, userEmail]);
 
   useEffect(() => {
+    if (!userEmail) {
+      return;
+    }
+
     if (activeWindow !== 'Αναφορές') {
       return;
     }
@@ -717,9 +751,13 @@ const handleSaveSupplierPayment = async () => {
     };
 
     loadReportsData();
-  }, [activeWindow]);
+  }, [activeWindow, userEmail]);
 
   useEffect(() => {
+    if (!userEmail) {
+      return;
+    }
+
     const loadAgencyData = async () => {
       const [{ data: agencyRows }, { data: representativeRows }] = await Promise.all([
         supabase.from('agencies').select('*').order('name'),
@@ -731,9 +769,13 @@ const handleSaveSupplierPayment = async () => {
     };
 
     loadAgencyData();
-  }, []);
+  }, [userEmail]);
 
   useEffect(() => {
+    if (!userEmail) {
+      return;
+    }
+
     const loadExpenseReferences = async () => {
       const loadedSuppliers = await fetchSuppliers();
       const loadedCategories = await fetchExpenseCategories();
@@ -748,15 +790,19 @@ const handleSaveSupplierPayment = async () => {
     };
 
     loadExpenseReferences();
-  }, []);
+  }, [userEmail]);
 
   useEffect(() => {
-    if (!showExpenseModal) return;
+    if (!userEmail || !showExpenseModal) return;
 
     fetchSuppliers().then(setSuppliers);
-  }, [showExpenseModal]);
+  }, [showExpenseModal, userEmail]);
 
   useEffect(() => {
+    if (!userEmail) {
+      return;
+    }
+
     if (
       activeWindow !== 'Ταμείο' &&
       activeWindow !== 'Έσοδα' &&
@@ -797,7 +843,7 @@ const handleSaveSupplierPayment = async () => {
     };
 
     loadFinanceTransactions();
-  }, [activeWindow]);
+  }, [activeWindow, userEmail]);
 
   const handleWindowOpen = (windowId: string) => {
     setActiveWindow(windowId as WindowType);
@@ -849,6 +895,18 @@ const handleSaveSupplierPayment = async () => {
 
   const closeViewCarModal = () => {
     setViewingPlate(null);
+  };
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      console.error('Logout error:', {
+        message: error.message,
+        name: error.name,
+        status: error.status,
+      });
+    }
   };
 
   const handleUpdateVehicleKteo = async (vehicleId: string, kteoExpiry: string) => {
@@ -1321,9 +1379,26 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     return null;
   };
 
+  if (authLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#08111a_0%,#050910_100%)] text-sm text-zinc-400">
+        Φόρτωση...
+      </main>
+    );
+  }
+
+  if (!userEmail) {
+    return <LoginScreen />;
+  }
+
   return (
     <>
-      <Sidebar onWindowOpen={handleWindowOpen} activeWindow={activeWindow} />
+      <Sidebar
+        onWindowOpen={handleWindowOpen}
+        activeWindow={activeWindow}
+        userEmail={userEmail}
+        onLogout={handleLogout}
+      />
       <main className="relative flex-1 bg-[radial-gradient(circle_at_45%_44%,rgba(14,165,233,0.1),transparent_24%),radial-gradient(circle_at_59%_40%,rgba(34,197,94,0.065),transparent_22%),linear-gradient(180deg,#08111a_0%,#050910_100%)]">
         {/* Homepage with centered logo */}
         {!activeWindow && (
