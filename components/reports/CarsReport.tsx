@@ -2,18 +2,22 @@
 
 import { Fragment, useEffect, useState } from 'react';
 import type { BookingRecord } from '@/lib/bookingsApi';
+import type { DebtRecord } from '@/lib/debtsApi';
 import type { ReportTransaction, ReportVehicle } from './types';
 
 type CarsReportProps = {
   transactions: ReportTransaction[];
   bookings: BookingRecord[];
   vehicles: ReportVehicle[];
+  debts: DebtRecord[];
+  fromDate: string;
+  toDate: string;
 };
 
 const money = (value: number) =>
   `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function CarsReport({ transactions, vehicles }: CarsReportProps) {
+export default function CarsReport({ transactions, vehicles, debts, fromDate, toDate }: CarsReportProps) {
   const [expandedCarId, setExpandedCarId] = useState<string | null>(null);
   const [allocationCarCount, setAllocationCarCount] = useState(vehicles.length);
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,18 +49,32 @@ export default function CarsReport({ transactions, vehicles }: CarsReportProps) 
       const directExpenses = carTransactions
         .filter((transaction) => transaction.type === 'expense')
         .reduce((sum, transaction) => sum + transaction.amount, 0);
+      const yearlyDebts = debts
+        .filter(
+          (debt) =>
+            debt.car_id &&
+            String(debt.car_id) === vehicle.id &&
+            debt.due_date &&
+            (!fromDate || debt.due_date >= fromDate) &&
+            (!toDate || debt.due_date <= toDate) &&
+            Number(debt.remaining_amount || 0) > 0
+        )
+        .reduce((sum, debt) => sum + Number(debt.remaining_amount || 0), 0);
       const totalExpenses = directExpenses + generalExpensesPerCar;
+      const net = income - totalExpenses;
 
       return {
         vehicle,
         income,
         directExpenses,
         totalExpenses,
-        net: income - totalExpenses,
+        yearlyDebts,
+        net,
+        netAfterDebts: net - yearlyDebts,
         transactions: carTransactions,
       };
     })
-    .filter((row) => row.transactions.length > 0)
+    .filter((row) => row.transactions.length > 0 || row.yearlyDebts > 0)
     .sort((left, right) => right.net - left.net);
 
   return (
@@ -89,10 +107,19 @@ export default function CarsReport({ transactions, vehicles }: CarsReportProps) 
       />
 
       <div className="overflow-hidden rounded-2xl border border-zinc-800">
-        <table className="w-full min-w-[1040px] text-left">
+        <table className="w-full min-w-[1280px] text-left">
           <thead className="bg-zinc-900/90">
             <tr>
-              {['Αυτοκίνητο', 'Έσοδα', 'Άμεσα Έξοδα', 'Γενικά Έξοδα / Αμάξι', 'Σύνολο Εξόδων', 'Καθαρό'].map(
+              {[
+                'Αυτοκίνητο',
+                'Έσοδα',
+                'Άμεσα Έξοδα',
+                'Γενικά Έξοδα / Αμάξι',
+                'Σύνολο Εξόδων',
+                'Οφειλές Έτους',
+                'Καθαρό',
+                'Καθαρό Μετά Οφειλών',
+              ].map(
                 (label) => (
                   <th key={label} className="px-4 py-3 text-sm text-zinc-400">
                     {label}
@@ -102,7 +129,17 @@ export default function CarsReport({ transactions, vehicles }: CarsReportProps) 
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ vehicle, income, directExpenses, totalExpenses, net, transactions: carTransactions }) => {
+            {rows.map(
+              ({
+                vehicle,
+                income,
+                directExpenses,
+                totalExpenses,
+                yearlyDebts,
+                net,
+                netAfterDebts,
+                transactions: carTransactions,
+              }) => {
               const expanded = expandedCarId === vehicle.id;
               return (
                 <Fragment key={vehicle.id}>
@@ -115,13 +152,21 @@ export default function CarsReport({ transactions, vehicles }: CarsReportProps) 
                     <td className="px-4 py-4 text-sm text-zinc-200">{money(directExpenses)}</td>
                     <td className="px-4 py-4 text-sm text-zinc-200">{money(generalExpensesPerCar)}</td>
                     <td className="px-4 py-4 text-sm text-zinc-200">{money(totalExpenses)}</td>
+                    <td className="px-4 py-4 text-sm text-zinc-200">{money(yearlyDebts)}</td>
                     <td className={`px-4 py-4 text-sm ${net >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                       {money(net)}
+                    </td>
+                    <td
+                      className={`px-4 py-4 text-sm ${
+                        netAfterDebts >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                      }`}
+                    >
+                      {money(netAfterDebts)}
                     </td>
                   </tr>
                   {expanded && (
                     <tr className="border-t border-zinc-800 bg-zinc-950/80">
-                      <td colSpan={6} className="p-4">
+                      <td colSpan={8} className="p-4">
                         <div className="overflow-hidden rounded-2xl border border-zinc-800">
                           <table className="w-full text-left">
                             <thead className="bg-zinc-900/70">

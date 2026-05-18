@@ -8,6 +8,7 @@ import LoginScreen from '@/components/LoginScreen';
 import FinanceOverview from '@/components/FinanceOverview';
 import FinanceIncome from '@/components/FinanceIncome';
 import FinanceExpenses from '@/components/FinanceExpenses';
+import DebtsManager from '@/components/DebtsManager';
 import ReportsCenter from '@/components/reports/ReportsCenter';
 import { fetchCars, addCar, deleteCar, updateCar } from '@/lib/carsApi';
 import {
@@ -48,6 +49,7 @@ type WindowType =
   | 'Ταμείο'
   | 'Έσοδα'
   | 'Έξοδα'
+  | 'Οφειλές'
   | 'Προμηθευτές'
   | 'Κατηγορίες Εξόδων'
   | 'Αναφορές'
@@ -1333,6 +1335,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             onUpdateKteo={handleUpdateVehicleKteo}
           />
         );
+      case 'Οφειλές':
+        return <DebtsManager vehicles={vehicles} suppliers={suppliers} />;
       default:
         return null;
     }
@@ -1350,6 +1354,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return 'Έσοδα';
       case 'Έξοδα':
         return 'Έξοδα';
+      case 'Οφειλές':
+        return 'Οφειλές';
       case 'Προμηθευτές':
         return 'Προμηθευτές';
       case 'Κατηγορίες Εξόδων':
@@ -1436,7 +1442,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             titleActions={getWindowActions()}
             fullscreen={activeWindow === 'Αναφορές'}
             financeDashboard={activeWindow === 'Ταμείο'}
-            wide={activeWindow === 'Αυτοκίνητα' || activeWindow === 'Ταμείο' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα' || activeWindow === 'Service'}
+            wide={activeWindow === 'Αυτοκίνητα' || activeWindow === 'Ταμείο' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα' || activeWindow === 'Οφειλές' || activeWindow === 'Service'}
           >
             {renderWindowContent()}
           </Window>

@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AgenciesReport from './AgenciesReport';
 import CarsReport from './CarsReport';
 import ExpensesReport from './ExpensesReport';
 import KteoReport from './KteoReport';
 import SuppliersReport from './SuppliersReport';
+import { fetchDebts, type DebtRecord } from '@/lib/debtsApi';
 import type { ReportsData, ReportsFilters } from './types';
 
 type ReportSection = 'agencies' | 'expenses' | 'suppliers' | 'cars' | 'kteo';
@@ -39,6 +40,15 @@ export default function ReportsCenter({
 }: ReportsData) {
   const [activeSection, setActiveSection] = useState<ReportSection>('agencies');
   const [filters, setFilters] = useState(initialFilters);
+  const [debts, setDebts] = useState<DebtRecord[]>([]);
+
+  useEffect(() => {
+    const loadDebts = async () => {
+      setDebts(await fetchDebts());
+    };
+
+    loadDebts();
+  }, []);
 
   const filteredTransactions = useMemo(
     () =>
@@ -201,6 +211,9 @@ export default function ReportsCenter({
                 transactions={filteredTransactions}
                 bookings={filteredBookings}
                 vehicles={vehicles}
+                debts={debts}
+                fromDate={filters.fromDate}
+                toDate={filters.toDate}
               />
             )}
             {activeSection === 'kteo' && (
