@@ -16,16 +16,25 @@ const money = (value: number) =>
 export default function CarsReport({ transactions, vehicles }: CarsReportProps) {
   const [expandedCarId, setExpandedCarId] = useState<string | null>(null);
   const [allocationCarCount, setAllocationCarCount] = useState(vehicles.length);
+  const [searchTerm, setSearchTerm] = useState('');
+
   useEffect(() => {
     setAllocationCarCount((current) => (current === 0 ? vehicles.length : current));
   }, [vehicles.length]);
+
   const totalGeneralBusinessExpenses = transactions
     .filter((transaction) => transaction.type === 'expense' && !transaction.car_id)
     .reduce((sum, transaction) => sum + transaction.amount, 0);
   const generalExpensesPerCar =
     allocationCarCount > 0 ? totalGeneralBusinessExpenses / allocationCarCount : 0;
+  const normalizedSearch = searchTerm.trim().toLowerCase();
 
   const rows = vehicles
+    .filter((vehicle) =>
+      [vehicle.plate, vehicle.brand, vehicle.model].some((value) =>
+        value.toLowerCase().includes(normalizedSearch)
+      )
+    )
     .map((vehicle) => {
       const carTransactions = transactions.filter(
         (transaction) => transaction.car_id && String(transaction.car_id) === vehicle.id
@@ -72,16 +81,24 @@ export default function CarsReport({ transactions, vehicles }: CarsReportProps) 
         Τα γενικά έξοδα επιχείρησης κατανέμονται ισόποσα στα αυτοκίνητα μόνο για σκοπούς αναφοράς.
       </p>
 
+      <input
+        value={searchTerm}
+        onChange={(event) => setSearchTerm(event.target.value)}
+        placeholder="Αναζήτηση αυτοκινήτου..."
+        className="w-full max-w-md rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500"
+      />
+
       <div className="overflow-hidden rounded-2xl border border-zinc-800">
         <table className="w-full min-w-[1040px] text-left">
           <thead className="bg-zinc-900/90">
             <tr>
-              <th className="px-4 py-3 text-sm text-zinc-400">Αυτοκίνητο</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Έσοδα</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Άμεσα Έξοδα</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Γενικά Έξοδα / Αμάξι</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Σύνολο Εξόδων</th>
-              <th className="px-4 py-3 text-sm text-zinc-400">Καθαρό</th>
+              {['Αυτοκίνητο', 'Έσοδα', 'Άμεσα Έξοδα', 'Γενικά Έξοδα / Αμάξι', 'Σύνολο Εξόδων', 'Καθαρό'].map(
+                (label) => (
+                  <th key={label} className="px-4 py-3 text-sm text-zinc-400">
+                    {label}
+                  </th>
+                )
+              )}
             </tr>
           </thead>
           <tbody>
@@ -109,10 +126,11 @@ export default function CarsReport({ transactions, vehicles }: CarsReportProps) 
                           <table className="w-full text-left">
                             <thead className="bg-zinc-900/70">
                               <tr>
-                                <th className="px-4 py-3 text-sm text-zinc-400">Ημερομηνία</th>
-                                <th className="px-4 py-3 text-sm text-zinc-400">Τύπος</th>
-                                <th className="px-4 py-3 text-sm text-zinc-400">Ποσό</th>
-                                <th className="px-4 py-3 text-sm text-zinc-400">Πληροφορία</th>
+                                {['Ημερομηνία', 'Τύπος', 'Ποσό', 'Πληροφορία'].map((label) => (
+                                  <th key={label} className="px-4 py-3 text-sm text-zinc-400">
+                                    {label}
+                                  </th>
+                                ))}
                               </tr>
                             </thead>
                             <tbody>

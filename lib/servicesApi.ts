@@ -78,3 +78,47 @@ export async function addService(service: {
 
   return data as ServiceRecord;
 }
+
+export async function updateService(
+  id: number,
+  updates: {
+    service_date: string;
+    km?: number | null;
+    description: string;
+    cost?: number | null;
+    notes?: string | null;
+  }
+) {
+  const { data, error } = await supabase.from('services').update(updates).eq('id', id).select().single();
+
+  if (error) {
+    console.error('Update service error:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
+    return null;
+  }
+
+  return data as ServiceRecord;
+}
+
+export async function deleteService(id: number): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase.from('services').delete().eq('id', id);
+
+  if (error) {
+    console.error('Delete service error:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
+    return {
+      success: false,
+      error: `${error.code || ''} ${error.message || ''} ${error.details || ''}`.trim(),
+    };
+  }
+
+  return { success: true };
+}

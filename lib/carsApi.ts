@@ -46,17 +46,27 @@ road_tax_expiry?: string;
   return data;
 } 
 export async function deleteCar(id: string) {
-  const { error } = await supabase
-    .from('cars')
-    .delete()
-    .eq('id', id);
+  try {
+    const { error } = await supabase
+      .from('cars')
+      .delete()
+      .eq('id', id);
 
-  if (error) {
-    console.log(error);
-    return false;
+    if (error) {
+      console.log('Delete car error:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
+      return { success: false, error };
+    }
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.log('Delete car request failed:', error);
+    return { success: false, error };
   }
-
-  return true;
 }
 
 export async function updateCar(

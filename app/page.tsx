@@ -938,11 +938,12 @@ const handleSaveSupplierPayment = async () => {
   };
 
   const deleteVehicle = async (id: string) => {
-  if (!window.confirm('Σίγουρα θέλετε να διαγράψετε αυτό το όχημα;')) return;
+  if (!window.confirm('Είστε σίγουροι ότι θέλετε να διαγράψετε αυτό το αυτοκίνητο;')) return;
 
+  try {
   const deleted = await deleteCar(id);
 
-  if (deleted) {
+  if (deleted.success) {
     const updatedCars = await fetchCars();
 
     setVehicles(
@@ -963,6 +964,11 @@ const handleSaveSupplierPayment = async () => {
         road_tax_expiry: car.road_tax_expiry || '',
     }))
   );
+    return;
+  }
+
+  } catch (error) {
+    console.log('Delete car request failed:', error);
   }
 };
   const closeAddCarModal = () => {

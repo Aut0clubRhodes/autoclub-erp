@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { fetchCars } from '@/lib/carsApi';
+import { deleteCar, fetchCars } from '@/lib/carsApi';
 import { addTransaction, fetchTransactions } from '@/lib/financeApi';
-import { fetchServices, addService, type ServiceRecord } from '@/lib/servicesApi';
+import { fetchServices, addService, updateService, deleteService, type ServiceRecord } from '@/lib/servicesApi';
 import { fetchSuppliers, type SupplierRecord } from '@/lib/suppliersApi';
 
 type ServiceCar = {
@@ -59,6 +59,8 @@ export default function ServicesManager() {
   const [showModal, setShowModal] = useState(false);
   const [modalRootReady, setModalRootReady] = useState(false);
   const [selectedCarId, setSelectedCarId] = useState<number | null>(null);
+  const [editingServiceId, setEditingServiceId] = useState<number | null>(null);
+  const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
   const [form, setForm] = useState(initialForm);
 
   const loadData = async () => {
@@ -163,11 +165,73 @@ export default function ServicesManager() {
   }, [selectedCarServiceRows]);
 
   const openAddServiceModal = () => {
+    setEditingServiceId(null);
     setForm({
       ...initialForm,
       car_id: selectedCar ? String(selectedCar.id) : '',
     });
     setShowModal(true);
+  };
+
+  const openEditServiceModal = ({
+    service,
+    partsCost,
+    laborCost,
+    partsDescription,
+  }: {
+    service: ServiceRecord;
+    partsCost: number;
+    laborCost: number;
+    partsDescription: string;
+  }) => {
+    setEditingServiceId(service.id);
+    setForm({
+      ...initialForm,
+      car_id: String(service.car_id),
+      service_date: service.service_date,
+      km: service.km ? String(service.km) : '',
+      description: service.description || '',
+      notes: service.notes || '',
+      parts_description: partsDescription === '-' ? '' : partsDescription,
+      parts_amount: String(partsCost || ''),
+      labor_amount: String(laborCost || ''),
+    });
+    setShowModal(true);
+  };
+
+  const handleDeleteService = async (service: ServiceRecord) => {
+    if (!window.confirm('Να διαγραφεί αυτή η καταχώρηση service;')) return;
+
+    const hasLinkedTransactions = transactions.some(
+      (transaction) =>
+        Number(transaction.car_id) === Number(service.car_id) &&
+        transaction.date === service.service_date &&
+        (transaction.source === 'service_parts' || transaction.source === 'service_labor')
+    );
+
+    if (hasLinkedTransactions) {
+      alert('Δεν μπορεί να διαγραφεί γιατί έχει οικονομικές κινήσεις συνδεδεμένες.');
+      return;
+    }
+
+    const result = await deleteService(service.id);
+    if (!result.success) {
+      alert('Δεν μπορεί να διαγραφεί γιατί έχει οικονομικές κινήσεις συνδεδεμένες.');
+      return;
+    }
+
+    await loadData();
+  };
+
+  const handleDeleteCar = async (carId: number) => {
+    if (!window.confirm('Είστε σίγουροι ότι θέλετε να διαγράψετε αυτό το αυτοκίνητο;')) return;
+
+    const deleted = await deleteCar(String(carId));
+    if (!deleted.success) {
+      return;
+    }
+
+    await loadData();
   };
 
   const handleSave = async () => {
@@ -204,6 +268,23 @@ export default function ServicesManager() {
     }
     if (laborAmount > 0 && !form.labor_payment_method) {
       alert('Επιλέξτε τρόπο πληρωμής εργασίας.');
+      return;
+    }
+
+    if (editingServiceId) {
+      const updated = await updateService(editingServiceId, {
+        service_date: form.service_date,
+        km: form.km ? Number(form.km) : null,
+        description: form.description,
+        cost: partsAmount + laborAmount,
+        notes: form.notes || null,
+      });
+
+      if (!updated) return;
+
+      await loadData();
+      setEditingServiceId(null);
+      setShowModal(false);
       return;
     }
 
@@ -312,12 +393,19 @@ export default function ServicesManager() {
             </div>
           ) : (
             <div className="space-y-4">
-              {serviceRowsByYear.map(([year, yearRows]) => (
+              {serviceRowsByYear.map(([year, yearRows]) => {
+                const expanded = Boolean(expandedYears[year]);
+                return (
                 <section key={year} className="overflow-hidden rounded-3xl border border-white/[0.08] bg-black/20">
-                  <div className="border-b border-white/[0.06] bg-white/[0.03] px-5 py-3 text-sm font-semibold text-white">
-                    {year}
-                  </div>
-                  <div className="overflow-x-auto">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedYears((current) => ({ ...current, [year]: !current[year] }))}
+                    className="flex w-full items-center justify-between border-b border-white/[0.06] bg-white/[0.03] px-5 py-3 text-left text-sm font-semibold text-white"
+                  >
+                    <span>{year}</span>
+                    <span className="text-zinc-400">{expanded ? '−' : '+'}</span>
+                  </button>
+                  {expanded && <div className="overflow-x-auto">
                     <table className="w-full min-w-[980px] text-left">
                       <thead>
                         <tr>
@@ -329,6 +417,7 @@ export default function ServicesManager() {
                             'Κόστος Ανταλλακτικών',
                             'Κόστος Εργασίας',
                             'Σύνολο',
+                            'Ενέργειες',
                           ].map((label) => (
                             <th key={label} className="px-4 py-3 text-xs font-medium text-zinc-400">
                               {label}
@@ -348,13 +437,32 @@ export default function ServicesManager() {
                             <td className="px-4 py-4 text-sm font-semibold text-white">
                               {money(partsCost + laborCost)}
                             </td>
+                            <td className="px-4 py-4 text-sm">
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditServiceModal({ service, partsCost, laborCost, partsDescription })}
+                                  className="rounded-xl border border-sky-400/25 bg-sky-400/10 px-3 py-2 text-xs text-sky-200 transition hover:bg-sky-400/20"
+                                >
+                                  Επεξεργασία
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteService(service)}
+                                  className="rounded-xl border border-rose-400/25 bg-rose-400/10 px-3 py-2 text-xs text-rose-200 transition hover:bg-rose-400/20"
+                                >
+                                  Διαγραφή
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </div>}
                 </section>
-              ))}
+              );
+              })}
             </div>
           )}
         </div>
@@ -388,13 +496,22 @@ export default function ServicesManager() {
                   <td className="px-4 py-4 text-sm text-zinc-200">{latestServiceDate}</td>
                   <td className="px-4 py-4 text-sm text-zinc-200">{serviceCount}</td>
                   <td className="px-4 py-4 text-sm">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCarId(car.id)}
-                      className="rounded-2xl border border-orange-400/25 bg-orange-400/10 px-3 py-2 text-xs font-medium text-orange-200 transition hover:bg-orange-400/20"
-                    >
-                      Ιστορικό Service
-                    </button>
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCarId(car.id)}
+                        className="rounded-2xl border border-orange-400/25 bg-orange-400/10 px-3 py-2 text-xs font-medium text-orange-200 transition hover:bg-orange-400/20"
+                      >
+                        Ιστορικό Service
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCar(car.id)}
+                        className="rounded-2xl border border-rose-400/25 bg-rose-400/10 px-3 py-2 text-xs font-medium text-rose-200 transition hover:bg-rose-400/20"
+                      >
+                        Διαγραφή
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
