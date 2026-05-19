@@ -87,7 +87,7 @@ export async function uploadCarDocument({
 }
 
 export async function deleteCarDocument(document: CarDocumentRecord): Promise<boolean> {
-  const filePath = getStoragePathFromPublicUrl(document.file_url);
+  const filePath = getCarDocumentFilePath(document.file_url);
 
   if (filePath) {
     const { error: storageError } = await supabase.storage.from(BUCKET_NAME).remove([filePath]);
@@ -116,9 +116,41 @@ export async function deleteCarDocument(document: CarDocumentRecord): Promise<bo
   return true;
 }
 
-function getStoragePathFromPublicUrl(fileUrl: string) {
-  const marker = `/storage/v1/object/public/${BUCKET_NAME}/`;
-  const [, path] = fileUrl.split(marker);
+export function getCarDocumentPublicUrl(fileUrlOrPath: string) {
+  const filePath = getCarDocumentFilePath(fileUrlOrPath);
 
-  return path ? decodeURIComponent(path) : '';
+  if (!filePath) return fileUrlOrPath;
+
+  const publicUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(filePath).data.publicUrl;
+
+  console.log('Car document public URL debug:', {
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    bucketName: BUCKET_NAME,
+    file_path: fileUrlOrPath,
+    cleanFilePath: filePath,
+    publicUrl,
+  });
+
+  return publicUrl;
+}
+
+export function getCarDocumentFilePath(fileUrlOrPath: string) {
+  if (!fileUrlOrPath) return '';
+
+  const marker = `/storage/v1/object/public/${BUCKET_NAME}/`;
+  const [, pathFromPublicUrl] = fileUrlOrPath.split(marker);
+
+  if (pathFromPublicUrl) return stripBucketPrefix(decodeURIComponent(pathFromPublicUrl));
+
+  const bucketPrefix = `${BUCKET_NAME}/`;
+  const cleanPath = fileUrlOrPath.startsWith(bucketPrefix)
+    ? fileUrlOrPath.slice(bucketPrefix.length)
+    : fileUrlOrPath;
+
+  return stripBucketPrefix(cleanPath.replace(/^\/+/, ''));
+}
+
+function stripBucketPrefix(filePath: string) {
+  const bucketPrefix = `${BUCKET_NAME}/`;
+  return filePath.startsWith(bucketPrefix) ? filePath.slice(bucketPrefix.length) : filePath;
 }

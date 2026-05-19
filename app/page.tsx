@@ -43,6 +43,7 @@ import {
   type ExpenseCategory,
 } from '@/lib/expenseCategoriesApi';
 import { fetchServicesByCarId, type ServiceRecord } from '@/lib/servicesApi';
+import { fetchCarDocuments, getCarDocumentPublicUrl, type CarDocumentRecord } from '@/lib/carDocumentsApi';
 type WindowType =
   | 'Αυτοκίνητα'
   | 'Service'
@@ -2130,6 +2131,8 @@ function VehicleViewModal({
   const [nextKteoExpiry, setNextKteoExpiry] = useState(vehicle.kteo_expiry || '');
   const [savingKteo, setSavingKteo] = useState(false);
   const [selectedLicenseFile, setSelectedLicenseFile] = useState<File | null>(null);
+  const [licenseDocuments, setLicenseDocuments] = useState<CarDocumentRecord[]>([]);
+  const [loadingLicenseDocuments, setLoadingLicenseDocuments] = useState(false);
 
   useEffect(() => {
     fetchServicesByCarId(Number(vehicle.id)).then(setServices);
@@ -2138,6 +2141,27 @@ function VehicleViewModal({
   useEffect(() => {
     setNextKteoExpiry(vehicle.kteo_expiry || '');
   }, [vehicle.kteo_expiry]);
+
+  useEffect(() => {
+    if (!showLicenseRegistrationModal) return;
+
+    let isCurrent = true;
+
+    const loadLicenseDocuments = async () => {
+      setLoadingLicenseDocuments(true);
+      const documents = await fetchCarDocuments(Number(vehicle.id));
+      if (isCurrent) {
+        setLicenseDocuments(documents);
+        setLoadingLicenseDocuments(false);
+      }
+    };
+
+    loadLicenseDocuments();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [showLicenseRegistrationModal, vehicle.id]);
 
   const saveKteoExpiry = async () => {
     if (!nextKteoExpiry) return;
@@ -2241,20 +2265,13 @@ function VehicleViewModal({
             <div>
               <h4 className="text-sm font-semibold text-white mb-3">Έγγραφα</h4>
               <div className="space-y-3 bg-zinc-900 rounded-2xl p-3 border border-zinc-800">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowLicenseModal(true)}
-                    className="h-10 rounded-xl border border-sky-500/25 bg-sky-500/[0.08] px-3.5 text-[13px] font-medium text-sky-100 transition hover:bg-sky-500/[0.14]"
-                  >
-                    Άδεια Κυκλοφορίας
-                  </button>
+                <div className="flex flex-wrap gap-2">           
                   <button
                     type="button"
                     onClick={() => setShowLicenseRegistrationModal(true)}
                     className="h-10 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.08] px-3.5 text-[13px] font-medium text-emerald-100 transition hover:bg-emerald-500/[0.14]"
                   >
-                    Καταχώρηση Άδειας
+                    Άδεια Κυκλοφορίας
                   </button>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-700 pt-3">
@@ -2341,6 +2358,55 @@ function VehicleViewModal({
                   <span>Επιλεγμένο αρχείο: {selectedLicenseFile.name}</span>
                 ) : (
                   <span>Δεν έχει επιλεγεί αρχείο.</span>
+                )}
+              </div>
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60">
+                <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+                  <h4 className="text-sm font-semibold text-white">Καταχωρημένα έγγραφα</h4>
+                  {loadingLicenseDocuments && <span className="text-xs text-zinc-500">Φόρτωση...</span>}
+                </div>
+                {licenseDocuments.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[480px] text-left">
+                      <thead className="bg-zinc-950/50">
+                        <tr>
+                          <th className="px-4 py-2 text-xs font-medium text-zinc-500">Τύπος</th>
+                          <th className="px-4 py-2 text-xs font-medium text-zinc-500">Αρχείο</th>
+                          <th className="px-4 py-2 text-xs font-medium text-zinc-500">Ενέργειες</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {licenseDocuments.map((document) => (
+                          <tr key={document.id} className="border-t border-zinc-800/80">
+                            <td className="px-4 py-2 text-xs text-zinc-300">{document.document_type}</td>
+                            <td className="px-4 py-2 text-xs text-white">{document.file_name}</td>
+                            <td className="px-4 py-2">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => window.open(getCarDocumentPublicUrl(document.file_url), '_blank', 'noopener,noreferrer')}
+                                  className="h-8 rounded-xl border border-sky-500/35 bg-sky-500/5 px-3 text-xs font-medium text-sky-200 transition hover:bg-sky-500/15"
+                                >
+                                  Προβολή
+                                </button>
+                                <a
+                                  href={getCarDocumentPublicUrl(document.file_url)}
+                                  download={document.file_name}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex h-8 items-center rounded-xl border border-zinc-600 bg-zinc-800/30 px-3 text-xs font-medium text-zinc-200 transition hover:bg-zinc-700/40"
+                                >
+                                  Download
+                                </a>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="px-4 py-4 text-xs text-zinc-500">Δεν υπάρχουν καταχωρημένα έγγραφα.</p>
                 )}
               </div>
               {/* TODO: Upload the selected license file to storage once document storage is introduced. */}
