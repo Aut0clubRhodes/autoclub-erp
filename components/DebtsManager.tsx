@@ -2,11 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { addDebt, fetchDebts, recordDebtPayment, type DebtRecord } from '@/lib/debtsApi';
+import { fetchCars } from '@/lib/carsApi';
 import type { SupplierRecord } from '@/lib/suppliersApi';
 
 type DebtVehicle = {
   id: string;
   plate: string;
+};
+
+type ImportCar = {
+  id: number | string;
+  plate?: string | null;
+  brand?: string | null;
+  model?: string | null;
 };
 
 type DebtsManagerProps = {
@@ -51,9 +59,11 @@ const initialPaymentForm = {
 export default function DebtsManager({ vehicles, suppliers }: DebtsManagerProps) {
   const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [paymentDebt, setPaymentDebt] = useState<DebtRecord | null>(null);
   const [form, setForm] = useState(initialForm);
   const [paymentForm, setPaymentForm] = useState(initialPaymentForm);
+  const [importFile, setImportFile] = useState<File | null>(null);
 
   const loadDebts = async () => {
     setDebts(await fetchDebts());
@@ -75,6 +85,11 @@ export default function DebtsManager({ vehicles, suppliers }: DebtsManagerProps)
   const closePaymentModal = () => {
     setPaymentDebt(null);
     setPaymentForm(initialPaymentForm);
+  };
+
+  const closeImportModal = () => {
+    setShowImportModal(false);
+    setImportFile(null);
   };
 
   const handleSaveDebt = async () => {
@@ -141,7 +156,14 @@ export default function DebtsManager({ vehicles, suppliers }: DebtsManagerProps)
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-3">
+        <button
+          type="button"
+          onClick={() => setShowImportModal(true)}
+          className="rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm font-semibold text-sky-200 transition hover:bg-sky-400/20"
+        >
+          Import Δοσολογίου
+        </button>
         <button
           type="button"
           onClick={() => setShowModal(true)}
@@ -222,6 +244,14 @@ export default function DebtsManager({ vehicles, suppliers }: DebtsManagerProps)
       </div>
 
       {showModal && <DebtFormModal form={form} setForm={setForm} suppliers={suppliers} vehicles={vehicles} onClose={closeModal} onSave={handleSaveDebt} />}
+
+      {showImportModal && (
+        <DebtImportModal
+          file={importFile}
+          setFile={setImportFile}
+          onClose={closeImportModal}
+        />
+      )}
 
       {paymentDebt && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
@@ -343,6 +373,112 @@ function DebtFormModal({
           </button>
           <button type="button" onClick={onSave} className="rounded-2xl bg-fuchsia-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-fuchsia-400">
             Αποθήκευση
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DebtImportModal({
+  file,
+  setFile,
+  onClose,
+}: {
+  file: File | null;
+  setFile: React.Dispatch<React.SetStateAction<File | null>>;
+  onClose: () => void;
+}) {
+  const [cars, setCars] = useState<ImportCar[]>([]);
+  const [selectedCarId, setSelectedCarId] = useState('');
+  const previewColumns = ['Αρ. Δόσης', 'Ημερομηνία Πληρωμής', 'Ποσό Δόσης', 'Κεφάλαιο', 'Τόκος'];
+
+  useEffect(() => {
+    fetchCars().then((records) => setCars(records as ImportCar[]));
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[86vh] w-[min(860px,92vw)] flex-col overflow-hidden rounded-[28px] border border-sky-300/15 bg-[linear-gradient(180deg,rgba(18,24,33,0.98),rgba(8,12,18,0.98))] shadow-[0_28px_90px_rgba(0,0,0,0.62)]">
+        <div className="flex items-center justify-between border-b border-white/[0.08] px-6 py-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-300/70">OCR Import V1</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">Import Δοσολογίου Δανείου</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-transparent p-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Αυτοκίνητο">
+              <select value={selectedCarId} onChange={(event) => setSelectedCarId(event.target.value)} className="input" required>
+                <option value="">Επιλογή αυτοκινήτου</option>
+                {cars.map((car) => (
+                  <option key={car.id} value={car.id}>
+                    {[car.plate, `${car.brand || ''} ${car.model || ''}`.trim()].filter(Boolean).join(' - ')}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Αρχείο Δοσολογίου">
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={(event) => setFile(event.target.files?.[0] || null)}
+                className="block w-full text-sm text-zinc-300 file:mr-4 file:rounded-xl file:border-0 file:bg-sky-500 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-black hover:file:bg-sky-400"
+              />
+            </Field>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-300">
+            {file ? `Επιλεγμένο αρχείο: ${file.name}` : 'Δεν έχει επιλεγεί αρχείο.'}
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-2xl border border-zinc-800">
+            <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/80 px-4 py-3">
+              <h3 className="text-sm font-semibold text-white">Προεπισκόπηση εισαγωγής</h3>
+              <span className="text-xs text-zinc-500">OCR δεν είναι ενεργό ακόμα</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left">
+                <thead className="bg-zinc-950/50">
+                  <tr>
+                    {previewColumns.map((column) => (
+                      <th key={column} className="px-4 py-3 text-xs font-medium text-zinc-400">
+                        {column}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colSpan={previewColumns.length} className="px-4 py-8 text-center text-sm text-zinc-500">
+                      Επιλέξτε αρχείο για προεπισκόπηση. Η OCR ανάλυση θα συνδεθεί σε επόμενο βήμα.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 border-t border-white/[0.08] bg-black/20 px-6 py-4">
+          <button type="button" onClick={onClose} className="rounded-2xl border border-zinc-700 px-5 py-3 text-sm text-zinc-300 transition hover:bg-white/[0.04]">
+            Ακύρωση
+          </button>
+          <button
+            type="button"
+            disabled
+            className="cursor-not-allowed rounded-2xl bg-sky-500/40 px-5 py-3 text-sm font-semibold text-black opacity-60"
+          >
+            Έγκριση & Καταχώρηση
           </button>
         </div>
       </div>
