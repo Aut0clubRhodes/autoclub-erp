@@ -175,6 +175,7 @@ export default function Home() {
   const [activeWindow, setActiveWindow] = useState<WindowType>(null);
   const [showAddCar, setShowAddCar] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
+  const [showIncomeNotes, setShowIncomeNotes] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showSupplierPaymentModal, setShowSupplierPaymentModal] = useState(false);
   const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
@@ -382,6 +383,7 @@ if (newTransaction?.id) {
       });
 
       setEditingIncomeId(null);
+      setShowIncomeNotes(false);
       setShowIncomeModal(false);
     } else {
       console.error('Failed to add transaction - Supabase returned error or no response');
@@ -423,6 +425,7 @@ const reloadTransactions = async () => {
 
 const handleEditIncome = (transaction: Transaction) => {
   setEditingIncomeId(transaction.id);
+  setShowIncomeNotes(false);
   setIncomeForm({
     income_type: transaction.source || 'rental',
     date: transaction.date || new Date().toISOString().split('T')[0],
@@ -1391,6 +1394,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           ...current,
           date: new Date().toISOString().split('T')[0],
         }));
+        setShowIncomeNotes(false);
         setShowIncomeModal(true);
       }}
     >
@@ -1459,14 +1463,15 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         )}
 {showIncomeModal && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-    <div className="w-full max-w-md rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl">
-      <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-800">
+    <div className="flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
         <h3 className="text-lg font-semibold text-white">Καταχώρηση Εσόδου</h3>
         <button
           type="button"
           onClick={() => {
             setShowIncomeModal(false);
             setEditingIncomeId(null);
+            setShowIncomeNotes(false);
           }}
           className="text-zinc-400 hover:text-white transition-colors p-2 rounded-lg"
         >
@@ -1474,7 +1479,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         </button>
       </div>
 
-      <div className="p-6 space-y-4">
+      <div className="min-h-0 flex-1 overflow-y-auto p-5 space-y-3">
         <label className="space-y-2 text-sm text-zinc-300 block">
           <span>Ημερομηνία</span>
           <input
@@ -1592,14 +1597,25 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500"
   />
 </label>
-        <label className="space-y-2 text-sm text-zinc-300 block">
-          <span>Σημειώσεις</span>
-          <textarea
-            value={incomeForm.notes}
-            onChange={(event) => setIncomeForm({ ...incomeForm, notes: event.target.value })}
-            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 min-h-24"
-          />
-        </label>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setShowIncomeNotes((current) => !current)}
+            className="rounded-2xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:bg-zinc-800"
+          >
+            Προσθήκη Σημειώσεων
+          </button>
+          {showIncomeNotes && (
+            <label className="space-y-2 text-sm text-zinc-300 block">
+              <span>Σημειώσεις</span>
+              <textarea
+                value={incomeForm.notes}
+                onChange={(event) => setIncomeForm({ ...incomeForm, notes: event.target.value })}
+                className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 min-h-20"
+              />
+            </label>
+          )}
+        </div>
 
         <div className="flex justify-end gap-3 pt-2">
           <button
