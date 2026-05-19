@@ -181,6 +181,7 @@ export default function Home() {
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [incomeForm, setIncomeForm] = useState({
     income_type: 'rental',
+    date: new Date().toISOString().split('T')[0],
     amount: '',
     payment_method: 'cash',
     car_id: '',
@@ -307,7 +308,7 @@ const newTransaction = await addTransaction({
   type: 'income',
   source: incomeForm.income_type,
   amount: Number(incomeForm.amount),
-  date: new Date().toISOString().split('T')[0],
+  date: incomeForm.date,
   payment_method: incomeForm.payment_method,
   car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
   agency_id: incomeForm.agency_id ? Number(incomeForm.agency_id) : null,
@@ -370,6 +371,7 @@ if (newTransaction?.id) {
 
       setIncomeForm({
         income_type: 'rental',
+        date: new Date().toISOString().split('T')[0],
         amount: '',
         payment_method: 'cash',
         car_id: '',
@@ -423,6 +425,7 @@ const handleEditIncome = (transaction: Transaction) => {
   setEditingIncomeId(transaction.id);
   setIncomeForm({
     income_type: transaction.source || 'rental',
+    date: transaction.date || new Date().toISOString().split('T')[0],
     amount: String(transaction.amount || ''),
     payment_method: transaction.payment_method || 'cash',
     car_id: transaction.car_id ? String(transaction.car_id) : '',
@@ -452,6 +455,7 @@ const handleSaveIncome = async () => {
 
   const updated = await updateTransaction(Number(editingIncomeId), {
     amount: Number(incomeForm.amount),
+    date: incomeForm.date,
     payment_method: incomeForm.payment_method,
     car_id: incomeForm.car_id ? Number(incomeForm.car_id) : null,
     agency_id: incomeForm.agency_id ? Number(incomeForm.agency_id) : null,
@@ -1382,7 +1386,13 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     <button
       className="rounded-2xl border border-sky-500 px-5 py-3 text-sm font-semibold text-sky-300 hover:bg-sky-500/10"
       type="button"
-      onClick={() => setShowIncomeModal(true)}
+      onClick={() => {
+        setIncomeForm((current) => ({
+          ...current,
+          date: new Date().toISOString().split('T')[0],
+        }));
+        setShowIncomeModal(true);
+      }}
     >
       + Καταχώρηση Εσόδου
     </button>
@@ -1465,6 +1475,15 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       </div>
 
       <div className="p-6 space-y-4">
+        <label className="space-y-2 text-sm text-zinc-300 block">
+          <span>Ημερομηνία</span>
+          <input
+            type="date"
+            value={incomeForm.date}
+            onChange={(event) => setIncomeForm({ ...incomeForm, date: event.target.value })}
+            className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500"
+          />
+        </label>
         <label className="space-y-2 text-sm text-zinc-300 block">
   <span>Τύπος Εσόδου</span>
 
@@ -2050,13 +2069,7 @@ function VehiclesTable({
                     >
                       Προβολή
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => onView(vehicle.plate)}
-                      className="service-history-btn"
-                    >
-                      Ιστορικό Service
-                    </button>
+                   
                     <button
                       type="button"
                       onClick={() => onEdit(vehicle.plate)}
