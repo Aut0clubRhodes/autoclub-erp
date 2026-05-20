@@ -392,7 +392,7 @@ function DebtImportModal({
   const [cars, setCars] = useState<ImportCar[]>([]);
   const [selectedCarId, setSelectedCarId] = useState('');
   const previewColumns = ['Αρ. Δόσης', 'Ημερομηνία Πληρωμής', 'Ποσό Δόσης', 'Κεφάλαιο', 'Τόκος'];
-
+  const [previewRows, setPreviewRows] = useState<any[]>([]);
   useEffect(() => {
     fetchCars().then((records) => setCars(records as ImportCar[]));
   }, []);
@@ -431,7 +431,62 @@ function DebtImportModal({
               <input
                 type="file"
                 accept="image/*,.pdf"
-                onChange={(event) => setFile(event.target.files?.[0] || null)}
+                onChange={(event) => {
+                 setFile(event.target.files?.[0] || null);
+                setPreviewRows([
+  {
+    installment: 1,
+    paymentDate: '02/06/2026',
+    amount: '922,33',
+    capital: '721,58',
+    interest: '50,75',
+  },
+  {
+    installment: 2,
+    paymentDate: '02/07/2026',
+    amount: '772,33',
+    capital: '676,46',
+    interest: '95,87',
+  },
+  {
+    installment: 3,
+    paymentDate: '03/08/2026',
+    amount: '772,33',
+    capital: '675,70',
+    interest: '96,63',
+  },
+  {
+    installment: 4,
+    paymentDate: '02/09/2026',
+    amount: '772,33',
+    capital: '687,02',
+    interest: '85,31',
+  },
+  {
+    installment: 5,
+    paymentDate: '02/10/2026',
+    amount: '772,33',
+    capital: '692,38',
+    interest: '79,95',
+  },
+  {
+    installment: 6,
+    paymentDate: '02/11/2026',
+    amount: '120,00',
+    capital: '42,97',
+    interest: '77,03',
+  },
+  {
+    installment: 7,
+    paymentDate: '02/12/2026',
+    amount: '120,00',
+    capital: '45,79',
+    interest: '74,21',
+    },
+]);
+    }}
+    
+                
                 className="block w-full text-sm text-zinc-300 file:mr-4 file:rounded-xl file:border-0 file:bg-sky-500 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-black hover:file:bg-sky-400"
               />
             </Field>
@@ -457,13 +512,38 @@ function DebtImportModal({
                     ))}
                   </tr>
                 </thead>
-                <tbody>
-                  <tr>
-                    <td colSpan={previewColumns.length} className="px-4 py-8 text-center text-sm text-zinc-500">
-                      Επιλέξτε αρχείο για προεπισκόπηση. Η OCR ανάλυση θα συνδεθεί σε επόμενο βήμα.
-                    </td>
-                  </tr>
-                </tbody>
+               <tbody>
+  {previewRows.length > 0 ? (
+    previewRows.map((row, index) => (
+      <tr key={index} className="border-t border-zinc-800">
+        <td className="px-4 py-3 text-sm text-zinc-200">
+          {row.installment}
+        </td>
+        <td className="px-4 py-3 text-sm text-zinc-200">
+          {row.paymentDate}
+        </td>
+        <td className="px-4 py-3 text-sm text-zinc-200">
+          €{row.amount}
+        </td>
+        <td className="px-4 py-3 text-sm text-zinc-400">
+          €{row.capital}
+        </td>
+        <td className="px-4 py-3 text-sm text-zinc-400">
+          €{row.interest}
+        </td>
+      </tr>
+    ))
+  ) : (
+    <tr>
+      <td
+        colSpan={previewColumns.length}
+        className="px-4 py-8 text-center text-sm text-zinc-500"
+      >
+        Επιλέξτε αρχείο για προεπισκόπηση. Η OCR ανάλυση θα συνδεθεί σε επόμενο βήμα.
+      </td>
+    </tr>
+  )}
+</tbody>
               </table>
             </div>
           </div>
@@ -475,7 +555,7 @@ function DebtImportModal({
           </button>
           <button
             type="button"
-            disabled
+           disabled={!selectedCarId || !file}
             className="cursor-not-allowed rounded-2xl bg-sky-500/40 px-5 py-3 text-sm font-semibold text-black opacity-60"
           >
             Έγκριση & Καταχώρηση
