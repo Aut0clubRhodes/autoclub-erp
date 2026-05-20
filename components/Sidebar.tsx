@@ -27,6 +27,7 @@ interface NavItem {
   icon: LucideIcon;
   tone: string;
   chip: string;
+  children?: NavItem[];
 }
 
 interface NavSection {
@@ -55,10 +56,18 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'ΟΙΚΟΝΟΜΙΚΑ',
     items: [
-      { label: 'Ταμείο', href: '/finance', icon: Wallet, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
-      { label: 'Έσοδα', href: '/finance/income', icon: TrendingUp, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
-      { label: 'Έξοδα', href: '/finance/expenses', icon: TrendingDown, tone: 'text-rose-300', chip: 'border-rose-400/25 bg-rose-400/10' },
-      { label: 'Οφειλές', href: '/finance/debts', icon: ReceiptText, tone: 'text-fuchsia-300', chip: 'border-fuchsia-400/25 bg-fuchsia-400/10' },
+      {
+        label: 'Ταμείο',
+        href: '/finance',
+        icon: Wallet,
+        tone: 'text-cyan-300',
+        chip: 'border-cyan-400/25 bg-cyan-400/10',
+        children: [
+          { label: 'Έσοδα', href: '/finance/income', icon: TrendingUp, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
+          { label: 'Έξοδα', href: '/finance/expenses', icon: TrendingDown, tone: 'text-rose-300', chip: 'border-rose-400/25 bg-rose-400/10' },
+          { label: 'Οφειλές', href: '/finance/debts', icon: ReceiptText, tone: 'text-fuchsia-300', chip: 'border-fuchsia-400/25 bg-fuchsia-400/10' },
+        ],
+      },
       { label: 'Αναφορές', href: '/reports', icon: BarChart3, tone: 'text-amber-300', chip: 'border-amber-400/25 bg-amber-400/10' },
     ],
   },
@@ -90,6 +99,7 @@ const WINDOW_ITEMS = [
 export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogout }: SidebarProps) {
   const pathname = usePathname();
   const [systemOpen, setSystemOpen] = useState(true);
+  const [financeOpen, setFinanceOpen] = useState(true);
 
   const handleItemClick = (item: NavItem) => {
     if (WINDOW_ITEMS.includes(item.label) && onWindowOpen) {
@@ -97,23 +107,32 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
     }
   };
 
-  const renderItem = (item: NavItem) => {
+  const renderItem = (item: NavItem, nested = false) => {
     const isWindowItem = WINDOW_ITEMS.includes(item.label);
+    const hasChildren = Boolean(item.children?.length);
+    const childIsActive = item.children?.some(
+      (child) => activeWindow === child.label || pathname === child.href || pathname.startsWith(`${child.href}/`)
+    );
     const isActive = isWindowItem
       ? activeWindow === item.label
       : pathname === item.href || pathname.startsWith(`${item.href}/`);
     const Icon = item.icon;
     const className = `group relative flex min-h-[44px] w-full items-center gap-2.5 rounded-2xl border px-3.5 py-1.5 text-left transition duration-200 ${
-      isActive
+      isActive || (hasChildren && childIsActive)
         ? 'border-sky-300/25 bg-sky-300/[0.08] text-white shadow-[0_0_0_1px_rgba(125,211,252,0.12),0_16px_30px_rgba(14,165,233,0.12)] before:absolute before:left-0 before:top-2 before:h-[calc(100%-1rem)] before:w-1 before:rounded-full before:bg-sky-300'
         : 'border-transparent text-zinc-300/90 hover:border-sky-100/[0.08] hover:bg-white/[0.035] hover:text-white'
+    }`;
+    const childClassName = `group relative ml-7 flex min-h-[32px] w-[calc(100%-1.75rem)] items-center gap-2 rounded-xl border px-3 py-1.5 text-left transition duration-200 ${
+      isActive
+        ? 'border-sky-300/20 bg-sky-300/[0.07] text-white'
+        : 'border-transparent text-zinc-400 hover:border-sky-100/[0.06] hover:bg-white/[0.03] hover:text-zinc-100'
     }`;
 
     const content = (
       <>
         <span
           className={`flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border transition duration-200 ${item.chip} ${
-            isActive ? 'shadow-[0_0_24px_rgba(56,189,248,0.14)]' : 'group-hover:shadow-[0_0_18px_rgba(255,255,255,0.08)]'
+            isActive || (hasChildren && childIsActive) ? 'shadow-[0_0_24px_rgba(56,189,248,0.14)]' : 'group-hover:shadow-[0_0_18px_rgba(255,255,255,0.08)]'
           }`}
         >
           <Icon className={`h-[18px] w-[18px] ${item.tone}`} strokeWidth={1.9} />
@@ -121,18 +140,54 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
         <span className="text-[13px] font-medium leading-none tracking-[0.01em]">{item.label}</span>
       </>
     );
+    const childContent = (
+      <>
+        <span
+          className={`flex h-[26px] w-[26px] items-center justify-center rounded-lg border transition duration-200 ${item.chip} ${
+            isActive ? 'shadow-[0_0_18px_rgba(56,189,248,0.12)]' : 'group-hover:shadow-[0_0_14px_rgba(255,255,255,0.07)]'
+          }`}
+        >
+          <Icon className={`h-[14px] w-[14px] ${item.tone}`} strokeWidth={1.9} />
+        </span>
+        <span className="text-[12px] font-medium leading-none tracking-[0.01em]">{item.label}</span>
+      </>
+    );
+
+    if (hasChildren) {
+      return (
+        <div key={item.href} className="space-y-1">
+          <div className="relative">
+            <button type="button" onClick={() => handleItemClick(item)} className={`${className} pr-11`}>
+              {content}
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setFinanceOpen((current) => !current);
+              }}
+              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.02] text-xs text-zinc-400 transition hover:border-sky-300/20 hover:bg-sky-300/[0.08] hover:text-white"
+              aria-label="Toggle finance menu"
+            >
+              <span className={`transition ${financeOpen ? 'rotate-180' : ''}`}>⌄</span>
+            </button>
+          </div>
+          {financeOpen && <div className="space-y-1">{item.children?.map((child) => renderItem(child, true))}</div>}
+        </div>
+      );
+    }
 
     if (isWindowItem) {
       return (
-        <button key={item.href} type="button" onClick={() => handleItemClick(item)} className={className}>
-          {content}
+        <button key={item.href} type="button" onClick={() => handleItemClick(item)} className={nested ? childClassName : className}>
+          {nested ? childContent : content}
         </button>
       );
     }
 
     return (
-      <Link key={item.href} href={item.href} className={className}>
-        {content}
+      <Link key={item.href} href={item.href} className={nested ? childClassName : className}>
+        {nested ? childContent : content}
       </Link>
     );
   };
@@ -171,7 +226,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
                 </div>
               )}
 
-              {isOpen && <div className="space-y-1">{section.items.map(renderItem)}</div>}
+              {isOpen && <div className="space-y-1">{section.items.map((item) => renderItem(item))}</div>}
             </div>
           );
         })}
