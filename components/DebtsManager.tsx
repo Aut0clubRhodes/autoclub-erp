@@ -250,6 +250,7 @@ export default function DebtsManager({ vehicles, suppliers }: DebtsManagerProps)
           file={importFile}
           setFile={setImportFile}
           onClose={closeImportModal}
+          onImported={loadDebts}
         />
       )}
 
@@ -384,15 +385,44 @@ function DebtImportModal({
   file,
   setFile,
   onClose,
+  onImported,
 }: {
   file: File | null;
   setFile: React.Dispatch<React.SetStateAction<File | null>>;
   onClose: () => void;
-}) {
+  onImported: () => Promise<void>;
+}){
   const [cars, setCars] = useState<ImportCar[]>([]);
   const [selectedCarId, setSelectedCarId] = useState('');
   const previewColumns = ['Αρ. Δόσης', 'Ημερομηνία Πληρωμής', 'Ποσό Δόσης', 'Κεφάλαιο', 'Τόκος'];
   const [previewRows, setPreviewRows] = useState<any[]>([]);
+  const handleImportApprove = async () => {
+  if (!selectedCarId || previewRows.length === 0) {
+    return;
+  }
+  for (const row of previewRows)
+    {
+    const created = await addDebt({
+      title: `Δόση ${row.installment}`,
+      supplier_id: null,
+      car_id: Number(selectedCarId),
+      category: 'Δάνειο',
+      due_date: row.paymentDate,
+     original_amount: Number(
+  String(row.amount)
+    .replace('€', '')
+    .replace(',', '.')
+    .trim()
+),
+      paid_amount: 0,
+      notes: `Κεφάλαιο: ${row.capital} | Τόκος: ${row.interest}`,
+    });
+    console.log('CREATED', created);
+  }
+
+  alert('Οι δόσεις καταχωρήθηκαν.');
+  onClose();
+};
   useEffect(() => {
     fetchCars().then((records) => setCars(records as ImportCar[]));
   }, []);
@@ -556,11 +586,7 @@ function DebtImportModal({
          <button
   type="button"
   disabled={!selectedCarId || !file || previewRows.length === 0}
-  onClick={() => {
-    console.log('IMPORT READY');
-    console.log(previewRows);
-    onClose();
-  }}
+ onClick={handleImportApprove}
             className={
   !selectedCarId || !file || previewRows.length === 0
     ? "cursor-not-allowed rounded-2xl bg-sky-500/40 px-5 py-3 text-sm font-semibold text-black opacity-60"
