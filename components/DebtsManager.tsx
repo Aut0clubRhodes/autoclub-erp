@@ -13,7 +13,7 @@ import { fetchCars } from '@/lib/carsApi';
 import type { SupplierRecord } from '@/lib/suppliersApi';
 
 type DebtVehicle = {
-  id: string;
+  id: number | string;
   plate: string;
 };
 
@@ -64,6 +64,7 @@ const initialPaymentForm = {
 };
 
 export default function DebtsManager({ vehicles, suppliers }: DebtsManagerProps) {
+  console.log('DEBTS VEHICLES:', vehicles);
   const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingDebtId, setEditingDebtId] = useState<number | null>(null);
@@ -231,7 +232,14 @@ const handleDeleteDebt = async (debtId: number) => {
             </tr>
           </thead>
           <tbody>
-            {debts.map((debt) => (
+            {[...debts]
+  .sort((a, b) => {
+    const dateA = a.due_date ? new Date(a.due_date).getTime() : 0;
+    const dateB = b.due_date ? new Date(b.due_date).getTime() : 0;
+
+    return dateA - dateB;
+  })
+  .map((debt) => (
               <tr key={debt.id} className="border-t border-zinc-800">
                 <td className="whitespace-nowrap px-3 py-3 text-sm text-zinc-200">{debt.due_date || '-'}</td>
                 <td className="px-3 py-3 text-sm font-medium text-white">{debt.title}</td>
