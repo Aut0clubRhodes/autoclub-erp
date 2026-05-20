@@ -12,11 +12,12 @@ import {
 export default function ExpenseCategoriesManager() {
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [newCategory, setNewCategory] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const loadCategories = async () => {
+  const loadCategories = async (seedIfEmpty = true) => {
     const loadedCategories = await fetchExpenseCategories();
-    if (loadedCategories.length === 0) {
+    if (seedIfEmpty && loadedCategories.length === 0) {
       const seededCategories = await seedDefaultExpenseCategories();
       setCategories(seededCategories);
       return;
@@ -26,8 +27,12 @@ export default function ExpenseCategoriesManager() {
   };
 
   useEffect(() => {
-    loadCategories();
+    loadCategories(false);
   }, []);
+
+  const filteredCategories = categories.filter((category) =>
+    category.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const handleAddCategory = async () => {
     const name = newCategory.trim();
@@ -37,9 +42,8 @@ export default function ExpenseCategoriesManager() {
     if (!created) return;
 
     setNewCategory('');
-    loadCategories();
+    loadCategories(false);
   };
-
   const handleDeleteCategory = async (category: ExpenseCategory) => {
     const confirmed = window.confirm(`Να διαγραφεί η κατηγορία "${category.name}";`);
     if (!confirmed) return;
@@ -63,7 +67,7 @@ export default function ExpenseCategoriesManager() {
       return;
     }
 
-    setCategories((current) => current.filter((item) => item.id !== categoryId));
+    await loadCategories(false);
   };
 
   return (
@@ -85,12 +89,18 @@ export default function ExpenseCategoriesManager() {
       </div>
 
       <div className="space-y-3">
+        <input
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Αναζήτηση κατηγορίας..."
+          className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-white outline-none transition placeholder:text-zinc-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+        />
         {errorMessage && (
           <div className="rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200">
             {errorMessage}
           </div>
         )}
-        {categories.map((category) => (
+        {filteredCategories.map((category) => (
           <div
             key={category.id}
             className="flex items-center justify-between gap-4 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3"
