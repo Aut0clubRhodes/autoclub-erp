@@ -1,7 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { addDebt, fetchDebts, recordDebtPayment, type DebtRecord } from '@/lib/debtsApi';
+import {
+  addDebt,
+  deleteDebt,
+  updateDebt,
+  fetchDebts,
+  recordDebtPayment,
+  type DebtRecord
+} from '@/lib/debtsApi';
 import { fetchCars } from '@/lib/carsApi';
 import type { SupplierRecord } from '@/lib/suppliersApi';
 
@@ -59,6 +66,7 @@ const initialPaymentForm = {
 export default function DebtsManager({ vehicles, suppliers }: DebtsManagerProps) {
   const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [editingDebtId, setEditingDebtId] = useState<number | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [paymentDebt, setPaymentDebt] = useState<DebtRecord | null>(null);
   const [form, setForm] = useState(initialForm);
@@ -102,7 +110,21 @@ export default function DebtsManager({ vehicles, suppliers }: DebtsManagerProps)
       alert('Συμπληρώστε αρχικό ποσό.');
       return;
     }
+if (editingDebtId) {
+  await updateDebt(editingDebtId, {
+    title: form.title.trim(),
+    supplier_id: form.supplier_id ? Number(form.supplier_id) : null,
+    car_id: form.car_id ? Number(form.car_id) : null,
+    category: form.category,
+    due_date: form.due_date || null,
+    original_amount: Number(form.original_amount),
+    notes: form.notes || null,
+  });
 
+  closeModal();
+  await loadDebts();
+  return;
+}
     const created = await addDebt({
       title: form.title.trim(),
       supplier_id: form.supplier_id ? Number(form.supplier_id) : null,
@@ -122,7 +144,20 @@ export default function DebtsManager({ vehicles, suppliers }: DebtsManagerProps)
     closeModal();
     await loadDebts();
   };
+const handleDeleteDebt = async (debtId: number) => {
+  const confirmed = window.confirm('Να διαγραφεί η οφειλή;');
 
+  if (!confirmed) return;
+
+  const deleted = await deleteDebt(debtId);
+
+  if (!deleted) {
+    alert('Η οφειλή δεν διαγράφηκε.');
+    return;
+  }
+
+  await loadDebts();
+};
   const handleSavePayment = async () => {
     if (!paymentDebt) return;
 
@@ -226,9 +261,30 @@ export default function DebtsManager({ vehicles, suppliers }: DebtsManagerProps)
                     </button>
                     {['Επεξεργασία', 'Διαγραφή'].map((label) => (
                       <button
-                        key={`${debt.id}-${label}`}
-                        type="button"
-                        onClick={showPlaceholder}
+  key={`${debt.id}-${label}`}
+  type="button"
+ onClick={() => {
+  if (label === 'Διαγραφή') {
+    handleDeleteDebt(Number(debt.id));
+    return;
+  }
+
+  if (label === 'Επεξεργασία') {
+    setEditingDebtId(Number(debt.id));
+
+    setForm({
+      title: debt.title || '',
+      supplier_id: debt.supplier_id ? String(debt.supplier_id) : '',
+      car_id: debt.car_id ? String(debt.car_id) : '',
+      category: debt.category || '',
+      due_date: debt.due_date || '',
+      original_amount: String(debt.original_amount || ''),
+      notes: debt.notes || '',
+    });
+
+    setShowModal(true);
+  }
+}}
                         className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-zinc-200 transition hover:bg-white/[0.07]"
                       >
                         {label}
