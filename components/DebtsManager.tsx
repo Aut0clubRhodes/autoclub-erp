@@ -501,7 +501,7 @@ function DebtImportModal({
               <h3 className="text-sm font-semibold text-white">Προεπισκόπηση εισαγωγής</h3>
               <span className="text-xs text-zinc-500">OCR δεν είναι ενεργό ακόμα</span>
             </div>
-            <div className="overflow-x-auto">
+           <div className="max-h-[320px] overflow-auto">
               <table className="w-full min-w-[760px] text-left">
                 <thead className="bg-zinc-950/50">
                   <tr>
@@ -553,10 +553,19 @@ function DebtImportModal({
           <button type="button" onClick={onClose} className="rounded-2xl border border-zinc-700 px-5 py-3 text-sm text-zinc-300 transition hover:bg-white/[0.04]">
             Ακύρωση
           </button>
-          <button
-            type="button"
-           disabled={!selectedCarId || !file}
-            className="cursor-not-allowed rounded-2xl bg-sky-500/40 px-5 py-3 text-sm font-semibold text-black opacity-60"
+         <button
+  type="button"
+  disabled={!selectedCarId || !file || previewRows.length === 0}
+  onClick={() => {
+    console.log('IMPORT READY');
+    console.log(previewRows);
+    onClose();
+  }}
+            className={
+  !selectedCarId || !file || previewRows.length === 0
+    ? "cursor-not-allowed rounded-2xl bg-sky-500/40 px-5 py-3 text-sm font-semibold text-black opacity-60"
+    : "cursor-pointer rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-sky-400"
+}
           >
             Έγκριση & Καταχώρηση
           </button>
