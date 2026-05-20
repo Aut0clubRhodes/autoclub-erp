@@ -103,7 +103,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
       ? activeWindow === item.label
       : pathname === item.href || pathname.startsWith(`${item.href}/`);
     const Icon = item.icon;
-    const className = `group relative flex min-h-[50px] w-full items-center gap-3 rounded-2xl border px-3.5 py-2 text-left transition duration-200 ${
+    const className = `group relative flex min-h-[44px] w-full items-center gap-2.5 rounded-2xl border px-3.5 py-1.5 text-left transition duration-200 ${
       isActive
         ? 'border-sky-300/25 bg-sky-300/[0.08] text-white shadow-[0_0_0_1px_rgba(125,211,252,0.12),0_16px_30px_rgba(14,165,233,0.12)] before:absolute before:left-0 before:top-2 before:h-[calc(100%-1rem)] before:w-1 before:rounded-full before:bg-sky-300'
         : 'border-transparent text-zinc-300/90 hover:border-sky-100/[0.08] hover:bg-white/[0.035] hover:text-white'
@@ -118,7 +118,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
         >
           <Icon className={`h-[18px] w-[18px] ${item.tone}`} strokeWidth={1.9} />
         </span>
-        <span className="text-[15px] font-medium leading-none tracking-[0.01em]">{item.label}</span>
+        <span className="text-[13px] font-medium leading-none tracking-[0.01em]">{item.label}</span>
       </>
     );
 
@@ -149,29 +149,29 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
         </p>
       </div>
 
-      <nav className="flex-1 space-y-5 overflow-y-auto px-4 py-5">
+      <nav className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
         {NAV_SECTIONS.map((section) => {
           const isSystem = section.collapsible;
           const isOpen = !isSystem || systemOpen;
 
           return (
-            <div key={section.title} className="space-y-2.5">
+            <div key={section.title} className="space-y-2">
               {isSystem ? (
                 <button
                   type="button"
                   onClick={() => setSystemOpen((current) => !current)}
-                  className="flex w-full items-center justify-between px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8e99a8] transition hover:text-zinc-200"
+                  className="flex w-full items-center justify-between px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8e99a8] transition hover:text-zinc-200"
                 >
                   <span>{section.title}</span>
                   <span className={`text-xs transition ${systemOpen ? 'rotate-180' : ''}`}>⌄</span>
                 </button>
               ) : (
-                <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#8e99a8]">
+                <div className="px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8e99a8]">
                   {section.title}
                 </div>
               )}
 
-              {isOpen && <div className="space-y-1.5">{section.items.map(renderItem)}</div>}
+              {isOpen && <div className="space-y-1">{section.items.map(renderItem)}</div>}
             </div>
           );
         })}
