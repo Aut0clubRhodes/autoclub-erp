@@ -5,11 +5,12 @@ import AgenciesReport from './AgenciesReport';
 import CarsReport from './CarsReport';
 import ExpensesReport from './ExpensesReport';
 import KteoReport from './KteoReport';
+import SecretariatReport from './SecretariatReport';
 import SuppliersReport from './SuppliersReport';
 import { fetchDebts, type DebtRecord } from '@/lib/debtsApi';
 import type { ReportsData, ReportsFilters } from './types';
 
-type ReportSection = 'agencies' | 'expenses' | 'suppliers' | 'cars' | 'kteo';
+type ReportSection = 'agencies' | 'expenses' | 'suppliers' | 'cars' | 'kteo' | 'secretariat';
 
 const sections: { id: ReportSection; label: string }[] = [
   { id: 'agencies', label: 'Πρακτορεία' },
@@ -17,6 +18,7 @@ const sections: { id: ReportSection; label: string }[] = [
   { id: 'suppliers', label: 'Προμηθευτές' },
   { id: 'cars', label: 'Αυτοκίνητα' },
   { id: 'kteo', label: 'ΚΤΕΟ' },
+  { id: 'secretariat', label: 'Γραμματεία' },
 ];
 
 const initialFilters: ReportsFilters = {
@@ -224,6 +226,7 @@ export default function ReportsCenter({
                 onUpdateKteo={onUpdateKteo}
               />
             )}
+            {activeSection === 'secretariat' && <SecretariatReport debts={debts} />}
           </div>
         </main>
       </div>
