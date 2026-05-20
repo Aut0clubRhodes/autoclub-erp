@@ -396,6 +396,10 @@ function DebtImportModal({
   const [selectedCarId, setSelectedCarId] = useState('');
   const previewColumns = ['Αρ. Δόσης', 'Ημερομηνία Πληρωμής', 'Ποσό Δόσης', 'Κεφάλαιο', 'Τόκος'];
   const [previewRows, setPreviewRows] = useState<any[]>([]);
+  const toIsoDate = (date: string) => {
+  const [day, month, year] = date.split('/');
+  return `${year}-${month}-${day}`;
+};
   const handleImportApprove = async () => {
   if (!selectedCarId || previewRows.length === 0) {
     return;
@@ -407,7 +411,7 @@ function DebtImportModal({
       supplier_id: null,
       car_id: Number(selectedCarId),
       category: 'Δάνειο',
-      due_date: row.paymentDate,
+      due_date: toIsoDate(row.paymentDate),
      original_amount: Number(
   String(row.amount)
     .replace('€', '')
