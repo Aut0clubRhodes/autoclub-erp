@@ -60,6 +60,14 @@ type WindowType =
   | 'Πρακτορεία'
   | null;
 
+type WindowId = Exclude<WindowType, null>;
+
+type OpenWindow = {
+  id: WindowId;
+  title: string;
+  zIndex: number;
+};
+
 type Vehicle = {
   id: string;
   plate: string;
@@ -182,7 +190,12 @@ const initialVehicles: Vehicle[] = [
 export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [activeWindow, setActiveWindow] = useState<WindowType>(null);
+  const [openWindows, setOpenWindows] = useState<OpenWindow[]>([]);
+  const [topZIndex, setTopZIndex] = useState(50);
+  const activeWindow = openWindows.length
+    ? openWindows.reduce((topWindow, windowItem) => (windowItem.zIndex > topWindow.zIndex ? windowItem : topWindow), openWindows[0]).id
+    : null;
+  const hasOpenWindow = (windowId: WindowId) => openWindows.some((windowItem) => windowItem.id === windowId);
   const [showAddCar, setShowAddCar] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showIncomeNotes, setShowIncomeNotes] = useState(false);
@@ -882,13 +895,72 @@ const handleSaveSupplierPayment = async () => {
     loadFinanceTransactions();
   }, [activeWindow, userEmail]);
 
-  const handleWindowOpen = (windowId: string) => {
-    setActiveWindow(windowId as WindowType);
+  const getWindowTitleForId = (windowId: WindowId) => {
+    switch (windowId) {
+      case 'Αυτοκίνητα':
+        return 'Διαχείριση Αυτοκινήτων';
+      case 'Service':
+        return 'Service';
+      case 'Ταμείο':
+        return 'Ταμείο';
+      case 'Έσοδα':
+        return 'Έσοδα';
+      case 'Έξοδα':
+        return 'Έξοδα';
+      case 'Οφειλές':
+        return 'Οφειλές';
+      case 'Προμηθευτές':
+        return 'Προμηθευτές';
+      case 'Έγγραφα':
+        return 'Έγγραφα';
+      case 'Κατηγορίες Εξόδων':
+        return 'Κατηγορίες Εξόδων';
+      case 'Αναφορές':
+        return 'Αναφορές';
+      case 'Πρακτορεία':
+        return 'Πρακτορεία';
+      default:
+        return '';
+    }
+  };
+
+  const focusWindow = (windowId: WindowId) => {
+    setTopZIndex((current) => {
+      const nextZIndex = current + 1;
+      setOpenWindows((currentWindows) =>
+        currentWindows.map((windowItem) =>
+          windowItem.id === windowId ? { ...windowItem, zIndex: nextZIndex } : windowItem
+        )
+      );
+      return nextZIndex;
+    });
+  };
+
+  const openWindow = (windowId: WindowId, title = getWindowTitleForId(windowId)) => {
+    setTopZIndex((current) => {
+      const nextZIndex = current + 1;
+      setOpenWindows((currentWindows) => {
+        const existingWindow = currentWindows.find((windowItem) => windowItem.id === windowId);
+
+        if (existingWindow) {
+          return currentWindows.map((windowItem) =>
+            windowItem.id === windowId ? { ...windowItem, zIndex: nextZIndex } : windowItem
+          );
+        }
+
+        return [...currentWindows, { id: windowId, title, zIndex: nextZIndex }];
+      });
+      return nextZIndex;
+    });
     setShowAddCar(false);
   };
 
+  const handleWindowOpen = (windowId: string) => {
+    openWindow(windowId as WindowId);
+  };
+
   const openHomepageIncome = () => {
-    setActiveWindow('Έσοδα');
+    openWindow('Έσοδα');
     setIncomeForm((current) => ({
       ...current,
       date: new Date().toISOString().split('T')[0],
@@ -898,12 +970,12 @@ const handleSaveSupplierPayment = async () => {
   };
 
   const openHomepageExpense = () => {
-    setActiveWindow('Έξοδα');
+    openWindow('Έξοδα');
     openAddExpenseModal();
   };
 
-  const handleWindowClose = () => {
-    setActiveWindow(null);
+  const closeWindow = (windowId: WindowId) => {
+    setOpenWindows((currentWindows) => currentWindows.filter((windowItem) => windowItem.id !== windowId));
     setShowAddCar(false);
     setShowExpenseModal(false);
     setEditingIncomeId(null);
@@ -1350,8 +1422,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const formatRelatedValue = (label: string, id: string) =>
     id ? `${label} #${id}` : '-';
 
-  const renderWindowContent = () => {
-    switch (activeWindow) {
+  const renderWindowContent = (windowId: WindowId) => {
+    switch (windowId) {
   case 'Πρακτορεία':
     return (
       <AgenciesManager />
@@ -1449,8 +1521,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     }
   };
 
-  const getWindowTitle = () => {
-    switch (activeWindow) {
+  const getWindowTitle = (windowId: WindowId) => {
+    switch (windowId) {
       case 'Αυτοκίνητα':
         return 'Διαχείριση Αυτοκινήτων';
       case 'Service':
@@ -1478,15 +1550,15 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     }
   };
 
-  const getWindowActions = () => {
-    if (activeWindow === 'Αυτοκίνητα') {
+  const getWindowActions = (windowId: WindowId) => {
+    if (windowId === 'Αυτοκίνητα') {
       return (
         <button className="add-car-btn" type="button" onClick={openAddCarModal}>
           + Προσθήκη Αυτοκινήτου
         </button>
       );
     }
-    if (activeWindow === 'Έσοδα') {
+    if (windowId === 'Έσοδα') {
   return (
     <button
       className="rounded-2xl border border-sky-500 px-5 py-3 text-sm font-semibold text-sky-300 hover:bg-sky-500/10"
@@ -1529,7 +1601,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       />
       <main className="relative flex-1 bg-[radial-gradient(circle_at_45%_44%,rgba(14,165,233,0.1),transparent_24%),radial-gradient(circle_at_59%_40%,rgba(34,197,94,0.065),transparent_22%),linear-gradient(180deg,#08111a_0%,#050910_100%)]">
         {/* Homepage with centered logo */}
-        {!activeWindow && (
+        {openWindows.length === 0 && (
           <div className="flex h-full w-full items-center justify-center px-4 py-8">
             <div className="flex w-full max-w-[640px] flex-col items-center gap-3.5">
               <div className="relative flex h-[304px] w-[min(552px,84vw)] flex-col items-center justify-center transition duration-300 hover:-translate-y-0.5">
@@ -1571,7 +1643,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               <div className="grid w-full max-w-[620px] gap-3 lg:grid-cols-3">
                 <button
                   type="button"
-                  onClick={() => setActiveWindow('Έσοδα')}
+                  onClick={() => openWindow('Έσοδα')}
                   className="group cursor-pointer rounded-2xl border border-emerald-300/14 bg-white/[0.025] p-3 text-left shadow-[0_0_22px_rgba(52,211,153,0.045)] transition duration-200 hover:-translate-y-px hover:border-emerald-300/28 hover:bg-white/[0.04] hover:shadow-[0_0_28px_rgba(52,211,153,0.09)]"
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200/65">
@@ -1595,7 +1667,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
                 <button
                   type="button"
-                  onClick={() => setActiveWindow('Έξοδα')}
+                  onClick={() => openWindow('Έξοδα')}
                   className="group cursor-pointer rounded-2xl border border-rose-300/14 bg-white/[0.025] p-3 text-left shadow-[0_0_22px_rgba(251,113,133,0.045)] transition duration-200 hover:-translate-y-px hover:border-rose-300/28 hover:bg-white/[0.04] hover:shadow-[0_0_28px_rgba(251,113,133,0.09)]"
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-200/65">
@@ -1619,7 +1691,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
                 <button
                   type="button"
-                  onClick={() => setActiveWindow('Οφειλές')}
+                  onClick={() => openWindow('Οφειλές')}
                   className="group cursor-pointer rounded-2xl border border-amber-300/18 bg-amber-300/[0.04] p-3 text-left shadow-[0_0_24px_rgba(251,191,36,0.06)] transition duration-200 hover:-translate-y-px hover:border-amber-300/30 hover:bg-amber-300/[0.06] hover:shadow-[0_0_30px_rgba(251,191,36,0.11)]"
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-200/70">
@@ -1667,18 +1739,21 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         )}
 
         {/* Floating Window */}
-        {activeWindow && (
+        {openWindows.map((windowItem) => (
           <Window
-            title={getWindowTitle()}
-            onClose={handleWindowClose}
-            titleActions={getWindowActions()}
-            fullscreen={activeWindow === 'Αναφορές'}
-            financeDashboard={activeWindow === 'Ταμείο'}
-            wide={activeWindow === 'Αυτοκίνητα' || activeWindow === 'Ταμείο' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα' || activeWindow === 'Οφειλές' || activeWindow === 'Service' || activeWindow === 'Έγγραφα'}
+            key={windowItem.id}
+            title={windowItem.title || getWindowTitle(windowItem.id)}
+            onClose={() => closeWindow(windowItem.id)}
+            onFocus={() => focusWindow(windowItem.id)}
+            zIndex={windowItem.zIndex}
+            titleActions={getWindowActions(windowItem.id)}
+            fullscreen={windowItem.id === 'Αναφορές'}
+            financeDashboard={windowItem.id === 'Ταμείο'}
+            wide={windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Οφειλές' || windowItem.id === 'Service' || windowItem.id === 'Έγγραφα'}
           >
-            {renderWindowContent()}
+            {renderWindowContent(windowItem.id)}
           </Window>
-        )}
+        ))}
 {showIncomeModal && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
     <div className="flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl">
