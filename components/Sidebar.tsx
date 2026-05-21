@@ -10,6 +10,7 @@ import {
   Building2,
   CalendarDays,
   Car,
+  FileText,
   LayoutDashboard,
   ReceiptText,
   Settings2,
@@ -77,6 +78,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Προμηθευτές', href: '/suppliers', icon: Building2, tone: 'text-violet-300', chip: 'border-violet-400/25 bg-violet-400/10' },
       { label: 'Πρακτορεία', href: '/agencies', icon: BriefcaseBusiness, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
+      { label: 'Έγγραφα', href: '/vehicle-documents', icon: FileText, tone: 'text-sky-300', chip: 'border-sky-400/25 bg-sky-400/10' },
       { label: 'Κατηγορίες Εξόδων', href: '/expense-categories', icon: Tags, tone: 'text-amber-300', chip: 'border-amber-400/25 bg-amber-400/10' },
       { label: 'Ρυθμίσεις', href: '/settings', icon: Settings2, tone: 'text-slate-300', chip: 'border-slate-400/20 bg-slate-400/10' },
     ],
@@ -93,6 +95,7 @@ const WINDOW_ITEMS = [
   'Προμηθευτές',
   'Αναφορές',
   'Πρακτορεία',
+  'Έγγραφα',
   'Κατηγορίες Εξόδων',
 ];
 

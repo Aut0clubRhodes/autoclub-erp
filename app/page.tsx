@@ -23,6 +23,7 @@ import AgenciesManager from '@/components/AgenciesManager';
 import SuppliersManager from '@/components/SuppliersManager';
 import ExpenseCategoriesManager from '@/components/ExpenseCategoriesManager';
 import ServicesManager from '@/components/ServicesManager';
+import VehicleDocumentsManager from '@/components/VehicleDocumentsManager';
 import { supabase } from '@/lib/supabaseClient';
 import {
   addIncomeEntry,
@@ -53,6 +54,7 @@ type WindowType =
   | 'Έξοδα'
   | 'Οφειλές'
   | 'Προμηθευτές'
+  | 'Έγγραφα'
   | 'Κατηγορίες Εξόδων'
   | 'Αναφορές'
   | 'Πρακτορεία'
@@ -1418,6 +1420,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         );
       case 'Προμηθευτές':
         return <SuppliersManager onSuppliersChange={setSuppliers} />;
+      case 'Έγγραφα':
+        return <VehicleDocumentsManager />;
       case 'Κατηγορίες Εξόδων':
         return <ExpenseCategoriesManager />;
       case 'Αναφορές':
@@ -1461,6 +1465,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return 'Οφειλές';
       case 'Προμηθευτές':
         return 'Προμηθευτές';
+      case 'Έγγραφα':
+        return 'Έγγραφα';
       case 'Κατηγορίες Εξόδων':
         return 'Κατηγορίες Εξόδων';
       case 'Αναφορές':
@@ -1668,7 +1674,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             titleActions={getWindowActions()}
             fullscreen={activeWindow === 'Αναφορές'}
             financeDashboard={activeWindow === 'Ταμείο'}
-            wide={activeWindow === 'Αυτοκίνητα' || activeWindow === 'Ταμείο' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα' || activeWindow === 'Οφειλές' || activeWindow === 'Service'}
+            wide={activeWindow === 'Αυτοκίνητα' || activeWindow === 'Ταμείο' || activeWindow === 'Έσοδα' || activeWindow === 'Έξοδα' || activeWindow === 'Οφειλές' || activeWindow === 'Service' || activeWindow === 'Έγγραφα'}
           >
             {renderWindowContent()}
           </Window>
