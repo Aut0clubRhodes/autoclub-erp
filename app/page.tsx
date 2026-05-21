@@ -75,6 +75,12 @@ type Vehicle = {
   road_tax_expiry?: string;
 };
 
+type LicenseViewerState = {
+  vehicle: Vehicle;
+  document?: CarDocumentRecord;
+  url?: string;
+};
+
 type Transaction = {
   id: string;
   date: string;
@@ -240,6 +246,9 @@ export default function Home() {
   const [toDate, setToDate] = useState('');
   const [editingPlate, setEditingPlate] = useState<string | null>(null);
   const [viewingPlate, setViewingPlate] = useState<string | null>(null);
+  const [licenseViewer, setLicenseViewer] = useState<LicenseViewerState | null>(null);
+  const [licenseZoom, setLicenseZoom] = useState(1);
+  const [licenseRotation, setLicenseRotation] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -934,6 +943,33 @@ const handleSaveSupplierPayment = async () => {
     setViewingPlate(plate);
   };
 
+  const openVehicleLicense = async (vehicle: Vehicle) => {
+    const documents = await fetchCarDocuments(Number(vehicle.id));
+    const licenseDocument = documents.find((document) => {
+      const documentType = String(document.document_type || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+      return documentType.includes('αδεια') || documentType.includes('κυκλοφορ');
+    });
+
+    if (licenseDocument) {
+      setLicenseZoom(1);
+      setLicenseRotation(0);
+      setLicenseViewer({
+        vehicle,
+        document: licenseDocument,
+        url: getCarDocumentPublicUrl(licenseDocument.file_url),
+      });
+      return;
+    }
+
+    setLicenseZoom(1);
+    setLicenseRotation(0);
+    setLicenseViewer({ vehicle });
+  };
+
   const closeViewCarModal = () => {
     setViewingPlate(null);
   };
@@ -1336,6 +1372,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             <VehiclesTable
               vehicles={filteredVehicles}
               onView={openViewCarModal}
+              onViewLicense={openVehicleLicense}
               onEdit={openEditCarModal}
               onDelete={deleteVehicle}
             />
@@ -2201,6 +2238,23 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             transactions={transactions}
           />
         )}
+
+        {licenseViewer && (
+          <VehicleLicenseViewerModal
+            viewer={licenseViewer}
+            zoom={licenseZoom}
+            rotation={licenseRotation}
+            onZoomIn={() => setLicenseZoom((current) => Math.min(current + 0.15, 2.5))}
+            onZoomOut={() => setLicenseZoom((current) => Math.max(current - 0.15, 0.5))}
+            onRotateLeft={() => setLicenseRotation((current) => current - 90)}
+            onRotateRight={() => setLicenseRotation((current) => current + 90)}
+            onReset={() => {
+              setLicenseZoom(1);
+              setLicenseRotation(0);
+            }}
+            onClose={() => setLicenseViewer(null)}
+          />
+        )}
       </main>
     </>
   );
@@ -2217,11 +2271,13 @@ function formatEuro(value: string) {
 function VehiclesTable({
   vehicles,
   onView,
+  onViewLicense,
   onEdit,
   onDelete,
 }: {
   vehicles: Vehicle[];
   onView: (plate: string) => void;
+  onViewLicense: (vehicle: Vehicle) => void;
   onEdit: (plate: string) => void;
   onDelete: (plate: string) => void;
 }) {
@@ -2251,7 +2307,7 @@ function VehiclesTable({
                 <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.year}</td>
                 <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.km}</td>
                 <td className="py-4 px-4 text-sm text-zinc-200 font-medium">{formatEuro(vehicle.price)}</td>
-                <td className="min-w-[300px] py-4 px-4 text-sm">
+                <td className="min-w-[430px] py-4 px-4 text-sm">
                   <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
                     <button
                       type="button"
@@ -2259,6 +2315,13 @@ function VehiclesTable({
                       className="rounded-2xl border border-sky-600 bg-zinc-900 px-3 py-2 text-xs text-sky-300 transition hover:bg-sky-500/10"
                     >
                       Προβολή
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onViewLicense(vehicle)}
+                      className="rounded-2xl border border-emerald-500/35 bg-emerald-500/[0.06] px-3 py-2 text-xs text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/12"
+                    >
+                      Προβολή Άδειας
                     </button>
                    
                     <button
@@ -2281,6 +2344,134 @@ function VehiclesTable({
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function VehicleLicenseViewerModal({
+  viewer,
+  zoom,
+  rotation,
+  onZoomIn,
+  onZoomOut,
+  onRotateLeft,
+  onRotateRight,
+  onReset,
+  onClose,
+}: {
+  viewer: LicenseViewerState;
+  zoom: number;
+  rotation: number;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onRotateLeft: () => void;
+  onRotateRight: () => void;
+  onReset: () => void;
+  onClose: () => void;
+}) {
+  const { vehicle, document, url } = viewer;
+  const fileName = document?.file_name || '';
+  const documentUrl = url || '';
+  const isPdf =
+    fileName.toLowerCase().endsWith('.pdf') ||
+    documentUrl.toLowerCase().includes('.pdf');
+  const isImage = Boolean(documentUrl) && !isPdf;
+
+  const controlButtonClass =
+    'rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-sky-300/25 hover:bg-sky-300/[0.08] hover:text-white';
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-5">
+      <div className="premium-window-in flex h-[min(86vh,860px)] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-emerald-300/15 bg-[linear-gradient(180deg,rgba(18,24,33,0.98),rgba(8,12,18,0.98))] shadow-[0_28px_90px_rgba(0,0,0,0.65),0_0_42px_rgba(16,185,129,0.08)]">
+        <div className="flex shrink-0 flex-col gap-4 border-b border-white/[0.08] px-5 py-4 sm:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200/65">
+                Άδεια Κυκλοφορίας
+              </p>
+              <h3 className="mt-1 truncate text-xl font-semibold text-white">{vehicle.plate}</h3>
+              <p className="mt-1 truncate text-sm text-zinc-400">
+                {vehicle.brand} {vehicle.model}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-transparent p-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white"
+              aria-label="Κλείσιμο"
+            >
+              ×
+            </button>
+          </div>
+
+          {document && (
+            <div className="flex flex-wrap items-center gap-2">
+              {isImage && (
+                <>
+                  <button type="button" onClick={onRotateLeft} className={controlButtonClass}>
+                    ↺ Rotate left
+                  </button>
+                  <button type="button" onClick={onRotateRight} className={controlButtonClass}>
+                    ↻ Rotate right
+                  </button>
+                  <button type="button" onClick={onZoomOut} className={controlButtonClass}>
+                    − Zoom
+                  </button>
+                  <button type="button" onClick={onZoomIn} className={controlButtonClass}>
+                    + Zoom
+                  </button>
+                  <button type="button" onClick={onReset} className={controlButtonClass}>
+                    Reset view
+                  </button>
+                </>
+              )}
+              {documentUrl && (
+                <>
+                  <a href={documentUrl} target="_blank" rel="noopener noreferrer" className={controlButtonClass}>
+                    Άνοιγμα σε νέα καρτέλα
+                  </a>
+                  <a href={documentUrl} download={fileName} target="_blank" rel="noopener noreferrer" className={controlButtonClass}>
+                    Λήψη
+                  </a>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-hidden p-4 sm:p-5">
+          {!document && (
+            <div className="flex h-full items-center justify-center rounded-3xl border border-white/[0.07] bg-white/[0.025] px-6 py-12 text-center text-sm text-zinc-300">
+              Δεν έχει ανέβει άδεια κυκλοφορίας για αυτό το όχημα.
+            </div>
+          )}
+
+          {document && isImage && (
+            <div className="h-full overflow-auto rounded-3xl border border-white/[0.07] bg-black/30 p-4">
+              <div className="flex min-h-full min-w-full items-center justify-center">
+                <img
+                  src={documentUrl}
+                  alt={fileName || 'Άδεια Κυκλοφορίας'}
+                  className="max-h-none max-w-none rounded-2xl shadow-[0_24px_70px_rgba(0,0,0,0.45)] transition-transform duration-200"
+                  style={{
+                    transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                    transformOrigin: 'center center',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {document && isPdf && (
+            <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-white/[0.07] bg-black/30">
+              <div className="border-b border-white/[0.06] px-4 py-3 text-xs text-zinc-400">
+                Για PDF, η προβολή γίνεται μέσα στο ERP. Τα custom zoom/rotate ενδέχεται να εξαρτώνται από τον browser PDF viewer.
+              </div>
+              <iframe title={fileName || 'Άδεια Κυκλοφορίας'} src={documentUrl} className="min-h-0 flex-1 bg-zinc-950" />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
