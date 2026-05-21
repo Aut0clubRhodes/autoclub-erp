@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { fetchCars } from '@/lib/carsApi';
 import {
   deleteCarDocument,
@@ -251,17 +251,66 @@ function DocumentPreviewModal({ row, onClose }: { row: DocumentRow; onClose: () 
   const url = getCarDocumentPublicUrl(row.document.file_url);
   const fileName = row.document.file_name || '';
   const isImage = Boolean(fileName.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif)$/));
+  const [modalSize, setModalSize] = useState({ width: 1050, height: 620 });
+  const resizeStartRef = useRef<{
+    mouseX: number;
+    mouseY: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   const closeViewer = () => {
     onClose();
   };
+
+  const startResize = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    resizeStartRef.current = {
+      mouseX: event.clientX,
+      mouseY: event.clientY,
+      width: modalSize.width,
+      height: modalSize.height,
+    };
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!resizeStartRef.current) return;
+
+      const nextWidth = resizeStartRef.current.width + event.clientX - resizeStartRef.current.mouseX;
+      const nextHeight = resizeStartRef.current.height + event.clientY - resizeStartRef.current.mouseY;
+      const maxWidth = window.innerWidth - 80;
+      const maxHeight = window.innerHeight - 80;
+
+      setModalSize({
+        width: Math.min(Math.max(nextWidth, 620), maxWidth),
+        height: Math.min(Math.max(nextHeight, 420), maxHeight),
+      });
+    };
+
+    const handleMouseUp = () => {
+      resizeStartRef.current = null;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
   const controlButtonClass =
     'rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-sky-300/25 hover:bg-sky-300/[0.08] hover:text-white';
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-8 backdrop-blur-sm">
-      <div className="flex w-[min(1050px,82vw)] max-h-[calc(100vh-80px)] flex-col overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl">
+      <div
+        className="relative flex max-h-[calc(100vh-80px)] flex-col overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl"
+        style={{ width: modalSize.width, height: modalSize.height }}
+      >
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200/65">ΑΔΕΙΑ ΚΥΚΛΟΦΟΡΙΑΣ</p>
@@ -289,7 +338,7 @@ function DocumentPreviewModal({ row, onClose }: { row: DocumentRow; onClose: () 
           </a>
         </div>
 
-        <div className="mx-6 mb-6 flex h-[420px] items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+        <div className="mx-6 mb-6 flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
           {isImage ? (
             <img
               src={url}
@@ -304,6 +353,11 @@ function DocumentPreviewModal({ row, onClose }: { row: DocumentRow; onClose: () 
             />
           )}
         </div>
+        <div
+          role="presentation"
+          onMouseDown={startResize}
+          className="absolute bottom-3 right-3 h-4 w-4 cursor-se-resize rounded-sm border-b-2 border-r-2 border-sky-200/70 opacity-50 transition hover:opacity-100"
+        />
       </div>
     </div>
   );

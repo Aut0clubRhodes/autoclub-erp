@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import Image from 'next/image';
 import Sidebar from '@/components/Sidebar';
 import Window from '@/components/Window';
@@ -2504,10 +2504,56 @@ function VehicleViewModal({
   const [selectedLicenseFile, setSelectedLicenseFile] = useState<File | null>(null);
   const [licenseDocuments, setLicenseDocuments] = useState<CarDocumentRecord[]>([]);
   const [loadingLicenseDocuments, setLoadingLicenseDocuments] = useState(false);
+  const [modalSize, setModalSize] = useState({ width: 900, height: 620 });
+  const resizeStartRef = useRef<{
+    mouseX: number;
+    mouseY: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  const startResize = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    resizeStartRef.current = {
+      mouseX: event.clientX,
+      mouseY: event.clientY,
+      width: modalSize.width,
+      height: modalSize.height,
+    };
+  };
 
   useEffect(() => {
     fetchServicesByCarId(Number(vehicle.id)).then(setServices);
   }, [vehicle.id]);
+
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!resizeStartRef.current) return;
+
+      const nextWidth = resizeStartRef.current.width + event.clientX - resizeStartRef.current.mouseX;
+      const nextHeight = resizeStartRef.current.height + event.clientY - resizeStartRef.current.mouseY;
+      const maxWidth = window.innerWidth - 80;
+      const maxHeight = window.innerHeight - 80;
+
+      setModalSize({
+        width: Math.min(Math.max(nextWidth, 620), maxWidth),
+        height: Math.min(Math.max(nextHeight, 420), maxHeight),
+      });
+    };
+
+    const handleMouseUp = () => {
+      resizeStartRef.current = null;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
   useEffect(() => {
     setNextKteoExpiry(vehicle.kteo_expiry || '');
@@ -2572,7 +2618,10 @@ function VehicleViewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-4xl rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl shadow-black/30 overflow-hidden max-h-[70vh] flex flex-col">
+      <div
+        className="relative flex flex-col overflow-hidden rounded-[28px] border border-zinc-800 bg-zinc-950 shadow-2xl shadow-black/30"
+        style={{ width: modalSize.width, height: modalSize.height }}
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
           <h3 className="text-lg font-semibold text-white">Φάκελος Αυτοκινήτου</h3>
           <button
@@ -2583,7 +2632,7 @@ function VehicleViewModal({
             ✕
           </button>
         </div>
-        <div className="overflow-y-auto flex-1">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="p-5 space-y-6">
             {/* Βασικά Στοιχεία Section */}
             <div>
@@ -2675,6 +2724,11 @@ function VehicleViewModal({
             </div>
           </div>
         </div>
+        <div
+          role="presentation"
+          onMouseDown={startResize}
+          className="absolute bottom-3 right-3 h-4 w-4 cursor-se-resize rounded-sm border-b-2 border-r-2 border-sky-200/70 opacity-50 transition hover:opacity-100"
+        />
       </div>
 
       {showLicenseModal && (
