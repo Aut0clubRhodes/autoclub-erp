@@ -1574,17 +1574,21 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                   </div>
                 </button>
 
-                <div className="rounded-2xl border border-amber-300/18 bg-amber-300/[0.04] p-3 shadow-[0_0_24px_rgba(251,191,36,0.06)] transition duration-200 hover:-translate-y-px hover:border-amber-300/28 hover:bg-amber-300/[0.055]">
+                <button
+                  type="button"
+                  onClick={() => setActiveWindow('Οφειλές')}
+                  className="group cursor-pointer rounded-2xl border border-amber-300/18 bg-amber-300/[0.04] p-3 text-left shadow-[0_0_24px_rgba(251,191,36,0.06)] transition duration-200 hover:-translate-y-px hover:border-amber-300/30 hover:bg-amber-300/[0.06] hover:shadow-[0_0_30px_rgba(251,191,36,0.11)]"
+                >
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-200/70">
                     Alert Οφειλών
                   </p>
-                  <div className="mt-3 rounded-xl border border-white/[0.055] bg-black/20 px-3 py-3">
+                  <div className="mt-3 rounded-xl border border-white/[0.055] bg-black/20 px-3 py-3 transition duration-200 group-hover:border-amber-200/12">
                     <p className="text-2xl font-semibold text-amber-100">{formatMoney(openDebtsTotal)}</p>
                     <p className="mt-1 text-xs text-amber-200/60">
                       {openDebts.length} ανοιχτές οφειλές
                     </p>
                   </div>
-                </div>
+                </button>
               </div>
 
               {upcomingKteoAlerts.length > 0 && (

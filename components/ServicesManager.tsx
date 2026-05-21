@@ -358,7 +358,7 @@ export default function ServicesManager() {
 
   return (
     <div className="space-y-5 text-white">
-      <div className="flex items-center justify-between rounded-3xl border border-orange-300/10 bg-[linear-gradient(135deg,rgba(249,115,22,0.08),rgba(8,12,18,0.36)_45%,rgba(255,255,255,0.02))] px-5 py-4 shadow-[0_20px_54px_rgba(0,0,0,0.24)]">
+      <div className="flex items-center justify-between rounded-3xl border border-orange-300/10 bg-[linear-gradient(135deg,rgba(249,115,22,0.08),rgba(8,12,18,0.36)_45%,rgba(255,255,255,0.02))] px-5 py-4 shadow-[0_20px_54px_rgba(0,0,0,0.24)] transition duration-200 hover:border-orange-200/16 hover:shadow-[0_24px_64px_rgba(0,0,0,0.28),0_0_34px_rgba(249,115,22,0.055)]">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-200/65">Fleet maintenance</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">Service</h1>
@@ -397,7 +397,7 @@ export default function ServicesManager() {
               {serviceRowsByYear.map(([year, yearRows]) => {
                 const expanded = Boolean(expandedYears[year]);
                 return (
-                <section key={year} className="overflow-hidden rounded-3xl border border-white/[0.075] bg-white/[0.025] shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition duration-200 hover:border-orange-200/14">
+                <section key={year} className="overflow-hidden rounded-3xl border border-white/[0.075] bg-white/[0.025] shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition duration-200 hover:-translate-y-px hover:border-orange-200/14 hover:shadow-[0_22px_56px_rgba(0,0,0,0.26),0_0_28px_rgba(249,115,22,0.045)]">
                   <button
                     type="button"
                     onClick={() => setExpandedYears((current) => ({ ...current, [year]: !current[year] }))}
@@ -468,7 +468,7 @@ export default function ServicesManager() {
           )}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-3xl border border-white/[0.075] bg-white/[0.025] shadow-[0_18px_58px_rgba(0,0,0,0.24)]">
+        <div className="overflow-hidden rounded-3xl border border-white/[0.075] bg-white/[0.025] shadow-[0_18px_58px_rgba(0,0,0,0.24)] transition duration-200 hover:border-orange-200/12 hover:shadow-[0_22px_64px_rgba(0,0,0,0.28),0_0_30px_rgba(249,115,22,0.04)]">
           <table className="w-full min-w-[920px] text-left">
             <thead className="bg-white/[0.035]">
               <tr>
