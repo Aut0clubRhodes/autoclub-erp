@@ -22,7 +22,7 @@ export default function Window({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#02050a]/55 p-4 backdrop-blur-[3px]">
       <div
-        className={`flex flex-col overflow-hidden rounded-[24px] border border-sky-100/[0.1] bg-[linear-gradient(180deg,rgba(13,20,30,0.96),rgba(7,12,18,0.98))] shadow-[0_24px_90px_rgba(0,0,0,0.58)] backdrop-blur-xl ${
+        className={`premium-window-in flex flex-col overflow-hidden rounded-[24px] border border-sky-100/[0.1] bg-[linear-gradient(180deg,rgba(13,20,30,0.96),rgba(7,12,18,0.98))] shadow-[0_24px_90px_rgba(0,0,0,0.58)] backdrop-blur-xl ${
           fullscreen
             ? 'w-full max-w-[1480px] h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)]'
             : financeDashboard

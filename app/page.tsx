@@ -712,6 +712,7 @@ const handleSaveSupplierPayment = async () => {
     }
 
     if (
+      !activeWindow ||
       activeWindow === 'Αυτοκίνητα' ||
       activeWindow === 'Έσοδα' ||
       activeWindow === 'Έξοδα' ||
@@ -858,6 +859,21 @@ const handleSaveSupplierPayment = async () => {
   const handleWindowOpen = (windowId: string) => {
     setActiveWindow(windowId as WindowType);
     setShowAddCar(false);
+  };
+
+  const openHomepageIncome = () => {
+    setActiveWindow('Έσοδα');
+    setIncomeForm((current) => ({
+      ...current,
+      date: new Date().toISOString().split('T')[0],
+    }));
+    setShowIncomeNotes(false);
+    setShowIncomeModal(true);
+  };
+
+  const openHomepageExpense = () => {
+    setActiveWindow('Έξοδα');
+    openAddExpenseModal();
   };
 
   const handleWindowClose = () => {
@@ -1240,6 +1256,25 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('el-GR');
   };
 
+  const upcomingKteoAlerts = vehicles
+    .map((vehicle) => {
+      if (!vehicle.kteo_expiry) return null;
+
+      const expiry = new Date(vehicle.kteo_expiry);
+      if (Number.isNaN(expiry.getTime())) return null;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      expiry.setHours(0, 0, 0, 0);
+
+      const daysUntilExpiry = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysUntilExpiry < 0 || daysUntilExpiry > 5) return null;
+
+      return { vehicle, daysUntilExpiry };
+    })
+    .filter((alert): alert is { vehicle: Vehicle; daysUntilExpiry: number } => Boolean(alert))
+    .sort((left, right) => left.daysUntilExpiry - right.daysUntilExpiry);
+
   const formatPaymentMethod = (method: string) => {
     const paymentMethods: { [key: string]: string } = {
       cash: 'Μετρητά',
@@ -1429,22 +1464,72 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       <main className="relative flex-1 bg-[radial-gradient(circle_at_45%_44%,rgba(14,165,233,0.1),transparent_24%),radial-gradient(circle_at_59%_40%,rgba(34,197,94,0.065),transparent_22%),linear-gradient(180deg,#08111a_0%,#050910_100%)]">
         {/* Homepage with centered logo */}
         {!activeWindow && (
-          <div className="flex h-full w-full items-center justify-center">
-            <div className="relative flex h-[370px] w-[min(620px,72vw)] flex-col items-center justify-center">
-              <div className="absolute inset-8 rounded-full bg-sky-400/[0.09] blur-3xl" />
-              <div className="absolute inset-16 translate-x-12 rounded-full bg-emerald-400/[0.06] blur-3xl" />
-              <div className="absolute inset-0 rounded-[28px] border border-sky-200/[0.2] bg-[linear-gradient(135deg,rgba(56,189,248,0.08),rgba(9,18,29,0.72)_35%,rgba(34,197,94,0.06))] shadow-[0_0_50px_rgba(0,160,255,0.12),0_0_60px_rgba(75,220,100,0.08),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md" />
-              <Image
-                src="/logo.png"
-                alt="AUTOCLUB"
-                fill
-                priority
-                className="relative object-cover object-center opacity-95"
-                sizes="620px"
-              />
-              <p className="absolute bottom-8 text-[11px] font-medium uppercase tracking-[0.28em] text-[#8e99a8]">
-                Enterprise Fleet ERP
-              </p>
+          <div className="flex h-full w-full items-center justify-center px-4 py-8">
+            <div className="flex w-full max-w-[640px] flex-col items-center gap-3.5">
+              <div className="relative flex h-[304px] w-[min(552px,84vw)] flex-col items-center justify-center transition duration-300 hover:-translate-y-0.5">
+                <div className="absolute inset-10 rounded-full bg-sky-400/[0.07] blur-3xl" />
+                <div className="absolute inset-20 translate-x-10 rounded-full bg-emerald-400/[0.045] blur-3xl" />
+                <div className="absolute inset-0 rounded-[28px] border border-sky-200/[0.16] bg-[linear-gradient(135deg,rgba(56,189,248,0.065),rgba(9,18,29,0.74)_35%,rgba(34,197,94,0.045))] shadow-[0_0_34px_rgba(0,160,255,0.09),0_0_38px_rgba(75,220,100,0.055),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-md" />
+                <Image
+                  src="/logo.png"
+                  alt="AUTOCLUB"
+                  fill
+                  priority
+                  className="relative object-cover object-center opacity-95"
+                  sizes="552px"
+                />
+                <p className="absolute bottom-8 text-[11px] font-medium uppercase tracking-[0.28em] text-[#8e99a8]">
+                  Enterprise Fleet ERP
+                </p>
+              </div>
+
+              <div className="grid w-full max-w-[500px] gap-2.5 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={openHomepageIncome}
+                  className="group rounded-2xl border border-emerald-300/18 bg-emerald-300/[0.045] px-4 py-2.5 text-center shadow-[0_0_20px_rgba(52,211,153,0.06)] transition duration-200 hover:-translate-y-px hover:border-emerald-300/28 hover:bg-emerald-300/[0.07] hover:shadow-[0_0_24px_rgba(52,211,153,0.1)]"
+                >
+                  <span className="block text-[10px] uppercase tracking-[0.2em] text-emerald-200/55">Quick entry</span>
+                  <span className="mt-0.5 block text-[13px] font-semibold text-emerald-100">+ Καταχώρηση Εσόδου</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={openHomepageExpense}
+                  className="group rounded-2xl border border-rose-300/18 bg-rose-300/[0.045] px-4 py-2.5 text-center shadow-[0_0_20px_rgba(251,113,133,0.06)] transition duration-200 hover:-translate-y-px hover:border-rose-300/28 hover:bg-rose-300/[0.07] hover:shadow-[0_0_24px_rgba(251,113,133,0.1)]"
+                >
+                  <span className="block text-[10px] uppercase tracking-[0.2em] text-rose-200/55">Quick entry</span>
+                  <span className="mt-0.5 block text-[13px] font-semibold text-rose-100">+ Καταχώρηση Εξόδου</span>
+                </button>
+              </div>
+
+              {upcomingKteoAlerts.length > 0 && (
+                <div className="w-full max-w-[500px] rounded-2xl border border-amber-300/18 bg-amber-300/[0.045] px-4 py-3 shadow-[0_0_24px_rgba(251,191,36,0.075)] backdrop-blur-sm transition duration-200 hover:-translate-y-px hover:border-amber-300/26">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-200/70">
+                    KTEO expires in 5 days
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {upcomingKteoAlerts.map(({ vehicle, daysUntilExpiry }) => (
+                      <div
+                        key={vehicle.id}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-white">{vehicle.plate}</p>
+                          <p className="truncate text-xs text-zinc-400">
+                            {vehicle.brand} {vehicle.model}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-semibold text-amber-100">{formatDate(vehicle.kteo_expiry || '')}</p>
+                          <p className="text-[11px] text-amber-200/60">
+                            {daysUntilExpiry === 0 ? 'Σήμερα' : `σε ${daysUntilExpiry} ημέρες`}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
