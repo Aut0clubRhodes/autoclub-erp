@@ -306,7 +306,7 @@ function DocumentPreviewModal({ row, onClose }: { row: DocumentRow; onClose: () 
     'rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-sky-300/25 hover:bg-sky-300/[0.08] hover:text-white';
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-8 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-8 backdrop-blur-sm">
       <div
         className="relative flex max-h-[calc(100vh-80px)] flex-col overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl"
         style={{ width: modalSize.width, height: modalSize.height }}

@@ -2463,7 +2463,7 @@ function VehicleLicenseViewerModal({
     'rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-sky-300/25 hover:bg-sky-300/[0.08] hover:text-white';
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-5">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-5">
       <div className="premium-window-in flex h-[min(86vh,860px)] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-emerald-300/15 bg-[linear-gradient(180deg,rgba(18,24,33,0.98),rgba(8,12,18,0.98))] shadow-[0_28px_90px_rgba(0,0,0,0.65),0_0_42px_rgba(16,185,129,0.08)]">
         <div className="flex shrink-0 flex-col gap-4 border-b border-white/[0.08] px-5 py-4 sm:px-6">
           <div className="flex items-start justify-between gap-4">
