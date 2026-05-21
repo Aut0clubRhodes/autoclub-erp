@@ -358,15 +358,16 @@ export default function ServicesManager() {
 
   return (
     <div className="space-y-5 text-white">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between rounded-3xl border border-orange-300/10 bg-[linear-gradient(135deg,rgba(249,115,22,0.08),rgba(8,12,18,0.36)_45%,rgba(255,255,255,0.02))] px-5 py-4 shadow-[0_20px_54px_rgba(0,0,0,0.24)]">
         <div>
-          <h1 className="text-3xl font-semibold">Service</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-200/65">Fleet maintenance</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight">Service</h1>
           <p className="mt-2 text-sm text-zinc-400">Ιστορικό συντήρησης και οικονομικές κινήσεις service.</p>
         </div>
         <button
           type="button"
           onClick={openAddServiceModal}
-          className="rounded-2xl border border-orange-500/40 bg-orange-500/10 px-4 py-3 text-sm font-semibold text-orange-200 hover:bg-orange-500/20"
+          className="rounded-2xl border border-orange-400/30 bg-orange-400/10 px-4 py-3 text-sm font-semibold text-orange-100 shadow-[0_0_22px_rgba(249,115,22,0.08)] transition duration-200 hover:-translate-y-px hover:border-orange-300/45 hover:bg-orange-400/16 hover:shadow-[0_0_28px_rgba(249,115,22,0.13)]"
         >
           + Καταχώρηση Service
         </button>
@@ -388,7 +389,7 @@ export default function ServicesManager() {
           </div>
 
           {serviceRowsByYear.length === 0 ? (
-            <div className="rounded-3xl border border-white/[0.08] bg-black/20 px-5 py-10 text-center text-sm text-zinc-400">
+            <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] px-5 py-10 text-center text-sm text-zinc-400 shadow-[0_18px_48px_rgba(0,0,0,0.22)]">
               Δεν υπάρχει ιστορικό service για αυτό το αυτοκίνητο.
             </div>
           ) : (
@@ -396,11 +397,11 @@ export default function ServicesManager() {
               {serviceRowsByYear.map(([year, yearRows]) => {
                 const expanded = Boolean(expandedYears[year]);
                 return (
-                <section key={year} className="overflow-hidden rounded-3xl border border-white/[0.08] bg-black/20">
+                <section key={year} className="overflow-hidden rounded-3xl border border-white/[0.075] bg-white/[0.025] shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition duration-200 hover:border-orange-200/14">
                   <button
                     type="button"
                     onClick={() => setExpandedYears((current) => ({ ...current, [year]: !current[year] }))}
-                    className="flex w-full items-center justify-between border-b border-white/[0.06] bg-white/[0.03] px-5 py-3 text-left text-sm font-semibold text-white"
+                    className="flex w-full items-center justify-between border-b border-white/[0.06] bg-white/[0.035] px-5 py-3 text-left text-sm font-semibold text-white transition hover:bg-orange-300/[0.045]"
                   >
                     <span>{year}</span>
                     <span className="text-zinc-400">{expanded ? '−' : '+'}</span>
@@ -427,7 +428,7 @@ export default function ServicesManager() {
                       </thead>
                       <tbody>
                         {yearRows.map(({ service, partsCost, laborCost, partsDescription }) => (
-                          <tr key={service.id} className="border-t border-white/[0.06]">
+                          <tr key={service.id} className="border-t border-white/[0.055] transition duration-200 hover:bg-white/[0.035]">
                             <td className="px-4 py-4 text-sm text-zinc-200">{service.service_date}</td>
                             <td className="px-4 py-4 text-sm text-zinc-200">{service.km || '-'}</td>
                             <td className="px-4 py-4 text-sm text-zinc-200">{service.description || '-'}</td>
@@ -442,14 +443,14 @@ export default function ServicesManager() {
                                 <button
                                   type="button"
                                   onClick={() => openEditServiceModal({ service, partsCost, laborCost, partsDescription })}
-                                  className="rounded-xl border border-sky-400/25 bg-sky-400/10 px-3 py-2 text-xs text-sky-200 transition hover:bg-sky-400/20"
+                                  className="rounded-xl border border-sky-400/24 bg-sky-400/10 px-3 py-2 text-xs text-sky-200 transition duration-200 hover:-translate-y-px hover:border-sky-300/38 hover:bg-sky-400/18"
                                 >
                                   Επεξεργασία
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteService(service)}
-                                  className="rounded-xl border border-rose-400/25 bg-rose-400/10 px-3 py-2 text-xs text-rose-200 transition hover:bg-rose-400/20"
+                                  className="rounded-xl border border-rose-400/24 bg-rose-400/10 px-3 py-2 text-xs text-rose-200 transition duration-200 hover:-translate-y-px hover:border-rose-300/38 hover:bg-rose-400/18"
                                 >
                                   Διαγραφή
                                 </button>
@@ -467,9 +468,9 @@ export default function ServicesManager() {
           )}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-3xl border border-white/[0.08] bg-black/20">
+        <div className="overflow-hidden rounded-3xl border border-white/[0.075] bg-white/[0.025] shadow-[0_18px_58px_rgba(0,0,0,0.24)]">
           <table className="w-full min-w-[920px] text-left">
-            <thead className="bg-white/[0.03]">
+            <thead className="bg-white/[0.035]">
               <tr>
                 {[
                   'Πινακίδα',
@@ -488,7 +489,7 @@ export default function ServicesManager() {
             </thead>
             <tbody>
               {carRows.map(({ car, latestServiceDate, serviceCount }) => (
-                <tr key={car.id} className="border-t border-white/[0.06]">
+                <tr key={car.id} className="border-t border-white/[0.055] transition duration-200 hover:bg-white/[0.035]">
                   <td className="px-4 py-4 text-sm font-medium text-white">{car.plate}</td>
                   <td className="px-4 py-4 text-sm text-zinc-200">{car.brand || '-'}</td>
                   <td className="px-4 py-4 text-sm text-zinc-200">{car.model || '-'}</td>
@@ -500,14 +501,14 @@ export default function ServicesManager() {
                       <button
                         type="button"
                         onClick={() => setSelectedCarId(car.id)}
-                        className="rounded-2xl border border-orange-400/25 bg-orange-400/10 px-3 py-2 text-xs font-medium text-orange-200 transition hover:bg-orange-400/20"
+                        className="rounded-2xl border border-orange-400/24 bg-orange-400/10 px-3 py-2 text-xs font-medium text-orange-200 transition duration-200 hover:-translate-y-px hover:border-orange-300/38 hover:bg-orange-400/18"
                       >
                         Ιστορικό Service
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteCar(car.id)}
-                        className="rounded-2xl border border-rose-400/25 bg-rose-400/10 px-3 py-2 text-xs font-medium text-rose-200 transition hover:bg-rose-400/20"
+                        className="rounded-2xl border border-rose-400/24 bg-rose-400/10 px-3 py-2 text-xs font-medium text-rose-200 transition duration-200 hover:-translate-y-px hover:border-rose-300/38 hover:bg-rose-400/18"
                       >
                         Διαγραφή
                       </button>
@@ -531,8 +532,8 @@ export default function ServicesManager() {
         modalRootReady &&
         createPortal(
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
-            <div className="flex max-h-[86vh] w-[min(860px,92vw)] flex-col overflow-hidden rounded-[28px] border border-orange-300/15 bg-[linear-gradient(180deg,rgba(18,24,33,0.98),rgba(8,12,18,0.98))] shadow-[0_28px_90px_rgba(0,0,0,0.62)]">
-              <div className="flex shrink-0 items-center justify-between border-b border-white/[0.08] px-6 py-5">
+            <div className="premium-window-in flex max-h-[86vh] w-[min(860px,92vw)] flex-col overflow-hidden rounded-[28px] border border-orange-300/14 bg-[linear-gradient(180deg,rgba(18,24,33,0.98),rgba(8,12,18,0.98))] shadow-[0_28px_90px_rgba(0,0,0,0.62),0_0_44px_rgba(249,115,22,0.06)]">
+              <div className="flex shrink-0 items-center justify-between border-b border-white/[0.07] px-6 py-4">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-200/70">
                     Service
@@ -542,7 +543,7 @@ export default function ServicesManager() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="rounded-xl border border-transparent p-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white"
+                  className="rounded-xl border border-transparent p-2 text-zinc-400 transition duration-200 hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white"
                   aria-label="Κλείσιμο"
                 >
                   ✕
@@ -550,8 +551,8 @@ export default function ServicesManager() {
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                <div className="space-y-6">
-                  <section className="space-y-4">
+                <div className="space-y-5">
+                  <section className="space-y-4 rounded-3xl border border-white/[0.055] bg-white/[0.018] p-4">
                     <SectionTitle>Βασικά Στοιχεία</SectionTitle>
                     <div className="grid gap-4 md:grid-cols-2">
                       <Field label="Αυτοκίνητο">
@@ -579,7 +580,7 @@ export default function ServicesManager() {
                     </Field>
                   </section>
 
-                  <section className="space-y-4">
+                  <section className="space-y-4 rounded-3xl border border-white/[0.055] bg-white/[0.018] p-4">
                     <SectionTitle>Ανταλλακτικά</SectionTitle>
                     <div className="grid gap-4 md:grid-cols-2">
                       <SupplierSelect label="Προμηθευτής Ανταλλακτικών" value={form.parts_supplier_id} suppliers={suppliers} onChange={(value) => setForm({ ...form, parts_supplier_id: value })} />
@@ -593,7 +594,7 @@ export default function ServicesManager() {
                     </div>
                   </section>
 
-                  <section className="space-y-4">
+                  <section className="space-y-4 rounded-3xl border border-white/[0.055] bg-white/[0.018] p-4">
                     <SectionTitle>Εργασία Συνεργείου</SectionTitle>
                     <div className="grid gap-4 md:grid-cols-2">
                       <SupplierSelect label="Συνεργείο / Προμηθευτής Εργασίας" value={form.labor_supplier_id} suppliers={suppliers} onChange={(value) => setForm({ ...form, labor_supplier_id: value })} />
@@ -606,11 +607,11 @@ export default function ServicesManager() {
                 </div>
               </div>
 
-              <div className="flex shrink-0 justify-end gap-3 border-t border-white/[0.08] bg-black/20 px-6 py-4">
-                <button type="button" onClick={() => setShowModal(false)} className="rounded-2xl border border-zinc-700 px-5 py-3 text-sm text-zinc-300 transition hover:bg-white/[0.04]">
+              <div className="flex shrink-0 justify-end gap-3 border-t border-white/[0.07] bg-black/20 px-6 py-4">
+                <button type="button" onClick={() => setShowModal(false)} className="rounded-2xl border border-zinc-700 px-5 py-3 text-sm text-zinc-300 transition duration-200 hover:-translate-y-px hover:bg-white/[0.04]">
                   Ακύρωση
                 </button>
-                <button type="button" onClick={handleSave} className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-orange-400">
+                <button type="button" onClick={handleSave} className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-semibold text-black shadow-[0_0_24px_rgba(249,115,22,0.16)] transition duration-200 hover:-translate-y-px hover:bg-orange-400">
                   Αποθήκευση
                 </button>
               </div>

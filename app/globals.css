@@ -62,6 +62,14 @@ body {
   animation: premium-window-in 180ms ease-out both;
 }
 
+:where(tbody tr) {
+  transition: background-color 200ms ease, border-color 200ms ease, transform 200ms ease;
+}
+
+:where(button, a) {
+  transition-duration: 200ms;
+}
+
 .add-car-btn {
   background: #16a34a;
   color: white;

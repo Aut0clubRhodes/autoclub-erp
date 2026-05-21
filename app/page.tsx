@@ -44,6 +44,7 @@ import {
 } from '@/lib/expenseCategoriesApi';
 import { fetchServicesByCarId, type ServiceRecord } from '@/lib/servicesApi';
 import { fetchCarDocuments, getCarDocumentPublicUrl, type CarDocumentRecord } from '@/lib/carDocumentsApi';
+import { fetchDebts, type DebtRecord } from '@/lib/debtsApi';
 type WindowType =
   | 'Αυτοκίνητα'
   | 'Service'
@@ -234,6 +235,7 @@ export default function Home() {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [editingPlate, setEditingPlate] = useState<string | null>(null);
@@ -814,7 +816,20 @@ const handleSaveSupplierPayment = async () => {
       return;
     }
 
+    if (activeWindow && activeWindow !== 'Οφειλές') {
+      return;
+    }
+
+    fetchDebts().then(setDebts);
+  }, [activeWindow, userEmail]);
+
+  useEffect(() => {
+    if (!userEmail) {
+      return;
+    }
+
     if (
+      activeWindow &&
       activeWindow !== 'Ταμείο' &&
       activeWindow !== 'Έσοδα' &&
       activeWindow !== 'Έξοδα' &&
@@ -1170,6 +1185,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const expenseTransactions = financeTransactions.filter(
     (transaction) => transaction.type === 'expense' || transaction.type === 'supplier_payment'
   );
+  const latestIncomeTransactions = [...incomeTransactions]
+    .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
+    .slice(0, 4);
+  const latestExpenseTransactions = [...expenseTransactions]
+    .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
+    .slice(0, 4);
+  const openDebts = debts.filter((debt) => Number(debt.remaining_amount || 0) > 0 && debt.status !== 'paid');
+  const openDebtsTotal = openDebts.reduce((sum, debt) => sum + Number(debt.remaining_amount || 0), 0);
   const paidExpenseTransactions = financeTransactions.filter((transaction) => {
     const paymentMethod = String(transaction.payment_method).toLowerCase();
     return (
@@ -1500,6 +1523,68 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                   <span className="block text-[10px] uppercase tracking-[0.2em] text-rose-200/55">Quick entry</span>
                   <span className="mt-0.5 block text-[13px] font-semibold text-rose-100">+ Καταχώρηση Εξόδου</span>
                 </button>
+              </div>
+
+              <div className="grid w-full max-w-[620px] gap-3 lg:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => setActiveWindow('Έσοδα')}
+                  className="group cursor-pointer rounded-2xl border border-emerald-300/14 bg-white/[0.025] p-3 text-left shadow-[0_0_22px_rgba(52,211,153,0.045)] transition duration-200 hover:-translate-y-px hover:border-emerald-300/28 hover:bg-white/[0.04] hover:shadow-[0_0_28px_rgba(52,211,153,0.09)]"
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200/65">
+                    Τελευταίες Καταχωρήσεις Εσόδων
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {latestIncomeTransactions.length === 0 && <p className="text-xs text-zinc-500">Δεν υπάρχουν εγγραφές.</p>}
+                    {latestIncomeTransactions.map((transaction) => (
+                      <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl bg-black/18 px-2.5 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium text-white">
+                            {transaction.contract_number || 'Χωρίς συμβόλαιο'}
+                          </p>
+                          <p className="text-[11px] text-zinc-500">{formatDate(transaction.date)}</p>
+                        </div>
+                        <p className="shrink-0 text-xs font-semibold text-emerald-200">{formatMoney(transaction.amount)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveWindow('Έξοδα')}
+                  className="group cursor-pointer rounded-2xl border border-rose-300/14 bg-white/[0.025] p-3 text-left shadow-[0_0_22px_rgba(251,113,133,0.045)] transition duration-200 hover:-translate-y-px hover:border-rose-300/28 hover:bg-white/[0.04] hover:shadow-[0_0_28px_rgba(251,113,133,0.09)]"
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-200/65">
+                    Τελευταίες Καταχωρήσεις Εξόδων
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {latestExpenseTransactions.length === 0 && <p className="text-xs text-zinc-500">Δεν υπάρχουν εγγραφές.</p>}
+                    {latestExpenseTransactions.map((transaction) => (
+                      <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl bg-black/18 px-2.5 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium text-white">
+                            {transaction.category || transaction.supplier_name || transaction.supplier || '-'}
+                          </p>
+                          <p className="text-[11px] text-zinc-500">{formatDate(transaction.date)}</p>
+                        </div>
+                        <p className="shrink-0 text-xs font-semibold text-rose-200">{formatMoney(transaction.amount)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </button>
+
+                <div className="rounded-2xl border border-amber-300/18 bg-amber-300/[0.04] p-3 shadow-[0_0_24px_rgba(251,191,36,0.06)] transition duration-200 hover:-translate-y-px hover:border-amber-300/28 hover:bg-amber-300/[0.055]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-200/70">
+                    Alert Οφειλών
+                  </p>
+                  <div className="mt-3 rounded-xl border border-white/[0.055] bg-black/20 px-3 py-3">
+                    <p className="text-2xl font-semibold text-amber-100">{formatMoney(openDebtsTotal)}</p>
+                    <p className="mt-1 text-xs text-amber-200/60">
+                      {openDebts.length} ανοιχτές οφειλές
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {upcomingKteoAlerts.length > 0 && (
