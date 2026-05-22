@@ -1630,8 +1630,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       />
       <main className="relative flex-1 bg-[radial-gradient(circle_at_45%_44%,rgba(14,165,233,0.1),transparent_24%),radial-gradient(circle_at_59%_40%,rgba(34,197,94,0.065),transparent_22%),linear-gradient(180deg,#08111a_0%,#050910_100%)]">
         {openWindows.length > 0 && (
-          <div className="pointer-events-none fixed left-[250px] right-5 top-3 z-[9000] flex items-center">
-            <div className="pointer-events-auto flex max-w-full items-end gap-1 overflow-x-auto rounded-t-2xl border border-sky-100/[0.08] border-b-sky-100/[0.12] bg-zinc-950/72 px-2 pt-2 shadow-[0_18px_44px_rgba(0,0,0,0.26)] backdrop-blur-xl">
+          <div className="pointer-events-none fixed left-[250px] right-0 top-0 z-[9000] flex h-[52px] items-end border-b border-white/[0.08] border-l border-white/[0.06] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] pl-3">
+            <div className="pointer-events-auto flex max-w-full items-end gap-1 overflow-x-auto pt-2">
               {openWindows.map((windowItem) => {
                 const isActiveTab = activeWindow === windowItem.id;
                 const isMinimizedTab = Boolean(windowItem.isMinimized);
@@ -1643,8 +1643,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                     onClick={() => focusWindow(windowItem.id)}
                     className={`group flex max-w-[190px] items-center gap-2 rounded-t-xl border px-3 py-2 text-left text-xs font-semibold transition duration-200 ${
                       isActiveTab
-                        ? 'border-sky-300/25 bg-sky-300/[0.12] text-white shadow-[0_-2px_18px_rgba(56,189,248,0.14)]'
-                        : 'border-white/[0.055] bg-white/[0.035] text-zinc-400 hover:border-sky-300/18 hover:bg-white/[0.06] hover:text-zinc-100'
+                        ? 'border-sky-300/25 border-b-transparent bg-[#08111a] text-white shadow-[0_-2px_18px_rgba(56,189,248,0.12)]'
+                        : 'border-white/[0.045] bg-white/[0.025] text-zinc-500 hover:border-sky-300/16 hover:bg-white/[0.045] hover:text-zinc-200'
                     } ${isMinimizedTab ? 'opacity-55' : 'opacity-100'}`}
                   >
                     {isMinimizedTab && <span className="h-1.5 w-1.5 rounded-full bg-zinc-500" />}
@@ -1670,7 +1670,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                   </button>
                 );
               })}
-              <div className="mb-2 ml-1 rounded-lg border border-white/[0.055] bg-white/[0.025] px-2.5 py-1.5 text-xs font-semibold text-zinc-500">
+              <div className="mb-2 ml-1 rounded-lg border border-white/[0.045] bg-white/[0.02] px-2.5 py-1.5 text-xs font-semibold text-zinc-500">
                 +
               </div>
             </div>
