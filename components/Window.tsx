@@ -43,8 +43,8 @@ export default function Window({
 }: WindowProps) {
   const [isMaximized, setIsMaximized] = useState(fullscreen);
   const [windowSize, setWindowSize] = useState({
-    width: initialWidth || 1100,
-    height: initialHeight || 720,
+    width: initialWidth || 1265,
+    height: initialHeight || 792,
   });
   const [position, setPosition] = useState({
     x: 320 + Math.round(Math.random() * 24),

@@ -9,6 +9,7 @@ import FinanceOverview from '@/components/FinanceOverview';
 import FinanceIncome from '@/components/FinanceIncome';
 import FinanceExpenses from '@/components/FinanceExpenses';
 import DebtsManager from '@/components/DebtsManager';
+import LeasingManager from '@/components/LeasingManager';
 import ReportsCenter from '@/components/reports/ReportsCenter';
 import { fetchCars, addCar, deleteCar, updateCar } from '@/lib/carsApi';
 import {
@@ -49,6 +50,7 @@ import { fetchDebts, type DebtRecord } from '@/lib/debtsApi';
 type WindowType =
   | 'Αυτοκίνητα'
   | 'Service'
+  | 'Leasing'
   | 'Ταμείο'
   | 'Έσοδα'
   | 'Έξοδα'
@@ -903,6 +905,8 @@ const handleSaveSupplierPayment = async () => {
         return 'Διαχείριση Αυτοκινήτων';
       case 'Service':
         return 'Service';
+      case 'Leasing':
+        return 'Leasing';
       case 'Ταμείο':
         return 'Ταμείο';
       case 'Έσοδα':
@@ -1437,6 +1441,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     const knownWindows: WindowId[] = [
       'Αυτοκίνητα',
       'Service',
+      'Leasing',
       'Ταμείο',
       'Έσοδα',
       'Έξοδα',
@@ -1460,6 +1465,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
   case 'Service':
     return <ServicesManager />;
+
+  case 'Leasing':
+    return <LeasingManager />;
 
   case 'Αυτοκίνητα':
     return (
@@ -1556,6 +1564,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return 'Διαχείριση Αυτοκινήτων';
       case 'Service':
         return 'Service';
+      case 'Leasing':
+        return 'Leasing';
       case 'Ταμείο':
         return 'Ταμείο';
       case 'Έσοδα':
@@ -1828,10 +1838,10 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               onMinimize={() => minimizeWindow(windowItem.id)}
               zIndex={windowItem.zIndex}
               titleActions={getWindowActions(windowItem.id)}
-              initialWidth={windowItem.id === 'Αναφορές' ? 1150 : undefined}
-              initialHeight={windowItem.id === 'Αναφορές' ? 720 : undefined}
+              initialWidth={windowItem.id === 'Αναφορές' ? 1320 : undefined}
+              initialHeight={windowItem.id === 'Αναφορές' ? 792 : undefined}
               financeDashboard={windowItem.id === 'Ταμείο'}
-              wide={windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Οφειλές' || windowItem.id === 'Service' || windowItem.id === 'Έγγραφα'}
+              wide={windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Οφειλές' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα'}
             >
               {renderWindowContent(windowItem.id)}
             </Window>

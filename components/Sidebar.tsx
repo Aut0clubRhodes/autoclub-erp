@@ -8,6 +8,7 @@ import {
   BarChart3,
   CalendarDays,
   Car,
+  FileText,
   FolderArchive,
   LayoutDashboard,
   ListTree,
@@ -52,6 +53,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Κρατήσεις', href: '/bookings', icon: CalendarDays, tone: 'text-violet-300', chip: 'border-violet-400/25 bg-violet-400/10' },
       { label: 'Αυτοκίνητα', href: '/cars', icon: Car, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
       { label: 'Service', href: '/services', icon: Wrench, tone: 'text-orange-300', chip: 'border-orange-400/25 bg-orange-400/10' },
+      { label: 'Leasing', href: '/leasing', icon: FileText, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
     ],
   },
   {
@@ -88,6 +90,7 @@ const NAV_SECTIONS: NavSection[] = [
 const WINDOW_ITEMS = [
   'Αυτοκίνητα',
   'Service',
+  'Leasing',
   'Ταμείο',
   'Έσοδα',
   'Έξοδα',
