@@ -204,7 +204,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
   };
 
   return (
-    <aside className="flex h-screen w-[244px] shrink-0 flex-col border-r border-sky-100/[0.045] bg-[linear-gradient(180deg,#07101a_0%,#05080d_100%)] text-white shadow-[20px_0_50px_rgba(0,0,0,0.28)] sm:w-[268px]">
+    <aside className="fixed bottom-0 left-0 top-0 z-[9000] flex w-[250px] shrink-0 flex-col border-r border-white/[0.06] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] text-white shadow-[18px_0_48px_rgba(0,0,0,0.22)]">
       <div className="border-b border-sky-100/[0.045] px-4 pb-3.5 pt-[18px] sm:px-5 sm:pb-4 sm:pt-5">
         <div className="relative mx-auto h-[62px] w-[148px] sm:h-[68px] sm:w-[164px]">
           <div className="absolute inset-4 rounded-full bg-sky-400/[0.065] blur-2xl" />

@@ -1628,9 +1628,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         userEmail={userEmail}
         onLogout={handleLogout}
       />
-      <main className="relative flex-1 bg-[radial-gradient(circle_at_45%_44%,rgba(14,165,233,0.1),transparent_24%),radial-gradient(circle_at_59%_40%,rgba(34,197,94,0.065),transparent_22%),linear-gradient(180deg,#08111a_0%,#050910_100%)]">
+      <main className="fixed bottom-0 left-[250px] right-0 top-[52px] overflow-hidden bg-[radial-gradient(circle_at_48%_42%,rgba(14,165,233,0.075),transparent_26%),radial-gradient(circle_at_62%_44%,rgba(34,197,94,0.045),transparent_24%),linear-gradient(180deg,#07101a_0%,#050910_100%)]">
         {openWindows.length > 0 && (
-          <div className="pointer-events-none fixed left-[250px] right-0 top-0 z-[9000] flex h-[52px] items-end border-b border-white/[0.08] border-l border-white/[0.06] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] pl-3">
+          <div className="pointer-events-none fixed left-[250px] right-0 top-0 z-[9000] flex h-[52px] items-end border-b border-white/[0.06] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] pl-3">
             <div className="pointer-events-auto flex max-w-full items-end gap-1 overflow-x-auto pt-2">
               {openWindows.map((windowItem) => {
                 const isActiveTab = activeWindow === windowItem.id;
