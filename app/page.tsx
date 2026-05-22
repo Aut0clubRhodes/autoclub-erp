@@ -1828,7 +1828,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               onMinimize={() => minimizeWindow(windowItem.id)}
               zIndex={windowItem.zIndex}
               titleActions={getWindowActions(windowItem.id)}
-              fullscreen={windowItem.id === 'Αναφορές'}
+              initialWidth={windowItem.id === 'Αναφορές' ? 1150 : undefined}
+              initialHeight={windowItem.id === 'Αναφορές' ? 720 : undefined}
               financeDashboard={windowItem.id === 'Ταμείο'}
               wide={windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Οφειλές' || windowItem.id === 'Service' || windowItem.id === 'Έγγραφα'}
             >

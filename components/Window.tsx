@@ -41,7 +41,7 @@ export default function Window({
   onFocus,
   onMinimize,
 }: WindowProps) {
-  const isMaximized = fullscreen;
+  const [isMaximized, setIsMaximized] = useState(fullscreen);
   const [windowSize, setWindowSize] = useState({
     width: initialWidth || 1100,
     height: initialHeight || 720,
@@ -66,6 +66,10 @@ export default function Window({
     y: number;
   } | null>(null);
 
+  useEffect(() => {
+    setIsMaximized(fullscreen);
+  }, [fullscreen]);
+
   const clampPosition = (x: number, y: number) => {
     return {
       x: Math.min(Math.max(x, 230), window.innerWidth - 120),
@@ -76,6 +80,7 @@ export default function Window({
   const startDrag = (event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
     if (target.closest('[data-resize-handle="true"]')) return;
+    if (isMaximized) return;
 
     event.preventDefault();
     onFocus?.();
@@ -206,9 +211,9 @@ export default function Window({
         }`}
         style={{
           left: isMaximized ? 250 : position.x,
-          top: isMaximized ? 16 : position.y,
-          width: isMaximized ? 'calc(100vw - 270px)' : windowSize.width,
-          height: isMaximized ? 'calc(100vh - 32px)' : windowSize.height,
+          top: isMaximized ? 52 : position.y,
+          width: isMaximized ? 'calc(100vw - 250px)' : windowSize.width,
+          height: isMaximized ? 'calc(100vh - 52px)' : windowSize.height,
           zIndex,
         }}
       >
@@ -229,6 +234,17 @@ export default function Window({
               aria-label="Minimize window"
             >
               −
+            </button>
+            <button
+              onClick={(event) => {
+                event.stopPropagation();
+                onFocus?.();
+                setIsMaximized((current) => !current);
+              }}
+              className="rounded-xl border border-transparent px-3 py-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white"
+              aria-label={isMaximized ? 'Restore window' : 'Maximize window'}
+            >
+              {isMaximized ? '\u2750' : '\u25A1'}
             </button>
             <button
               onClick={onClose}
