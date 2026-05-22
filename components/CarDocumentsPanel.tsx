@@ -91,7 +91,7 @@ export default function CarDocumentsPanel({ vehicle, onClose }: CarDocumentsPane
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
       <div className="flex max-h-[84vh] w-[min(920px,94vw)] flex-col overflow-hidden rounded-[28px] border border-sky-300/15 bg-zinc-950 shadow-2xl">
         <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
           <div>
@@ -174,7 +174,7 @@ export default function CarDocumentsPanel({ vehicle, onClose }: CarDocumentsPane
       </div>
 
       {showUploadModal && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
           <div className="w-[min(560px,92vw)] overflow-hidden rounded-[28px] border border-sky-300/15 bg-zinc-950 shadow-2xl">
             <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
               <h3 className="text-lg font-semibold text-white">Upload Ξ•Ξ³Ξ³ΟΞ¬Ο†ΞΏΟ…</h3>

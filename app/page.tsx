@@ -66,6 +66,7 @@ type OpenWindow = {
   id: WindowId;
   title: string;
   zIndex: number;
+  isMinimized?: boolean;
 };
 
 type Vehicle = {
@@ -192,8 +193,9 @@ export default function Home() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [openWindows, setOpenWindows] = useState<OpenWindow[]>([]);
   const [topZIndex, setTopZIndex] = useState(50);
-  const activeWindow = openWindows.length
-    ? openWindows.reduce((topWindow, windowItem) => (windowItem.zIndex > topWindow.zIndex ? windowItem : topWindow), openWindows[0]).id
+  const visibleWindows = openWindows.filter((windowItem) => !windowItem.isMinimized);
+  const activeWindow = visibleWindows.length
+    ? visibleWindows.reduce((topWindow, windowItem) => (windowItem.zIndex > topWindow.zIndex ? windowItem : topWindow), visibleWindows[0]).id
     : null;
   const hasOpenWindow = (windowId: WindowId) => openWindows.some((windowItem) => windowItem.id === windowId);
   const [showAddCar, setShowAddCar] = useState(false);
@@ -738,11 +740,11 @@ const handleSaveSupplierPayment = async () => {
     }
 
     if (
-      !activeWindow ||
-      activeWindow === 'Αυτοκίνητα' ||
-      activeWindow === 'Έσοδα' ||
-      activeWindow === 'Έξοδα' ||
-      activeWindow === 'Αναφορές'
+      openWindows.length === 0 ||
+      hasOpenWindow('Αυτοκίνητα') ||
+      hasOpenWindow('Έσοδα') ||
+      hasOpenWindow('Έξοδα') ||
+      hasOpenWindow('Αναφορές')
     ) {
       const loadCars = async () => {
         const cars = await fetchCars();
@@ -766,14 +768,14 @@ const handleSaveSupplierPayment = async () => {
       };
       loadCars();
     }
-  }, [activeWindow, userEmail]);
+  }, [openWindows, userEmail]);
 
   useEffect(() => {
     if (!userEmail) {
       return;
     }
 
-    if (activeWindow !== 'Αναφορές') {
+    if (!hasOpenWindow('Αναφορές')) {
       return;
     }
 
@@ -788,7 +790,7 @@ const handleSaveSupplierPayment = async () => {
     };
 
     loadReportsData();
-  }, [activeWindow, userEmail]);
+  }, [openWindows, userEmail]);
 
   useEffect(() => {
     if (!userEmail) {
@@ -840,12 +842,12 @@ const handleSaveSupplierPayment = async () => {
       return;
     }
 
-    if (activeWindow && activeWindow !== 'Οφειλές') {
+    if (openWindows.length > 0 && !hasOpenWindow('Οφειλές')) {
       return;
     }
 
     fetchDebts().then(setDebts);
-  }, [activeWindow, userEmail]);
+  }, [openWindows, userEmail]);
 
   useEffect(() => {
     if (!userEmail) {
@@ -853,11 +855,11 @@ const handleSaveSupplierPayment = async () => {
     }
 
     if (
-      activeWindow &&
-      activeWindow !== 'Ταμείο' &&
-      activeWindow !== 'Έσοδα' &&
-      activeWindow !== 'Έξοδα' &&
-      activeWindow !== 'Αναφορές'
+      openWindows.length > 0 &&
+      !hasOpenWindow('Ταμείο') &&
+      !hasOpenWindow('Έσοδα') &&
+      !hasOpenWindow('Έξοδα') &&
+      !hasOpenWindow('Αναφορές')
     ) {
       return;
     }
@@ -893,7 +895,7 @@ const handleSaveSupplierPayment = async () => {
     };
 
     loadFinanceTransactions();
-  }, [activeWindow, userEmail]);
+  }, [openWindows, userEmail]);
 
   const getWindowTitleForId = (windowId: WindowId) => {
     switch (windowId) {
@@ -929,7 +931,7 @@ const handleSaveSupplierPayment = async () => {
       const nextZIndex = current + 1;
       setOpenWindows((currentWindows) =>
         currentWindows.map((windowItem) =>
-          windowItem.id === windowId ? { ...windowItem, zIndex: nextZIndex } : windowItem
+          windowItem.id === windowId ? { ...windowItem, zIndex: nextZIndex, isMinimized: false } : windowItem
         )
       );
       return nextZIndex;
@@ -944,11 +946,11 @@ const handleSaveSupplierPayment = async () => {
 
         if (existingWindow) {
           return currentWindows.map((windowItem) =>
-            windowItem.id === windowId ? { ...windowItem, zIndex: nextZIndex } : windowItem
+            windowItem.id === windowId ? { ...windowItem, zIndex: nextZIndex, isMinimized: false } : windowItem
           );
         }
 
-        return [...currentWindows, { id: windowId, title, zIndex: nextZIndex }];
+        return [...currentWindows, { id: windowId, title, zIndex: nextZIndex, isMinimized: false }];
       });
       return nextZIndex;
     });
@@ -980,6 +982,14 @@ const handleSaveSupplierPayment = async () => {
     setShowExpenseModal(false);
     setEditingIncomeId(null);
     setEditingExpenseId(null);
+  };
+
+  const minimizeWindow = (windowId: WindowId) => {
+    setOpenWindows((currentWindows) =>
+      currentWindows.map((windowItem) =>
+        windowItem.id === windowId ? { ...windowItem, isMinimized: true } : windowItem
+      )
+    );
   };
 
   const openAddCarModal = () => {
@@ -1422,8 +1432,27 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const formatRelatedValue = (label: string, id: string) =>
     id ? `${label} #${id}` : '-';
 
+  const resolveWindowId = (windowId: WindowId | string, title?: string): WindowId | null => {
+    const value = String(windowId || title || '');
+    const knownWindows: WindowId[] = [
+      'Αυτοκίνητα',
+      'Service',
+      'Ταμείο',
+      'Έσοδα',
+      'Έξοδα',
+      'Οφειλές',
+      'Προμηθευτές',
+      'Έγγραφα',
+      'Κατηγορίες Εξόδων',
+      'Αναφορές',
+      'Πρακτορεία',
+    ];
+
+    return knownWindows.includes(value as WindowId) ? (value as WindowId) : null;
+  };
+
   const renderWindowContent = (windowId: WindowId) => {
-    switch (windowId) {
+    switch (resolveWindowId(windowId)) {
   case 'Πρακτορεία':
     return (
       <AgenciesManager />
@@ -1600,6 +1629,54 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         onLogout={handleLogout}
       />
       <main className="relative flex-1 bg-[radial-gradient(circle_at_45%_44%,rgba(14,165,233,0.1),transparent_24%),radial-gradient(circle_at_59%_40%,rgba(34,197,94,0.065),transparent_22%),linear-gradient(180deg,#08111a_0%,#050910_100%)]">
+        {openWindows.length > 0 && (
+          <div className="pointer-events-none fixed left-[250px] right-5 top-3 z-[9000] flex items-center">
+            <div className="pointer-events-auto flex max-w-full items-end gap-1 overflow-x-auto rounded-t-2xl border border-sky-100/[0.08] border-b-sky-100/[0.12] bg-zinc-950/72 px-2 pt-2 shadow-[0_18px_44px_rgba(0,0,0,0.26)] backdrop-blur-xl">
+              {openWindows.map((windowItem) => {
+                const isActiveTab = activeWindow === windowItem.id;
+                const isMinimizedTab = Boolean(windowItem.isMinimized);
+
+                return (
+                  <button
+                    key={windowItem.id}
+                    type="button"
+                    onClick={() => focusWindow(windowItem.id)}
+                    className={`group flex max-w-[190px] items-center gap-2 rounded-t-xl border px-3 py-2 text-left text-xs font-semibold transition duration-200 ${
+                      isActiveTab
+                        ? 'border-sky-300/25 bg-sky-300/[0.12] text-white shadow-[0_-2px_18px_rgba(56,189,248,0.14)]'
+                        : 'border-white/[0.055] bg-white/[0.035] text-zinc-400 hover:border-sky-300/18 hover:bg-white/[0.06] hover:text-zinc-100'
+                    } ${isMinimizedTab ? 'opacity-55' : 'opacity-100'}`}
+                  >
+                    {isMinimizedTab && <span className="h-1.5 w-1.5 rounded-full bg-zinc-500" />}
+                    <span className="min-w-0 flex-1 truncate">{windowItem.title || getWindowTitle(windowItem.id)}</span>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        closeWindow(windowItem.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        closeWindow(windowItem.id);
+                      }}
+                      className="rounded-md px-1.5 py-0.5 text-zinc-500 transition hover:bg-white/[0.08] hover:text-white"
+                      aria-label={`Close ${windowItem.title || getWindowTitle(windowItem.id)}`}
+                    >
+                      ×
+                    </span>
+                  </button>
+                );
+              })}
+              <div className="mb-2 ml-1 rounded-lg border border-white/[0.055] bg-white/[0.025] px-2.5 py-1.5 text-xs font-semibold text-zinc-500">
+                +
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Homepage with centered logo */}
         {openWindows.length === 0 && (
           <div className="flex h-full w-full items-center justify-center px-4 py-8">
@@ -1739,23 +1816,28 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         )}
 
         {/* Floating Window */}
-        {openWindows.map((windowItem) => (
-          <Window
-            key={windowItem.id}
-            title={windowItem.title || getWindowTitle(windowItem.id)}
-            onClose={() => closeWindow(windowItem.id)}
-            onFocus={() => focusWindow(windowItem.id)}
-            zIndex={windowItem.zIndex}
-            titleActions={getWindowActions(windowItem.id)}
-            fullscreen={windowItem.id === 'Αναφορές'}
-            financeDashboard={windowItem.id === 'Ταμείο'}
-            wide={windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Οφειλές' || windowItem.id === 'Service' || windowItem.id === 'Έγγραφα'}
-          >
-            {renderWindowContent(windowItem.id)}
-          </Window>
-        ))}
+        {openWindows.map((windowItem) => {
+          if (windowItem.isMinimized) return null;
+
+          return (
+            <Window
+              key={windowItem.id}
+              title={windowItem.title || getWindowTitle(windowItem.id)}
+              onClose={() => closeWindow(windowItem.id)}
+              onFocus={() => focusWindow(windowItem.id)}
+              onMinimize={() => minimizeWindow(windowItem.id)}
+              zIndex={windowItem.zIndex}
+              titleActions={getWindowActions(windowItem.id)}
+              fullscreen={windowItem.id === 'Αναφορές'}
+              financeDashboard={windowItem.id === 'Ταμείο'}
+              wide={windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Οφειλές' || windowItem.id === 'Service' || windowItem.id === 'Έγγραφα'}
+            >
+              {renderWindowContent(windowItem.id)}
+            </Window>
+          );
+        })}
 {showIncomeModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+  <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4">
     <div className="flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl">
       <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
         <h3 className="text-lg font-semibold text-white">Καταχώρηση Εσόδου</h3>
@@ -1935,7 +2017,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   </div>
 )}
 {showExpenseModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+  <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4">
     <div className="w-full max-w-md rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl">
       <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-800">
         <h3 className="text-lg font-semibold text-white">Καταχώρηση Εξόδου</h3>
@@ -2080,7 +2162,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   </div>
 )}
 {showSupplierPaymentModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+  <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4">
     <div className="w-full max-w-md rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl">
       <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-800">
         <h3 className="text-lg font-semibold text-white">Πληρωμή Προμηθευτή</h3>
@@ -2196,7 +2278,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   </div>
 )}
         {showAddCar && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4">
             <div className="w-full max-w-2xl rounded-[28px] bg-zinc-950 border border-zinc-800 shadow-2xl shadow-black/30 overflow-hidden">
               <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-800">
                 <h3 className="text-lg font-semibold text-white">
@@ -2692,7 +2774,7 @@ function VehicleViewModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4">
       <div
         className="relative flex flex-col overflow-hidden rounded-[28px] border border-zinc-800 bg-zinc-950 shadow-2xl shadow-black/30"
         style={{ width: modalSize.width, height: modalSize.height }}
@@ -2807,7 +2889,7 @@ function VehicleViewModal({
       </div>
 
       {showLicenseModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-zinc-800 bg-zinc-950 shadow-2xl">
             <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
               <h3 className="text-lg font-semibold text-white">Άδεια Κυκλοφορίας — {vehicle.plate}</h3>
@@ -2821,7 +2903,7 @@ function VehicleViewModal({
       )}
 
       {showLicenseRegistrationModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-emerald-300/15 bg-zinc-950 shadow-2xl">
             <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
               <h3 className="text-lg font-semibold text-white">Καταχώρηση Άδειας Κυκλοφορίας — {vehicle.plate}</h3>
@@ -2928,7 +3010,7 @@ function VehicleViewModal({
       )}
 
       {showKteoModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-sky-300/15 bg-zinc-950 shadow-2xl">
             <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
               <h3 className="text-lg font-semibold text-white">Ενημέρωση ΚΤΕΟ — {vehicle.plate}</h3>
@@ -2965,7 +3047,7 @@ function VehicleViewModal({
       )}
 
       {showServiceHistoryModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
           <div className="flex max-h-[82vh] w-full max-w-4xl flex-col overflow-hidden rounded-[28px] border border-orange-300/15 bg-zinc-950 shadow-2xl">
             <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
               <h3 className="text-lg font-semibold text-white">Ιστορικό Service — {vehicle.plate}</h3>

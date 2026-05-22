@@ -24,6 +24,7 @@ interface WindowProps {
   initialHeight?: number;
   zIndex?: number;
   onFocus?: () => void;
+  onMinimize?: () => void;
 }
 
 export default function Window({
@@ -38,6 +39,7 @@ export default function Window({
   initialHeight,
   zIndex,
   onFocus,
+  onMinimize,
 }: WindowProps) {
   const isMaximized = fullscreen;
   const [windowSize, setWindowSize] = useState({
@@ -48,7 +50,6 @@ export default function Window({
     x: 320 + Math.round(Math.random() * 24),
     y: 80 + Math.round(Math.random() * 24),
   });
-  const [isMinimized, setIsMinimized] = useState(false);
   const resizeStartRef = useRef<{
     mouseX: number;
     mouseY: number;
@@ -204,10 +205,10 @@ export default function Window({
                 : ''
         }`}
         style={{
-          left: isMaximized && !isMinimized ? 250 : position.x,
-          top: isMaximized && !isMinimized ? 16 : position.y,
-          width: isMaximized && !isMinimized ? 'calc(100vw - 270px)' : windowSize.width,
-          height: isMinimized ? 56 : isMaximized ? 'calc(100vh - 32px)' : windowSize.height,
+          left: isMaximized ? 250 : position.x,
+          top: isMaximized ? 16 : position.y,
+          width: isMaximized ? 'calc(100vw - 270px)' : windowSize.width,
+          height: isMaximized ? 'calc(100vh - 32px)' : windowSize.height,
           zIndex,
         }}
       >
@@ -218,14 +219,14 @@ export default function Window({
         >
           <h2 className="text-base font-semibold tracking-tight text-[#f4f7fb]">{title}</h2>
           <div className="flex items-center gap-3">
-            {!isMinimized && titleActions}
+            {titleActions}
             <button
               onClick={(event) => {
                 event.stopPropagation();
-                setIsMinimized((current) => !current);
+                onMinimize?.();
               }}
               className="rounded-xl border border-transparent px-3 py-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white"
-              aria-label={isMinimized ? 'Restore window' : 'Minimize window'}
+              aria-label="Minimize window"
             >
               −
             </button>
@@ -240,21 +241,15 @@ export default function Window({
         </div>
 
         {/* Content */}
-        {!isMinimized && (
-          <div
-            className={`min-h-0 flex-1 ${
-              isMaximized
-                ? 'overflow-auto p-0'
-                : financeDashboard
-                  ? 'overflow-hidden p-4'
-                  : 'overflow-hidden p-6'
-            }`}
-          >
-            {children}
-          </div>
-        )}
+        <div
+          className={`min-h-0 flex-1 overflow-auto ${
+            isMaximized ? 'p-0' : financeDashboard ? 'p-4' : 'p-6'
+          }`}
+        >
+          {children}
+        </div>
 
-        {!isMinimized && !isMaximized && (
+        {!isMaximized && (
           <>
             <div
               role="presentation"

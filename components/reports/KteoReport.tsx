@@ -193,7 +193,7 @@ export default function KteoReport({ vehicles, fromDate, toDate, onUpdateKteo }:
       </div>
 
       {editingVehicle && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-sky-300/15 bg-zinc-950 shadow-2xl">
             <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
               <h3 className="text-lg font-semibold text-white">Ενημέρωση ΚΤΕΟ — {editingVehicle.plate}</h3>

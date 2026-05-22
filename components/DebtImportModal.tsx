@@ -28,7 +28,7 @@ export default function DebtImportModal({ vehicles, onClose }: DebtImportModalPr
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
       <div className="flex max-h-[86vh] w-[min(720px,92vw)] flex-col overflow-hidden rounded-[28px] border border-sky-300/15 bg-[linear-gradient(180deg,rgba(18,24,33,0.98),rgba(8,12,18,0.98))] shadow-[0_28px_90px_rgba(0,0,0,0.62)]">
         <div className="flex items-center justify-between border-b border-white/[0.08] px-6 py-5">
           <div>

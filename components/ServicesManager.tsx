@@ -531,7 +531,7 @@ export default function ServicesManager() {
       {showModal &&
         modalRootReady &&
         createPortal(
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
             <div className="premium-window-in flex max-h-[86vh] w-[min(860px,92vw)] flex-col overflow-hidden rounded-[28px] border border-orange-300/14 bg-[linear-gradient(180deg,rgba(18,24,33,0.98),rgba(8,12,18,0.98))] shadow-[0_28px_90px_rgba(0,0,0,0.62),0_0_44px_rgba(249,115,22,0.06)]">
               <div className="flex shrink-0 items-center justify-between border-b border-white/[0.07] px-6 py-4">
                 <div>
