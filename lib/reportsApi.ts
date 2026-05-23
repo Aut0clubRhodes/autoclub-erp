@@ -52,6 +52,14 @@ export const fetchSupplierLedger = async (): Promise<SupplierLedgerRow[]> => {
         .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
 
       const payments = supplierTransactions
+        .filter(
+          (transaction) =>
+            (transaction.type === 'expense' || transaction.type === 'supplier_payment') &&
+            ['cash', 'card', 'bank'].includes(String(transaction.payment_method || ''))
+        )
+        .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+
+      const supplierPayments = supplierTransactions
         .filter((transaction) => transaction.type === 'supplier_payment')
         .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
 
@@ -60,7 +68,7 @@ export const fetchSupplierLedger = async (): Promise<SupplierLedgerRow[]> => {
         supplier_name: String(supplier.name ?? ''),
         total_credit_charges: creditCharges,
         total_payments: payments,
-        outstanding_balance: creditCharges - payments,
+        outstanding_balance: creditCharges - supplierPayments,
       };
     })
     .sort((left, right) => left.supplier_name.localeCompare(right.supplier_name, 'el'));
