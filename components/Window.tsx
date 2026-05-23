@@ -43,8 +43,8 @@ export default function Window({
 }: WindowProps) {
   const [isMaximized, setIsMaximized] = useState(fullscreen);
   const [windowSize, setWindowSize] = useState({
-    width: initialWidth || 1265,
-    height: initialHeight || 792,
+    width: initialWidth || 1450,
+    height: initialHeight || 910,
   });
   const [position, setPosition] = useState({
     x: 320 + Math.round(Math.random() * 24),
@@ -202,11 +202,11 @@ export default function Window({
             : 'rounded-3xl'
         } ${
           !isMaximized && financeDashboard
-              ? 'max-w-[min(1180px,94vw)] max-h-[88vh]'
+              ? 'max-w-[min(1450px,96vw)] max-h-[92vh]'
             : !isMaximized && wide
-              ? 'max-w-[min(1220px,92vw)] max-h-[78vh]'
+              ? 'max-w-[min(1450px,96vw)] max-h-[88vh]'
               : !isMaximized
-                ? 'max-w-[1100px] max-h-[90vh]'
+                ? 'max-w-[1300px] max-h-[92vh]'
                 : ''
         }`}
         style={{
@@ -259,7 +259,7 @@ export default function Window({
         {/* Content */}
         <div
           className={`min-h-0 flex-1 overflow-auto ${
-            isMaximized ? 'p-0' : financeDashboard ? 'p-4' : 'p-6'
+            isMaximized ? 'p-0' : financeDashboard ? 'p-5' : 'p-7'
           }`}
         >
           {children}
