@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import {
+  Activity,
   BarChart3,
   CalendarDays,
   Car,
@@ -71,6 +72,7 @@ const NAV_SECTIONS: NavSection[] = [
           { label: 'Οφειλές', href: '/finance/debts', icon: ReceiptText, tone: 'text-fuchsia-300', chip: 'border-fuchsia-400/25 bg-fuchsia-400/10' },
         ],
       },
+      { label: 'Financial Engine', href: '/financial-engine', icon: Activity, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
       { label: 'Αναφορές', href: '/reports', icon: BarChart3, tone: 'text-amber-300', chip: 'border-amber-400/25 bg-amber-400/10' },
     ],
   },
@@ -95,6 +97,7 @@ const WINDOW_ITEMS = [
   'Έσοδα',
   'Έξοδα',
   'Οφειλές',
+  'Financial Engine',
   'Προμηθευτές',
   'Αναφορές',
   'Πρακτορεία',

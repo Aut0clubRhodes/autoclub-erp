@@ -10,6 +10,7 @@ import FinanceIncome from '@/components/FinanceIncome';
 import FinanceExpenses from '@/components/FinanceExpenses';
 import DebtsManager from '@/components/DebtsManager';
 import LeasingManager from '@/components/LeasingManager';
+import FinancialEngine from '@/components/FinancialEngine';
 import ReportsCenter from '@/components/reports/ReportsCenter';
 import { fetchCars, addCar, deleteCar, updateCar } from '@/lib/carsApi';
 import {
@@ -55,6 +56,7 @@ type WindowType =
   | 'Έσοδα'
   | 'Έξοδα'
   | 'Οφειλές'
+  | 'Financial Engine'
   | 'Προμηθευτές'
   | 'Έγγραφα'
   | 'Κατηγορίες Εξόδων'
@@ -855,7 +857,7 @@ const handleSaveSupplierPayment = async () => {
       return;
     }
 
-    if (openWindows.length > 0 && !hasOpenWindow('Οφειλές')) {
+    if (openWindows.length > 0 && !hasOpenWindow('Οφειλές') && !hasOpenWindow('Financial Engine')) {
       return;
     }
 
@@ -926,6 +928,8 @@ const handleSaveSupplierPayment = async () => {
         return 'Έξοδα';
       case 'Οφειλές':
         return 'Οφειλές';
+      case 'Financial Engine':
+        return 'Financial Engine';
       case 'Προμηθευτές':
         return 'Προμηθευτές';
       case 'Έγγραφα':
@@ -1484,6 +1488,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       'Έσοδα',
       'Έξοδα',
       'Οφειλές',
+      'Financial Engine',
       'Προμηθευτές',
       'Έγγραφα',
       'Κατηγορίες Εξόδων',
@@ -1567,6 +1572,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             onDeleteExpense={handleDeleteExpense}
           />
         );
+      case 'Financial Engine':
+        return <FinancialEngine transactions={transactionsWithAgencyNames} debts={debts} />;
       case 'Προμηθευτές':
         return <SuppliersManager onSuppliersChange={setSuppliers} />;
       case 'Έγγραφα':
@@ -1614,6 +1621,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return 'Έξοδα';
       case 'Οφειλές':
         return 'Οφειλές';
+      case 'Financial Engine':
+        return 'Financial Engine';
       case 'Προμηθευτές':
         return 'Προμηθευτές';
       case 'Έγγραφα':
@@ -1881,7 +1890,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               initialWidth={windowItem.id === 'Αναφορές' ? 1320 : undefined}
               initialHeight={windowItem.id === 'Αναφορές' ? 792 : undefined}
               financeDashboard={windowItem.id === 'Ταμείο'}
-              wide={windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Οφειλές' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα'}
+              wide={windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Οφειλές' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα'}
             >
               {renderWindowContent(windowItem.id)}
             </Window>
