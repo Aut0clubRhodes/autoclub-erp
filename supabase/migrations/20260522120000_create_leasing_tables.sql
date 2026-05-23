@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS leasing_contracts (
   vehicle_description TEXT NOT NULL,
   total_amount NUMERIC NOT NULL DEFAULT 0,
   down_payment NUMERIC NOT NULL DEFAULT 0,
+  down_payment_transaction_id BIGINT REFERENCES transactions(id) ON DELETE SET NULL,
   remaining_amount NUMERIC NOT NULL DEFAULT 0,
   installments_count INTEGER NOT NULL DEFAULT 0,
   monthly_payment NUMERIC NOT NULL DEFAULT 0,
@@ -35,7 +36,19 @@ ALTER TABLE leasing_contracts
 ADD COLUMN IF NOT EXISTS car_id BIGINT;
 
 ALTER TABLE leasing_contracts
+ADD COLUMN IF NOT EXISTS down_payment_transaction_id BIGINT REFERENCES transactions(id) ON DELETE SET NULL;
+
+ALTER TABLE leasing_contracts
 ADD COLUMN IF NOT EXISTS installments_count INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE leasing_contracts
+DROP CONSTRAINT IF EXISTS leasing_contracts_down_payment_transaction_id_fkey;
+
+ALTER TABLE leasing_contracts
+ADD CONSTRAINT leasing_contracts_down_payment_transaction_id_fkey
+FOREIGN KEY (down_payment_transaction_id)
+REFERENCES transactions(id)
+ON DELETE SET NULL;
 
 ALTER TABLE leasing_contracts
 DROP CONSTRAINT IF EXISTS leasing_contracts_car_id_fkey;

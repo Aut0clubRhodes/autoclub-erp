@@ -4,17 +4,19 @@ import { useEffect, useMemo, useState } from 'react';
 import AgenciesReport from './AgenciesReport';
 import CarsReport from './CarsReport';
 import ExpensesReport from './ExpensesReport';
+import IncomeReport from './IncomeReport';
 import KteoReport from './KteoReport';
 import SecretariatReport from './SecretariatReport';
 import SuppliersReport from './SuppliersReport';
 import { fetchDebts, type DebtRecord } from '@/lib/debtsApi';
 import type { ReportsData, ReportsFilters } from './types';
 
-type ReportSection = 'agencies' | 'expenses' | 'suppliers' | 'cars' | 'kteo' | 'secretariat';
+type ReportSection = 'agencies' | 'expenses' | 'income' | 'suppliers' | 'cars' | 'kteo' | 'secretariat';
 
 const sections: { id: ReportSection; label: string }[] = [
   { id: 'agencies', label: 'Πρακτορεία' },
   { id: 'expenses', label: 'Έξοδα' },
+  { id: 'income', label: 'Έσοδα' },
   { id: 'suppliers', label: 'Προμηθευτές' },
   { id: 'cars', label: 'Αυτοκίνητα' },
   { id: 'kteo', label: 'ΚΤΕΟ' },
@@ -205,6 +207,7 @@ export default function ReportsCenter({
               />
             )}
             {activeSection === 'expenses' && <ExpensesReport transactions={filteredTransactions} />}
+            {activeSection === 'income' && <IncomeReport transactions={filteredTransactions} />}
             {activeSection === 'suppliers' && (
               <SuppliersReport transactions={filteredTransactions} supplierLedger={supplierLedger} />
             )}

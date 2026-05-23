@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { fetchCars } from '@/lib/carsApi';
-import { addTransaction } from '@/lib/financeApi';
+import { addTransaction, deleteTransaction } from '@/lib/financeApi';
 import {
   addLeasingContract,
   addLeasingPayment,
+  deleteLeasingContract,
   fetchLeasingContracts,
+  fetchLeasingPayments,
   updateLeasingContract,
   type LeasingContract,
   type LeasingStatus,
@@ -129,16 +131,17 @@ export default function LeasingManager() {
     amount: number,
     paymentDate: string,
     paymentMethod: string,
-    notes: string | null
+    notes: string | null,
+    options: { isDownPayment?: boolean } = {}
   ) => {
     const transaction = await addTransaction({
       type: 'income',
-      source: 'leasing_payment',
+      source: 'leasing',
       amount,
       date: paymentDate,
       payment_method: paymentMethod,
       car_id: contract.car_id ? Number(contract.car_id) : null,
-      category: 'Leasing',
+      category: 'leasing',
       notes: notes || `Leasing payment: ${contract.customer_name}`,
     });
 
@@ -148,28 +151,31 @@ export default function LeasingManager() {
 
     const nextRemaining = Math.max(0, Number(contract.remaining_amount || 0) - amount);
     const nextStatus: LeasingStatus = nextRemaining <= 0 ? 'completed' : contract.status;
-    const payment = await addLeasingPayment({
-      leasing_contract_id: contract.id,
-      amount,
-      payment_date: paymentDate,
-      payment_method: paymentMethod,
-      notes,
-      transaction_id: Number(transaction.id),
-    });
-
-    if (!payment) {
-      alert('Η κίνηση εσόδου δημιουργήθηκε, αλλά δεν αποθηκεύτηκε η πληρωμή leasing.');
-      return false;
-    }
-
     const updated = await updateLeasingContract(contract.id, {
       remaining_amount: nextRemaining,
       status: nextStatus,
+      ...(options.isDownPayment ? { down_payment_transaction_id: Number(transaction.id) } : {}),
     });
 
     if (!updated) {
       alert('Η πληρωμή αποθηκεύτηκε, αλλά δεν ενημερώθηκε το υπόλοιπο leasing.');
       return false;
+    }
+
+    if (!options.isDownPayment) {
+      const payment = await addLeasingPayment({
+        leasing_contract_id: contract.id,
+        amount,
+        payment_date: paymentDate,
+        payment_method: paymentMethod,
+        notes,
+        transaction_id: Number(transaction.id),
+      });
+
+      if (!payment) {
+        alert('Η κίνηση εσόδου δημιουργήθηκε, αλλά δεν αποθηκεύτηκε η πληρωμή leasing.');
+        return false;
+      }
     }
 
     return true;
@@ -237,7 +243,8 @@ export default function LeasingManager() {
         downPayment,
         contractForm.start_date || new Date().toISOString().split('T')[0],
         contractForm.payment_method,
-        `Προκαταβολή leasing: ${contract.customer_name}`
+        `Προκαταβολή leasing: ${contract.customer_name}`,
+        { isDownPayment: true }
       );
     }
 
@@ -272,6 +279,48 @@ export default function LeasingManager() {
       await loadContracts();
       setPaymentContract(null);
     }
+    setSaving(false);
+  };
+
+  const handleDeleteContract = async (contract: LeasingContract) => {
+    if (!window.confirm(`Να διαγραφεί το leasing του πελάτη "${contract.customer_name}";`)) {
+      return;
+    }
+
+    setSaving(true);
+    const payments = await fetchLeasingPayments(contract.id);
+    const transactionIds = Array.from(
+      new Set(
+        [
+          contract.down_payment_transaction_id,
+          ...payments.map((payment) => payment.transaction_id),
+        ]
+          .filter((id): id is number => Boolean(id))
+          .map((id) => Number(id))
+      )
+    );
+
+    for (const transactionId of transactionIds) {
+      const deleted = await deleteTransaction(transactionId);
+      if (!deleted) {
+        console.error('Leasing transaction delete failed:', {
+          contractId: contract.id,
+          transactionId,
+        });
+        alert('Δεν διαγράφηκαν όλες οι οικονομικές κινήσεις του leasing.');
+        setSaving(false);
+        return;
+      }
+    }
+
+    const deletedContract = await deleteLeasingContract(contract.id);
+    if (!deletedContract) {
+      alert('Το leasing δεν διαγράφηκε.');
+      setSaving(false);
+      return;
+    }
+
+    await loadContracts();
     setSaving(false);
   };
 
@@ -348,14 +397,24 @@ export default function LeasingManager() {
                     </span>
                   </td>
                   <td className="px-4 py-4 text-right">
-                    <button
-                      type="button"
-                      onClick={() => openPaymentModal(contract)}
-                      disabled={contract.status !== 'active' || Number(contract.remaining_amount || 0) <= 0}
-                      className="rounded-xl border border-emerald-400/24 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200 transition duration-200 hover:-translate-y-px hover:border-emerald-300/38 hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-45"
-                    >
-                      Καταχώρηση Δόσης
-                    </button>
+                    <div className="flex justify-end gap-2 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => openPaymentModal(contract)}
+                        disabled={contract.status !== 'active' || Number(contract.remaining_amount || 0) <= 0}
+                        className="rounded-xl border border-emerald-400/24 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-200 transition duration-200 hover:-translate-y-px hover:border-emerald-300/38 hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        Καταχώρηση Δόσης
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteContract(contract)}
+                        disabled={saving}
+                        className="rounded-xl border border-rose-400/28 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-200 transition duration-200 hover:-translate-y-px hover:border-rose-300/45 hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        Διαγραφή
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

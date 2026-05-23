@@ -88,6 +88,13 @@ type Vehicle = {
   road_tax_expiry?: string;
 };
 
+type VehicleSortKey = 'category' | 'year';
+type SortDirection = 'asc' | 'desc';
+type VehicleSortState = {
+  key: VehicleSortKey;
+  direction: SortDirection;
+} | null;
+
 type LicenseViewerState = {
   vehicle: Vehicle;
   document?: CarDocumentRecord;
@@ -259,6 +266,7 @@ export default function Home() {
     road_tax_expiry: '',
   });
   const [searchTerm, setSearchTerm] = useState('');
+  const [vehicleSort, setVehicleSort] = useState<VehicleSortState>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [fromDate, setFromDate] = useState('');
@@ -339,6 +347,7 @@ console.log('CREATED INCOME ENTRY ID', incomeEntry.id);
 const newTransaction = await addTransaction({
   type: 'income',
   source: incomeForm.income_type,
+  category: incomeForm.income_type,
   amount: Number(incomeForm.amount),
   date: incomeForm.date,
   payment_method: incomeForm.payment_method,
@@ -488,6 +497,8 @@ const handleSaveIncome = async () => {
   }
 
   const updated = await updateTransaction(Number(editingIncomeId), {
+    source: incomeForm.income_type,
+    category: incomeForm.income_type,
     amount: Number(incomeForm.amount),
     date: incomeForm.date,
     payment_method: incomeForm.payment_method,
@@ -1270,6 +1281,33 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     );
   });
 
+  const sortedFilteredVehicles = vehicleSort
+    ? [...filteredVehicles].sort((left, right) => {
+        const direction = vehicleSort.direction === 'asc' ? 1 : -1;
+
+        if (vehicleSort.key === 'category') {
+          return direction * String(left.category || '').localeCompare(String(right.category || ''), 'el', {
+            numeric: true,
+            sensitivity: 'base',
+          });
+        }
+
+        const leftYear = Number(left.year) || 0;
+        const rightYear = Number(right.year) || 0;
+        return direction * (leftYear - rightYear);
+      })
+    : filteredVehicles;
+
+  const handleVehicleSort = (key: VehicleSortKey) => {
+    setVehicleSort((current) => {
+      if (current?.key === key) {
+        return { key, direction: current.direction === 'asc' ? 'desc' : 'asc' };
+      }
+
+      return { key, direction: key === 'year' ? 'desc' : 'asc' };
+    });
+  };
+
   const transactionsWithAgencyNames = transactions.map((transaction) => ({
     ...transaction,
     agency:
@@ -1481,7 +1519,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               />
             </div>
             <VehiclesTable
-              vehicles={filteredVehicles}
+              vehicles={sortedFilteredVehicles}
+              sort={vehicleSort}
+              onSort={handleVehicleSort}
               onView={openViewCarModal}
               onViewLicense={openVehicleLicense}
               onEdit={openEditCarModal}
@@ -2444,12 +2484,16 @@ function formatEuro(value: string) {
 }
 function VehiclesTable({
   vehicles,
+  sort,
+  onSort,
   onView,
   onViewLicense,
   onEdit,
   onDelete,
 }: {
   vehicles: Vehicle[];
+  sort: VehicleSortState;
+  onSort: (key: VehicleSortKey) => void;
   onView: (plate: string) => void;
   onViewLicense: (vehicle: Vehicle) => void;
   onEdit: (plate: string) => void;
@@ -2462,10 +2506,14 @@ function VehiclesTable({
           <thead>
             <tr className="border-b border-zinc-700">
               <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">Πινακίδα</th>
-              <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">Κατηγορία</th>
+              <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">
+                <SortableVehicleHeader label="Κατηγορία" sortKey="category" sort={sort} onSort={onSort} />
+              </th>
               <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">Μάρκα</th>
               <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">Μοντέλο</th>
-              <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">Έτος</th>
+              <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">
+                <SortableVehicleHeader label="Έτος" sortKey="year" sort={sort} onSort={onSort} />
+              </th>
               <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">Χλμ</th>
               <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">Τιμή Αγοράς</th>
               <th className="text-left py-3 px-4 text-sm font-semibold text-zinc-300">Ενέργειες</th>
@@ -2520,6 +2568,33 @@ function VehiclesTable({
         </table>
       </div>
     </div>
+  );
+}
+
+function SortableVehicleHeader({
+  label,
+  sortKey,
+  sort,
+  onSort,
+}: {
+  label: string;
+  sortKey: VehicleSortKey;
+  sort: VehicleSortState;
+  onSort: (key: VehicleSortKey) => void;
+}) {
+  const isActive = sort?.key === sortKey;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      className="inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-left text-sm font-semibold text-zinc-300 transition hover:text-white"
+    >
+      <span>{label}</span>
+      <span className={`text-[11px] ${isActive ? 'text-sky-300' : 'text-zinc-600'}`}>
+        {isActive ? (sort.direction === 'asc' ? '↑' : '↓') : ''}
+      </span>
+    </button>
   );
 }
 

@@ -12,6 +12,7 @@ export type LeasingContract = {
   vehicle_description: string;
   total_amount: number;
   down_payment: number;
+  down_payment_transaction_id?: number | null;
   remaining_amount: number;
   installments_count?: number | null;
   monthly_payment: number;
@@ -39,6 +40,25 @@ export async function fetchLeasingContracts(): Promise<LeasingContract[]> {
 
   if (error) {
     console.error('Fetch leasing contracts error:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function fetchLeasingPayments(contractId: number): Promise<LeasingPayment[]> {
+  const { data, error } = await supabase
+    .from('leasing_payments')
+    .select('*')
+    .eq('leasing_contract_id', contractId);
+
+  if (error) {
+    console.error('Fetch leasing payments error:', {
       message: error.message,
       details: error.details,
       hint: error.hint,
@@ -106,6 +126,22 @@ export async function updateLeasingContract(id: number, payload: Partial<Leasing
   }
 
   return data as LeasingContract;
+}
+
+export async function deleteLeasingContract(id: number): Promise<boolean> {
+  const { error } = await supabase.from('leasing_contracts').delete().eq('id', id);
+
+  if (error) {
+    console.error('Delete leasing contract error:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
+    return false;
+  }
+
+  return true;
 }
 
 export async function addLeasingPayment(payload: {

@@ -16,6 +16,7 @@ export type ReportTransaction = {
   category: string;
   notes: string;
   contract_number?: string;
+  booking_id?: string;
   source?: string;
   agency?: string;
   representative?: string;
