@@ -3,9 +3,22 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
-type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'RETURN';
+type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
 type LicenceState = 'uploaded' | 'empty';
 type VehicleGroup = 'A' | 'B' | 'C' | 'D' | 'E' | 'H' | 'H1' | 'H2' | 'H3' | 'H4' | 'H5' | 'K' | 'K1' | 'K2';
+
+type WhatsappMessage = {
+  id: string;
+  from: 'AutoClub' | 'Customer';
+  text: string;
+  createdAt: string;
+};
+
+type WorkflowEvent = {
+  id: string;
+  text: string;
+  createdAt: string;
+};
 
 type Reservation = {
   id: string;
@@ -25,6 +38,8 @@ type Reservation = {
   licenceFront: LicenceState;
   licenceBack: LicenceState;
   notes: string;
+  whatsappMessages?: WhatsappMessage[];
+  workflowEvents?: WorkflowEvent[];
 };
 
 type ReservationForm = {
@@ -66,18 +81,18 @@ const fallbackAgencyRepresentatives: Record<string, string[]> = {
 };
 
 const fallbackAgencies = Object.keys(fallbackAgencyRepresentatives);
-const statuses: Array<ReservationStatus | 'ALL'> = ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'RETURN'];
+const statuses: Array<ReservationStatus | 'ALL'> = ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED'];
 const statusActiveClasses: Record<ReservationStatus, string> = {
   PENDING: 'border-amber-300 bg-amber-400/25 text-amber-50 shadow-[0_0_16px_rgba(251,191,36,0.14)]',
   ACCEPTED: 'border-emerald-300 bg-emerald-400/24 text-emerald-50 shadow-[0_0_16px_rgba(52,211,153,0.14)]',
   REJECTED: 'border-rose-300 bg-rose-400/24 text-rose-50 shadow-[0_0_16px_rgba(251,113,133,0.14)]',
-  RETURN: 'border-cyan-300 bg-cyan-400/24 text-cyan-50 shadow-[0_0_16px_rgba(34,211,238,0.14)]',
 };
-const whatsappMessages = [
-  { from: 'AutoClub', text: 'Hello, your reservation request has been received.' },
-  { from: 'Customer', text: 'Can I send the licence photos here?' },
-  { from: 'AutoClub', text: 'Yes, please send front and back side of the licence.' },
+const defaultWhatsappMessages: WhatsappMessage[] = [
+  { id: 'msg-default-1', from: 'AutoClub', text: 'Hello, your reservation request has been received.', createdAt: 'mock' },
+  { id: 'msg-default-2', from: 'Customer', text: 'Can I send the licence photos here?', createdAt: 'mock' },
+  { id: 'msg-default-3', from: 'AutoClub', text: 'Yes, please send front and back side of the licence.', createdAt: 'mock' },
 ];
+const bookingsStorageKey = 'autoclub-bookings-v1';
 
 const initialForm: ReservationForm = {
   phoneWhatsapp: '',
@@ -185,7 +200,7 @@ const initialReservations: Reservation[] = [
     pickupTime: '10:00',
     returnTime: '10:00',
     price: 360,
-    status: 'RETURN',
+    status: 'ACCEPTED',
     sendReturn: true,
     licenceFront: 'empty',
     licenceBack: 'empty',
@@ -261,15 +276,67 @@ const withCurrentOption = (options: string[], current: string) =>
 const modalFieldClass =
   'w-full rounded-[14px] border border-white/[0.08] bg-zinc-950/80 px-3.5 py-2.5 text-sm font-semibold text-zinc-50 outline-none transition placeholder:text-zinc-600 focus:border-sky-300/55 focus:bg-zinc-950 focus:ring-2 focus:ring-sky-400/10';
 
+const normalizeStatus = (status: unknown): ReservationStatus =>
+  status === 'ACCEPTED' ? 'ACCEPTED' : status === 'REJECTED' ? 'REJECTED' : 'PENDING';
+
+const normalizeReservation = (reservation: Reservation): Reservation => ({
+  ...reservation,
+  status: normalizeStatus(reservation.status),
+  whatsappMessages: reservation.whatsappMessages || defaultWhatsappMessages,
+  workflowEvents: reservation.workflowEvents || [],
+});
+
+const normalizeReservations = (reservations: Reservation[]) => reservations.map(normalizeReservation);
+
+const loadStoredReservations = () => {
+  if (typeof window === 'undefined') {
+    return normalizeReservations(initialReservations);
+  }
+
+  try {
+    const storedBookings = window.localStorage.getItem(bookingsStorageKey);
+    if (!storedBookings) {
+      return normalizeReservations(initialReservations);
+    }
+
+    const parsedBookings: unknown = JSON.parse(storedBookings);
+    if (!Array.isArray(parsedBookings)) {
+      return normalizeReservations(initialReservations);
+    }
+
+    return normalizeReservations(parsedBookings as Reservation[]);
+  } catch (error) {
+    console.warn('Bookings localStorage load warning', error);
+    return normalizeReservations(initialReservations);
+  }
+};
+
+const createWorkflowEvent = (text: string): WorkflowEvent => ({
+  id: `event-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+  text,
+  createdAt: new Date().toISOString(),
+});
+
+const createWhatsappMessage = (text: string): WhatsappMessage => ({
+  id: `msg-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+  from: 'AutoClub',
+  text,
+  createdAt: new Date().toISOString(),
+});
+
 export default function BookingsManager() {
-  const [reservations, setReservations] = useState(initialReservations);
-  const [selectedId, setSelectedId] = useState(initialReservations[0].id);
+  const [reservations, setReservations] = useState<Reservation[]>(() => loadStoredReservations());
+  const [selectedId, setSelectedId] = useState(() => loadStoredReservations()[0]?.id || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof statuses)[number]>('ALL');
   const [showNewModal, setShowNewModal] = useState(false);
   const [form, setForm] = useState<ReservationForm>(initialForm);
   const [agencyRows, setAgencyRows] = useState<AgencyRow[]>([]);
   const [representativeRows, setRepresentativeRows] = useState<RepresentativeRow[]>([]);
+
+  useEffect(() => {
+    window.localStorage.setItem(bookingsStorageKey, JSON.stringify(normalizeReservations(reservations)));
+  }, [reservations]);
 
   useEffect(() => {
     const loadAgencyData = async () => {
@@ -375,6 +442,8 @@ export default function BookingsManager() {
       licenceFront: 'empty',
       licenceBack: 'empty',
       notes: form.notes,
+      whatsappMessages: defaultWhatsappMessages,
+      workflowEvents: [],
     };
 
     setReservations((current) => [nextReservation, ...current]);
@@ -536,8 +605,40 @@ function ReservationInspector({
   };
 
   const sendReminder = () => {
-    updateDraft({ sendReturn: true });
-    onUpdate({ sendReturn: true });
+    const nextWhatsappMessages = [
+      ...(draft.whatsappMessages || defaultWhatsappMessages),
+      createWhatsappMessage('Return reminder sent to customer.'),
+    ];
+    const nextWorkflowEvents = [
+      ...(draft.workflowEvents || []),
+      createWorkflowEvent('Return reminder sent. Waiting for customer return confirmation.'),
+    ];
+    const patch = {
+      sendReturn: true,
+      whatsappMessages: nextWhatsappMessages,
+      workflowEvents: nextWorkflowEvents,
+    };
+
+    updateDraft(patch);
+    onUpdate(patch);
+  };
+
+  const updateStatus = (status: ReservationStatus) => {
+    const patch: Partial<Reservation> = { status };
+
+    if (status === 'ACCEPTED' && draft.status !== 'ACCEPTED') {
+      patch.whatsappMessages = [
+        ...(draft.whatsappMessages || defaultWhatsappMessages),
+        createWhatsappMessage('Confirmation message sent with agreement/licence link.'),
+      ];
+      patch.workflowEvents = [
+        ...(draft.workflowEvents || []),
+        createWorkflowEvent('Confirmation sent'),
+      ];
+    }
+
+    updateDraft(patch);
+    onUpdate(patch);
   };
 
   const actions: Array<{
@@ -579,7 +680,7 @@ function ReservationInspector({
               <EditableCompactInput label="Return Date" type="date" value={draft.returnDate} onChange={(value) => updateDraft({ returnDate: value })} />
               <EditableCompactInput label="Return Time" value={draft.returnTime} placeholder="18:00" onChange={(value) => updateDraft({ returnTime: value })} />
               <EditableCompactInput label="Price" type="number" value={draft.price === null ? '' : String(draft.price)} onChange={(value) => updateDraft({ price: value === '' ? null : Number(value) || null })} />
-              <StatusPillSelector value={draft.status} onChange={(status) => updateDraft({ status })} />
+              <StatusPillSelector value={draft.status} onChange={updateStatus} />
             </div>
           </div>
         </Panel>
@@ -606,8 +707,8 @@ function ReservationInspector({
               <span className="text-[10px] text-zinc-500">mock</span>
             </div>
             <div className="grid gap-1 pr-1">
-              {whatsappMessages.map((message, index) => (
-                <div key={`${message.from}-${index}`} className="rounded-md border border-white/[0.045] bg-white/[0.025] px-2 py-1.5">
+              {(draft.whatsappMessages || defaultWhatsappMessages).map((message) => (
+                <div key={message.id} className="rounded-md border border-white/[0.045] bg-white/[0.025] px-2 py-1.5">
                   <p className="text-[10px] font-semibold text-sky-200">{message.from}</p>
                   <p className="text-[11px] leading-4 text-zinc-300">{message.text}</p>
                 </div>
@@ -624,6 +725,26 @@ function ReservationInspector({
               >
                 Send
               </button>
+            </div>
+          </div>
+
+          <div className="mt-2 rounded-lg border border-white/[0.055] bg-black/20 p-2">
+            <div className="mb-1.5 flex items-center justify-between">
+              <p className="text-[11px] font-bold text-zinc-100">Workflow log</p>
+              <span className="text-[10px] text-zinc-500">local</span>
+            </div>
+            <div className="grid gap-1">
+              {(draft.workflowEvents || []).length > 0 ? (
+                (draft.workflowEvents || []).map((event) => (
+                  <div key={event.id} className="rounded-md border border-white/[0.045] bg-white/[0.025] px-2 py-1.5 text-[11px] leading-4 text-zinc-300">
+                    {event.text}
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
+                  No workflow events yet.
+                </p>
+              )}
             </div>
           </div>
 
@@ -822,7 +943,7 @@ function StatusPillSelector({
     <div className="grid gap-1 rounded-md border border-white/[0.045] bg-black/20 px-2 py-1.5">
       <span className="text-[10px] font-semibold text-zinc-400">Status</span>
       <div className="grid grid-cols-2 gap-1">
-        {(['PENDING', 'ACCEPTED', 'REJECTED', 'RETURN'] as ReservationStatus[]).map((status) => (
+        {(['PENDING', 'ACCEPTED', 'REJECTED'] as ReservationStatus[]).map((status) => (
           <button
             key={status}
             type="button"
