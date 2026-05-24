@@ -210,9 +210,9 @@ export default function Window({
                 : ''
         }`}
         style={{
-          left: isMaximized ? 250 : position.x,
+          left: isMaximized ? 'var(--autoclub-sidebar-width, 250px)' : position.x,
           top: isMaximized ? 52 : position.y,
-          width: isMaximized ? 'calc(100vw - 250px)' : windowSize.width,
+          width: isMaximized ? 'calc(100vw - var(--autoclub-sidebar-width, 250px))' : windowSize.width,
           height: isMaximized ? 'calc(100vh - 52px)' : windowSize.height,
           zIndex,
         }}

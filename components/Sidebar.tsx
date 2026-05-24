@@ -46,6 +46,7 @@ interface SidebarProps {
   activeWindow?: string | null;
   userEmail?: string | null;
   onLogout?: () => void;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 const NAV_SECTIONS: NavSection[] = [
@@ -108,24 +109,28 @@ const WINDOW_ITEMS = [
   'Κατηγορίες Εξόδων',
 ];
 
-export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogout }: SidebarProps) {
+export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogout, onCollapsedChange }: SidebarProps) {
   const pathname = usePathname();
   const [systemOpen, setSystemOpen] = useState(true);
   const [financeOpen, setFinanceOpen] = useState(true);
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  useEffect(() => {
-    const savedValue = window.localStorage.getItem('autoclub-sidebar-collapsed');
-    const collapsed = savedValue === 'true';
-
-    setIsCollapsed(collapsed);
-    document.documentElement.style.setProperty('--autoclub-sidebar-width', collapsed ? '72px' : '250px');
-  }, []);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('autoclub-sidebar-collapsed') === 'true';
+  });
 
   useEffect(() => {
     window.localStorage.setItem('autoclub-sidebar-collapsed', String(isCollapsed));
     document.documentElement.style.setProperty('--autoclub-sidebar-width', isCollapsed ? '72px' : '250px');
   }, [isCollapsed]);
+
+  const toggleCollapsed = () => {
+    const next = !isCollapsed;
+
+    setIsCollapsed(next);
+    window.localStorage.setItem('autoclub-sidebar-collapsed', String(next));
+    document.documentElement.style.setProperty('--autoclub-sidebar-width', next ? '72px' : '250px');
+    onCollapsedChange?.(next);
+  };
 
   const handleItemClick = (item: NavItem) => {
     if (WINDOW_ITEMS.includes(item.label) && onWindowOpen) {
@@ -183,17 +188,18 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
       return (
         <div key={item.href} className="space-y-1">
           <div className="relative">
-            {!isCollapsed && <button
+            <button
               type="button"
               onClick={() => handleItemClick(item)}
               className={`${className} ${isCollapsed ? '' : 'pr-11'}`}
               title={isCollapsed ? item.label : undefined}
             >
               {content}
-            </button>}
-            <button
-              type="button"
-              onClick={(event) => {
+            </button>
+            {!isCollapsed && (
+              <button
+                type="button"
+                onClick={(event) => {
                 event.stopPropagation();
                 setFinanceOpen((current) => !current);
               }}
@@ -201,11 +207,12 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
               aria-label="Toggle finance menu"
             >
               <span className={`transition ${financeOpen ? 'rotate-180' : ''}`}>⌄</span>
-            </button>
+              </button>
+            )}
           </div>
           <div
             className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
-              financeOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+              isCollapsed || financeOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
             }`}
           >
             <div className="min-h-0 overflow-hidden">
@@ -243,7 +250,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
         <div className="mb-2 flex items-center justify-end">
           <button
             type="button"
-            onClick={() => setIsCollapsed((current) => !current)}
+            onClick={toggleCollapsed}
             className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.025] text-zinc-300 transition hover:border-sky-300/25 hover:bg-sky-300/[0.08] hover:text-white"
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
@@ -287,17 +294,17 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
         })}
       </nav>
 
-      <div className="border-t border-sky-100/[0.04] px-3 py-2">
-        <div className="flex items-center gap-2 rounded-xl border border-white/[0.04] bg-white/[0.016] px-2 py-2">
+      <div className={`border-t border-sky-100/[0.04] ${isCollapsed ? 'px-2 py-2' : 'px-3 py-2'}`}>
+        <div className={`flex items-center gap-2 rounded-xl border border-white/[0.04] bg-white/[0.016] px-2 py-2 ${isCollapsed ? 'justify-center' : ''}`}>
           <div className="flex h-7 w-7 items-center justify-center rounded-full border border-sky-300/14 bg-sky-300/[0.06] text-[11px] font-semibold text-white">
             A
           </div>
-          <div className="min-w-0">
+          {!isCollapsed && <div className="min-w-0">
             <p className="truncate text-[11px] font-medium text-[#f4f7fb]">AutoClub</p>
             <p className="truncate text-[10px] text-[#8e99a8]">{userEmail || 'Administrator'}</p>
-          </div>
+          </div>}
         </div>
-        {onLogout && (
+        {onLogout && !isCollapsed && (
           <button
             type="button"
             onClick={onLogout}
@@ -306,7 +313,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
             Αποσύνδεση
           </button>
         )}
-        <p className="mt-2 text-center text-[9px] uppercase tracking-[0.14em] text-zinc-600">v1.0.0</p>
+        {!isCollapsed && <p className="mt-2 text-center text-[9px] uppercase tracking-[0.14em] text-zinc-600">v1.0.0</p>}
       </div>
     </aside>
   );

@@ -204,13 +204,23 @@ const initialVehicles: Vehicle[] = [
 export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('autoclub-sidebar-collapsed') === 'true';
+  });
   const [openWindows, setOpenWindows] = useState<OpenWindow[]>([]);
   const [topZIndex, setTopZIndex] = useState(50);
+  const sidebarWidth = isSidebarCollapsed ? 72 : 250;
   const visibleWindows = openWindows.filter((windowItem) => !windowItem.isMinimized);
   const activeWindow = visibleWindows.length
     ? visibleWindows.reduce((topWindow, windowItem) => (windowItem.zIndex > topWindow.zIndex ? windowItem : topWindow), visibleWindows[0]).id
     : null;
   const hasOpenWindow = (windowId: WindowId) => openWindows.some((windowItem) => windowItem.id === windowId);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--autoclub-sidebar-width', `${sidebarWidth}px`);
+  }, [sidebarWidth]);
+
   const [showAddCar, setShowAddCar] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showIncomeNotes, setShowIncomeNotes] = useState(false);
@@ -1726,10 +1736,17 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         activeWindow={activeWindow}
         userEmail={userEmail}
         onLogout={handleLogout}
+        onCollapsedChange={setIsSidebarCollapsed}
       />
-      <main className="fixed bottom-0 left-[250px] right-0 top-[52px] overflow-hidden bg-[radial-gradient(circle_at_48%_42%,rgba(14,165,233,0.075),transparent_26%),radial-gradient(circle_at_62%_44%,rgba(34,197,94,0.045),transparent_24%),linear-gradient(180deg,#07101a_0%,#050910_100%)]">
+      <main
+        className="fixed bottom-0 right-0 top-[52px] overflow-hidden bg-[radial-gradient(circle_at_48%_42%,rgba(14,165,233,0.075),transparent_26%),radial-gradient(circle_at_62%_44%,rgba(34,197,94,0.045),transparent_24%),linear-gradient(180deg,#07101a_0%,#050910_100%)] transition-[left] duration-200"
+        style={{ left: sidebarWidth }}
+      >
         {openWindows.length > 0 && (
-          <div className="pointer-events-none fixed left-[250px] right-0 top-0 z-[9000] flex h-[52px] items-end border-b border-white/[0.06] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] pl-3">
+          <div
+            className="pointer-events-none fixed right-0 top-0 z-[9000] flex h-[52px] items-end border-b border-white/[0.06] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] pl-3 transition-[left] duration-200"
+            style={{ left: sidebarWidth }}
+          >
             <div className="pointer-events-auto flex max-w-full items-end gap-1 overflow-x-auto pt-2">
               {openWindows.map((windowItem) => {
                 const isActiveTab = activeWindow === windowItem.id;
