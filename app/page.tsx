@@ -214,6 +214,8 @@ export default function Home() {
   const [showAddCar, setShowAddCar] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showIncomeNotes, setShowIncomeNotes] = useState(false);
+  const [incomeCarSearch, setIncomeCarSearch] = useState('');
+  const [isIncomeCarComboboxOpen, setIsIncomeCarComboboxOpen] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showSupplierPaymentModal, setShowSupplierPaymentModal] = useState(false);
   const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
@@ -914,6 +916,13 @@ const handleSaveSupplierPayment = async () => {
     loadFinanceTransactions();
   }, [openWindows, userEmail]);
 
+  useEffect(() => {
+    if (!showIncomeModal) {
+      setIncomeCarSearch('');
+      setIsIncomeCarComboboxOpen(false);
+    }
+  }, [showIncomeModal]);
+
   const getWindowTitleForId = (windowId: WindowId) => {
     switch (windowId) {
       case 'Αυτοκίνητα':
@@ -1408,6 +1417,27 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const availableRepresentatives = representatives.filter(
     (representative) => String(representative.agency_id) === incomeForm.agency_id
   );
+  const selectedIncomeVehicle = vehicles.find((vehicle) => String(vehicle.id) === String(incomeForm.car_id));
+  const formatIncomeVehicleOption = (vehicle: Vehicle) =>
+    [vehicle.plate, [vehicle.brand, vehicle.model].filter(Boolean).join(' ')]
+      .filter(Boolean)
+      .join(' — ');
+  const selectedIncomeVehicleLabel = selectedIncomeVehicle
+    ? formatIncomeVehicleOption(selectedIncomeVehicle)
+    : '';
+  const filteredIncomeVehicles = vehicles
+    .filter((vehicle) => {
+      const query = incomeCarSearch.trim().toLowerCase();
+
+      if (!query) {
+        return true;
+      }
+
+      return [vehicle.plate, vehicle.brand, vehicle.model]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(query));
+    })
+    .slice(0, 80);
   const revenueByAgency = incomeTransactions
     .filter((transaction) => transaction.agency_id)
     .reduce<Record<string, RevenueByAgencyRow>>((rows, transaction) => {
@@ -1977,18 +2007,97 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         </label>
 <label className="space-y-2 text-sm text-zinc-300 block">
   <span>Αυτοκίνητο</span>
-  <select
-    value={incomeForm.car_id}
-    onChange={(event) => setIncomeForm({ ...incomeForm, car_id: event.target.value })}
-    className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500"
-  >
-    <option value="">Επιλογή αυτοκινήτου</option>
-    {vehicles.map((vehicle) => (
-      <option key={vehicle.id} value={vehicle.id}>
-        {vehicle.plate}
-      </option>
-    ))}
-  </select>
+  <div className="relative">
+    <input
+      value={isIncomeCarComboboxOpen ? incomeCarSearch : selectedIncomeVehicleLabel}
+      onFocus={() => {
+        setIncomeCarSearch('');
+        setIsIncomeCarComboboxOpen(true);
+      }}
+      onChange={(event) => {
+        setIncomeCarSearch(event.target.value);
+        setIsIncomeCarComboboxOpen(true);
+      }}
+      onBlur={() => {
+        window.setTimeout(() => setIsIncomeCarComboboxOpen(false), 120);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          setIsIncomeCarComboboxOpen(false);
+          setIncomeCarSearch('');
+        }
+
+        if (event.key === 'Enter' && isIncomeCarComboboxOpen && filteredIncomeVehicles[0]) {
+          event.preventDefault();
+          const vehicle = filteredIncomeVehicles[0];
+          setIncomeForm({ ...incomeForm, car_id: String(vehicle.id) });
+          setIncomeCarSearch(formatIncomeVehicleOption(vehicle));
+          setIsIncomeCarComboboxOpen(false);
+        }
+      }}
+      placeholder="Αναζήτηση με πινακίδα, μάρκα ή μοντέλο..."
+      role="combobox"
+      aria-expanded={isIncomeCarComboboxOpen}
+      aria-controls="income-car-options"
+      className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 pr-10 text-sm text-white outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/15"
+    />
+
+    {incomeForm.car_id ? (
+      <button
+        type="button"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => {
+          setIncomeForm({ ...incomeForm, car_id: '' });
+          setIncomeCarSearch('');
+          setIsIncomeCarComboboxOpen(false);
+        }}
+        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs text-zinc-500 transition hover:bg-white/[0.05] hover:text-white"
+        aria-label="Clear selected car"
+      >
+        ×
+      </button>
+    ) : null}
+
+    {isIncomeCarComboboxOpen && (
+      <div
+        id="income-car-options"
+        role="listbox"
+        className="absolute z-[10020] mt-2 max-h-64 w-full overflow-auto rounded-2xl border border-sky-300/20 bg-zinc-950 p-1.5 shadow-2xl shadow-black/40"
+      >
+        {filteredIncomeVehicles.length > 0 ? (
+          filteredIncomeVehicles.map((vehicle) => {
+            const label = formatIncomeVehicleOption(vehicle);
+            const isSelected = String(vehicle.id) === String(incomeForm.car_id);
+
+            return (
+              <button
+                key={vehicle.id}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  setIncomeForm({ ...incomeForm, car_id: String(vehicle.id) });
+                  setIncomeCarSearch(label);
+                  setIsIncomeCarComboboxOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition ${
+                  isSelected
+                    ? 'bg-sky-400/15 text-sky-100'
+                    : 'text-zinc-200 hover:bg-white/[0.055] hover:text-white'
+                }`}
+              >
+                <span className="truncate font-semibold">{label}</span>
+                <span className="shrink-0 text-[11px] text-zinc-500">#{vehicle.id}</span>
+              </button>
+            );
+          })
+        ) : (
+          <div className="px-3 py-3 text-sm text-zinc-500">Δεν βρέθηκε αυτοκίνητο.</div>
+        )}
+      </div>
+    )}
+  </div>
 </label>
 
 <label className="space-y-2 text-sm text-zinc-300 block">
