@@ -1761,34 +1761,34 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={openHomepageIncome}
-                  className="group rounded-2xl border border-emerald-300/18 bg-emerald-300/[0.045] px-4 py-2.5 text-center shadow-[0_0_20px_rgba(52,211,153,0.06)] transition duration-200 hover:-translate-y-px hover:border-emerald-300/28 hover:bg-emerald-300/[0.07] hover:shadow-[0_0_24px_rgba(52,211,153,0.1)]"
+                  className="group rounded-2xl border border-emerald-300/18 bg-emerald-300/[0.045] px-3.5 py-2 text-center shadow-[0_0_18px_rgba(52,211,153,0.055)] transition duration-200 hover:-translate-y-px hover:border-emerald-300/28 hover:bg-emerald-300/[0.07] hover:shadow-[0_0_22px_rgba(52,211,153,0.09)]"
                 >
-                  <span className="block text-[10px] uppercase tracking-[0.2em] text-emerald-200/55">Quick entry</span>
-                  <span className="mt-0.5 block text-[13px] font-semibold text-emerald-100">+ Καταχώρηση Εσόδου</span>
+                  <span className="block text-[9px] uppercase tracking-[0.16em] text-emerald-200/55">Quick entry</span>
+                  <span className="mt-0.5 block text-[12px] font-semibold text-emerald-100">+ Καταχώρηση Εσόδου</span>
                 </button>
                 <button
                   type="button"
                   onClick={openHomepageExpense}
-                  className="group rounded-2xl border border-rose-300/18 bg-rose-300/[0.045] px-4 py-2.5 text-center shadow-[0_0_20px_rgba(251,113,133,0.06)] transition duration-200 hover:-translate-y-px hover:border-rose-300/28 hover:bg-rose-300/[0.07] hover:shadow-[0_0_24px_rgba(251,113,133,0.1)]"
+                  className="group rounded-2xl border border-rose-300/18 bg-rose-300/[0.045] px-3.5 py-2 text-center shadow-[0_0_18px_rgba(251,113,133,0.055)] transition duration-200 hover:-translate-y-px hover:border-rose-300/28 hover:bg-rose-300/[0.07] hover:shadow-[0_0_22px_rgba(251,113,133,0.09)]"
                 >
-                  <span className="block text-[10px] uppercase tracking-[0.2em] text-rose-200/55">Quick entry</span>
-                  <span className="mt-0.5 block text-[13px] font-semibold text-rose-100">+ Καταχώρηση Εξόδου</span>
+                  <span className="block text-[9px] uppercase tracking-[0.16em] text-rose-200/55">Quick entry</span>
+                  <span className="mt-0.5 block text-[12px] font-semibold text-rose-100">+ Καταχώρηση Εξόδου</span>
                 </button>
               </div>
 
-              <div className="grid w-full max-w-[620px] gap-3 lg:grid-cols-3">
+              <div className="grid w-full max-w-[600px] gap-2.5 lg:grid-cols-3">
                 <button
                   type="button"
                   onClick={() => openWindow('Έσοδα')}
-                  className="group cursor-pointer rounded-2xl border border-emerald-300/14 bg-white/[0.025] p-3 text-left shadow-[0_0_22px_rgba(52,211,153,0.045)] transition duration-200 hover:-translate-y-px hover:border-emerald-300/28 hover:bg-white/[0.04] hover:shadow-[0_0_28px_rgba(52,211,153,0.09)]"
+                  className="group cursor-pointer rounded-2xl border border-emerald-300/14 bg-white/[0.025] p-2.5 text-left shadow-[0_0_18px_rgba(52,211,153,0.04)] transition duration-200 hover:-translate-y-px hover:border-emerald-300/28 hover:bg-white/[0.04] hover:shadow-[0_0_24px_rgba(52,211,153,0.08)]"
                 >
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200/65">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-200/65">
                     Τελευταίες Καταχωρήσεις Εσόδων
                   </p>
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-2.5 space-y-1.5">
                     {latestIncomeTransactions.length === 0 && <p className="text-xs text-zinc-500">Δεν υπάρχουν εγγραφές.</p>}
                     {latestIncomeTransactions.map((transaction) => (
-                      <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl bg-black/18 px-2.5 py-2">
+                      <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl bg-black/18 px-2.5 py-1.5">
                         <div className="min-w-0">
                           <p className="truncate text-xs font-medium text-white">
                             {transaction.contract_number || 'Χωρίς συμβόλαιο'}
@@ -1804,15 +1804,15 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={() => openWindow('Έξοδα')}
-                  className="group cursor-pointer rounded-2xl border border-rose-300/14 bg-white/[0.025] p-3 text-left shadow-[0_0_22px_rgba(251,113,133,0.045)] transition duration-200 hover:-translate-y-px hover:border-rose-300/28 hover:bg-white/[0.04] hover:shadow-[0_0_28px_rgba(251,113,133,0.09)]"
+                  className="group cursor-pointer rounded-2xl border border-rose-300/14 bg-white/[0.025] p-2.5 text-left shadow-[0_0_18px_rgba(251,113,133,0.04)] transition duration-200 hover:-translate-y-px hover:border-rose-300/28 hover:bg-white/[0.04] hover:shadow-[0_0_24px_rgba(251,113,133,0.08)]"
                 >
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-200/65">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-rose-200/65">
                     Τελευταίες Καταχωρήσεις Εξόδων
                   </p>
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-2.5 space-y-1.5">
                     {latestExpenseTransactions.length === 0 && <p className="text-xs text-zinc-500">Δεν υπάρχουν εγγραφές.</p>}
                     {latestExpenseTransactions.map((transaction) => (
-                      <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl bg-black/18 px-2.5 py-2">
+                      <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl bg-black/18 px-2.5 py-1.5">
                         <div className="min-w-0">
                           <p className="truncate text-xs font-medium text-white">
                             {transaction.category || transaction.supplier_name || transaction.supplier || '-'}
@@ -1828,13 +1828,13 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={() => openWindow('Γραμμάτια')}
-                  className="group cursor-pointer rounded-2xl border border-amber-300/18 bg-amber-300/[0.04] p-3 text-left shadow-[0_0_24px_rgba(251,191,36,0.06)] transition duration-200 hover:-translate-y-px hover:border-amber-300/30 hover:bg-amber-300/[0.06] hover:shadow-[0_0_30px_rgba(251,191,36,0.11)]"
+                  className="group cursor-pointer rounded-2xl border border-amber-300/18 bg-amber-300/[0.04] p-2.5 text-left shadow-[0_0_20px_rgba(251,191,36,0.055)] transition duration-200 hover:-translate-y-px hover:border-amber-300/30 hover:bg-amber-300/[0.06] hover:shadow-[0_0_26px_rgba(251,191,36,0.1)]"
                 >
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-200/70">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-200/70">
                     Alert Γραμματίων
                   </p>
-                  <div className="mt-3 rounded-xl border border-white/[0.055] bg-black/20 px-3 py-3 transition duration-200 group-hover:border-amber-200/12">
-                    <p className="text-2xl font-semibold text-amber-100">{formatMoney(openDebtsTotal)}</p>
+                  <div className="mt-2.5 rounded-xl border border-white/[0.055] bg-black/20 px-3 py-2.5 transition duration-200 group-hover:border-amber-200/12">
+                    <p className="text-xl font-semibold text-amber-100">{formatMoney(openDebtsTotal)}</p>
                     <p className="mt-1 text-xs text-amber-200/60">
                       {openDebts.length} ανοιχτά γραμμάτια
                     </p>
@@ -1843,15 +1843,15 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               </div>
 
               {upcomingKteoAlerts.length > 0 && (
-                <div className="w-full max-w-[500px] rounded-2xl border border-amber-300/18 bg-amber-300/[0.045] px-4 py-3 shadow-[0_0_24px_rgba(251,191,36,0.075)] backdrop-blur-sm transition duration-200 hover:-translate-y-px hover:border-amber-300/26">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-200/70">
+                <div className="w-full max-w-[480px] rounded-2xl border border-amber-300/18 bg-amber-300/[0.045] px-3.5 py-2.5 shadow-[0_0_20px_rgba(251,191,36,0.065)] backdrop-blur-sm transition duration-200 hover:-translate-y-px hover:border-amber-300/26">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-200/70">
                     KTEO expires in 5 days
                   </p>
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-2.5 space-y-1.5">
                     {upcomingKteoAlerts.map(({ vehicle, daysUntilExpiry }) => (
                       <div
                         key={vehicle.id}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2"
+                        className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-1.5"
                       >
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-white">{vehicle.plate}</p>

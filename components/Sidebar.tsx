@@ -126,12 +126,12 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
       ? activeWindow === item.label
       : pathname === item.href || pathname.startsWith(`${item.href}/`);
     const Icon = item.icon;
-    const className = `group relative flex min-h-[40px] w-full items-center gap-2 rounded-2xl border px-2.5 py-1 text-left transition duration-200 hover:-translate-y-px ${
+    const className = `group relative flex min-h-[35px] w-full items-center gap-1.5 rounded-xl border px-2 py-0.5 text-left transition duration-200 hover:-translate-y-px ${
       isActive || (hasChildren && childIsActive)
         ? 'border-sky-300/25 bg-sky-300/[0.08] text-white shadow-[0_0_0_1px_rgba(125,211,252,0.12),0_16px_30px_rgba(14,165,233,0.12)] before:absolute before:left-0 before:top-2 before:h-[calc(100%-1rem)] before:w-1 before:rounded-full before:bg-sky-300'
         : 'border-transparent text-zinc-300/90 hover:border-sky-100/[0.08] hover:bg-white/[0.035] hover:text-white'
     }`;
-    const childClassName = `group relative ml-6 flex min-h-[30px] w-[calc(100%-1.5rem)] items-center gap-2 rounded-xl border px-2.5 py-1 text-left transition duration-200 hover:-translate-y-px ${
+    const childClassName = `group relative ml-5 flex min-h-[28px] w-[calc(100%-1.25rem)] items-center gap-1.5 rounded-xl border px-2 py-0.5 text-left transition duration-200 hover:-translate-y-px ${
       isActive
         ? 'border-sky-300/20 bg-sky-300/[0.07] text-white'
         : 'border-transparent text-zinc-400 hover:border-sky-100/[0.06] hover:bg-white/[0.03] hover:text-zinc-100'
@@ -140,25 +140,25 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
     const content = (
       <>
         <span
-          className={`flex h-[32px] w-[32px] items-center justify-center rounded-[10px] border transition duration-200 ${item.chip} ${
-            isActive || (hasChildren && childIsActive) ? 'shadow-[0_0_20px_rgba(56,189,248,0.12)]' : 'group-hover:shadow-[0_0_14px_rgba(255,255,255,0.07)]'
+          className={`flex h-[28px] w-[28px] items-center justify-center rounded-[9px] border transition duration-200 ${item.chip} ${
+            isActive || (hasChildren && childIsActive) ? 'shadow-[0_0_16px_rgba(56,189,248,0.10)]' : 'group-hover:shadow-[0_0_12px_rgba(255,255,255,0.06)]'
           }`}
         >
-          <Icon className={`h-[17px] w-[17px] ${item.tone}`} strokeWidth={1.9} />
+          <Icon className={`h-[15px] w-[15px] ${item.tone}`} strokeWidth={1.9} />
         </span>
-        <span className="text-[12px] font-medium leading-none tracking-[0.01em]">{item.label}</span>
+        <span className="text-[11px] font-medium leading-none tracking-[0.005em]">{item.label}</span>
       </>
     );
     const childContent = (
       <>
         <span
-          className={`flex h-[24px] w-[24px] items-center justify-center rounded-lg border transition duration-200 ${item.chip} ${
-            isActive ? 'shadow-[0_0_14px_rgba(56,189,248,0.1)]' : 'group-hover:shadow-[0_0_12px_rgba(255,255,255,0.06)]'
+          className={`flex h-[22px] w-[22px] items-center justify-center rounded-lg border transition duration-200 ${item.chip} ${
+            isActive ? 'shadow-[0_0_12px_rgba(56,189,248,0.08)]' : 'group-hover:shadow-[0_0_10px_rgba(255,255,255,0.05)]'
           }`}
         >
-          <Icon className={`h-[12px] w-[12px] ${item.tone}`} strokeWidth={1.9} />
+          <Icon className={`h-[11px] w-[11px] ${item.tone}`} strokeWidth={1.9} />
         </span>
-        <span className="text-[11px] font-medium leading-none tracking-[0.01em]">{item.label}</span>
+        <span className="text-[10.5px] font-medium leading-none tracking-[0.005em]">{item.label}</span>
       </>
     );
 
@@ -175,7 +175,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
                 event.stopPropagation();
                 setFinanceOpen((current) => !current);
               }}
-              className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-xl border border-white/[0.045] bg-white/[0.018] text-xs text-zinc-500 transition hover:border-sky-300/18 hover:bg-sky-300/[0.07] hover:text-white"
+              className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg border border-white/[0.04] bg-white/[0.016] text-[11px] text-zinc-500 transition hover:border-sky-300/18 hover:bg-sky-300/[0.07] hover:text-white"
               aria-label="Toggle finance menu"
             >
               <span className={`transition ${financeOpen ? 'rotate-180' : ''}`}>⌄</span>
@@ -187,7 +187,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
             }`}
           >
             <div className="min-h-0 overflow-hidden">
-              <div className="space-y-1 pt-1">{item.children?.map((child) => renderItem(child, true))}</div>
+              <div className="space-y-0.5 pt-0.5">{item.children?.map((child) => renderItem(child, true))}</div>
             </div>
           </div>
         </div>
@@ -211,64 +211,64 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
 
   return (
     <aside className="fixed bottom-0 left-0 top-0 z-[9000] flex w-[250px] shrink-0 flex-col border-r border-white/[0.06] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] text-white shadow-[18px_0_48px_rgba(0,0,0,0.22)]">
-      <div className="border-b border-sky-100/[0.045] px-4 pb-3.5 pt-[18px] sm:px-5 sm:pb-4 sm:pt-5">
-        <div className="relative mx-auto h-[62px] w-[148px] sm:h-[68px] sm:w-[164px]">
+      <div className="border-b border-sky-100/[0.04] px-4 pb-2.5 pt-3.5 sm:px-4 sm:pb-3 sm:pt-4">
+        <div className="relative mx-auto h-[52px] w-[132px] sm:h-[58px] sm:w-[148px]">
           <div className="absolute inset-4 rounded-full bg-sky-400/[0.065] blur-2xl" />
           <Image src="/logo.png" alt="AUTOCLUB" fill priority className="relative object-cover object-center" sizes="176px" />
         </div>
-        <p className="mt-1.5 text-center text-[10px] font-medium uppercase tracking-[0.26em] text-[#8e99a8]">
+        <p className="mt-1 text-center text-[9px] font-medium uppercase tracking-[0.22em] text-[#8e99a8]">
           Enterprise Fleet ERP
         </p>
       </div>
 
-      <nav className="autoclub-sidebar-scroll flex-1 space-y-3 overflow-y-auto px-3 py-3.5 sm:px-3.5">
+      <nav className="autoclub-sidebar-scroll flex-1 space-y-2 overflow-y-auto px-2.5 py-2.5 sm:px-3">
         {NAV_SECTIONS.map((section) => {
           const isSystem = section.collapsible;
           const isOpen = !isSystem || systemOpen;
 
           return (
-            <div key={section.title} className="space-y-1">
+            <div key={section.title} className="space-y-0.5">
               {isSystem ? (
                 <button
                   type="button"
                   onClick={() => setSystemOpen((current) => !current)}
-                  className="flex w-full items-center justify-between px-2 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#8e99a8] transition hover:text-zinc-200"
+                  className="flex w-full items-center justify-between px-2 text-[8.5px] font-semibold uppercase tracking-[0.15em] text-[#8e99a8] transition hover:text-zinc-200"
                 >
                   <span>{section.title}</span>
                   <span className={`text-xs transition ${systemOpen ? 'rotate-180' : ''}`}>⌄</span>
                 </button>
               ) : (
-                <div className="px-2 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#8e99a8]">
+                <div className="px-2 text-[8.5px] font-semibold uppercase tracking-[0.15em] text-[#8e99a8]">
                   {section.title}
                 </div>
               )}
 
-              {isOpen && <div className="space-y-1">{section.items.map((item) => renderItem(item))}</div>}
+              {isOpen && <div className="space-y-0.5">{section.items.map((item) => renderItem(item))}</div>}
             </div>
           );
         })}
       </nav>
 
-      <div className="border-t border-sky-100/[0.045] px-4 py-3">
-        <div className="flex items-center gap-2.5 rounded-2xl border border-white/[0.045] bg-white/[0.018] px-2.5 py-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full border border-sky-300/16 bg-sky-300/[0.065] text-xs font-semibold text-white">
+      <div className="border-t border-sky-100/[0.04] px-3 py-2">
+        <div className="flex items-center gap-2 rounded-xl border border-white/[0.04] bg-white/[0.016] px-2 py-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-sky-300/14 bg-sky-300/[0.06] text-[11px] font-semibold text-white">
             A
           </div>
           <div className="min-w-0">
-            <p className="truncate text-xs font-medium text-[#f4f7fb]">AutoClub</p>
-            <p className="truncate text-[11px] text-[#8e99a8]">{userEmail || 'Administrator'}</p>
+            <p className="truncate text-[11px] font-medium text-[#f4f7fb]">AutoClub</p>
+            <p className="truncate text-[10px] text-[#8e99a8]">{userEmail || 'Administrator'}</p>
           </div>
         </div>
         {onLogout && (
           <button
             type="button"
             onClick={onLogout}
-            className="mt-2.5 w-full rounded-2xl border border-white/[0.06] bg-white/[0.018] px-3 py-2 text-xs font-medium text-zinc-300 transition hover:border-rose-300/22 hover:bg-rose-300/[0.07] hover:text-white"
+            className="mt-2 w-full rounded-xl border border-white/[0.055] bg-white/[0.016] px-3 py-1.5 text-[11px] font-medium text-zinc-300 transition hover:border-rose-300/22 hover:bg-rose-300/[0.07] hover:text-white"
           >
             Αποσύνδεση
           </button>
         )}
-        <p className="mt-2.5 text-center text-[10px] uppercase tracking-[0.18em] text-zinc-600">v1.0.0</p>
+        <p className="mt-2 text-center text-[9px] uppercase tracking-[0.14em] text-zinc-600">v1.0.0</p>
       </div>
     </aside>
   );
