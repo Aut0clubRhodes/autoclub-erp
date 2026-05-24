@@ -91,6 +91,7 @@ const NAV_SECTIONS: NavSection[] = [
 
 const WINDOW_ITEMS = [
   'Αυτοκίνητα',
+  'Κρατήσεις',
   'Service',
   'Leasing',
   'Ταμείο',
