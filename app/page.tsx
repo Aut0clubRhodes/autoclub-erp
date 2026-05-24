@@ -9,6 +9,7 @@ import FinanceOverview from '@/components/FinanceOverview';
 import FinanceIncome from '@/components/FinanceIncome';
 import FinanceExpenses from '@/components/FinanceExpenses';
 import DebtsManager from '@/components/DebtsManager';
+import BookingsManager from '@/components/BookingsManager';
 import LeasingManager from '@/components/LeasingManager';
 import FinancialEngine from '@/components/FinancialEngine';
 import ReportsCenter from '@/components/reports/ReportsCenter';
@@ -50,6 +51,7 @@ import { fetchCarDocuments, getCarDocumentPublicUrl, type CarDocumentRecord } fr
 import { fetchDebts, type DebtRecord } from '@/lib/debtsApi';
 type WindowType =
   | 'Αυτοκίνητα'
+  | 'Κρατήσεις'
   | 'Service'
   | 'Leasing'
   | 'Ταμείο'
@@ -916,6 +918,8 @@ const handleSaveSupplierPayment = async () => {
     switch (windowId) {
       case 'Αυτοκίνητα':
         return 'Διαχείριση Αυτοκινήτων';
+      case 'Κρατήσεις':
+        return 'Κρατήσεις';
       case 'Service':
         return 'Service';
       case 'Leasing':
@@ -1482,6 +1486,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     const value = String(windowId || title || '');
     const knownWindows: WindowId[] = [
       'Αυτοκίνητα',
+      'Κρατήσεις',
       'Service',
       'Leasing',
       'Ταμείο',
@@ -1508,6 +1513,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
   case 'Service':
     return <ServicesManager />;
+
+  case 'Κρατήσεις':
+    return <BookingsManager />;
 
   case 'Leasing':
     return <LeasingManager />;
@@ -1609,6 +1617,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     switch (windowId) {
       case 'Αυτοκίνητα':
         return 'Διαχείριση Αυτοκινήτων';
+      case 'Κρατήσεις':
+        return 'Κρατήσεις';
       case 'Service':
         return 'Service';
       case 'Leasing':
