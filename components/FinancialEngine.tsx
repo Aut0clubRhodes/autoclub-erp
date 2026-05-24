@@ -20,6 +20,7 @@ type FinancialEngineTransaction = {
 type FinancialEngineDebt = {
   id: number;
   title: string;
+  payment_date?: string | null;
   due_date?: string | null;
   remaining_amount: number;
   status?: string | null;
@@ -94,7 +95,7 @@ const monthNames = [
 const tabs: { id: EngineTab; label: string; description: string }[] = [
   { id: 'income', label: 'Έσοδα', description: 'Συνοπτική βάση για ανάλυση εσόδων από πραγματικές κινήσεις.' },
   { id: 'expenses', label: 'Έξοδα', description: 'Συνοπτική βάση για έλεγχο εξόδων και πίεσης ταμείου.' },
-  { id: 'obligations', label: 'Γραμμάτια', description: 'Ανοιχτά γραμμάτια, δάνεια και οφειλές από το module Οφειλές.' },
+  { id: 'obligations', label: 'Γραμμάτια', description: 'Ανοιχτά γραμμάτια, δάνεια και χρέη από το module Γραμμάτια.' },
   { id: 'cashflow', label: 'Ταμειακή Ροή', description: 'Προβολή ταμείου από πραγματικό ιστορικό και γραμμάτια.' },
   { id: 'forecast', label: 'Πρόβλεψη', description: 'Προσομοίωση αγοράς στόλου πάνω σε πραγματική ιστορική βάση.' },
 ];
@@ -478,44 +479,44 @@ function ObligationsView({
   schedules: ScheduledPayment[];
 }) {
   const openDebts = debts.filter(isOpenDebt);
-  const openDebtsWithoutDate = openDebts.filter((debt) => !debt.due_date);
+  const openDebtsWithoutDate = openDebts.filter((debt) => !getDebtPaymentDate(debt));
 
   return (
     <div className="space-y-3">
       <div className="grid gap-3 md:grid-cols-3">
-        <MetricCard label="Ανοιχτές οφειλές" value={String(openDebts.length)} tone="warn" />
+        <MetricCard label="Ανοιχτά γραμμάτια" value={String(openDebts.length)} tone="warn" />
         <MetricCard label="Προγραμματισμένες πληρωμές" value={String(schedules.length)} />
         <MetricCard label="Σύνολο πίεσης ταμείου" value={money(schedules.reduce((sum, payment) => sum + payment.amount, 0))} tone="expense" />
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
         <div>
-          <h4 className="text-sm font-semibold text-white">Γραμμάτια / Οφειλές</h4>
+          <h4 className="text-sm font-semibold text-white">Γραμμάτια</h4>
           <p className="text-xs text-slate-300">
-            Η πρόβλεψη cashflow τραβάει τις ανοιχτές οφειλές από το module Οφειλές και τις τοποθετεί στον μήνα πληρωμής.
+            Η πρόβλεψη cashflow τραβάει τα ανοιχτά γραμμάτια και τα τοποθετεί στον μήνα πληρωμής.
           </p>
         </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-amber-300/15 bg-amber-400/[0.04]">
         <div className="border-b border-amber-300/10 px-4 py-3">
-          <h4 className="text-sm font-semibold text-amber-100">Οφειλές που μπαίνουν στην πρόβλεψη</h4>
-          <p className="text-xs text-amber-100/70">Υπολογίζονται με υπόλοιπο και ημερομηνία πληρωμής, χωρίς να αλλάζει το module Οφειλές.</p>
+          <h4 className="text-sm font-semibold text-amber-100">Γραμμάτια που μπαίνουν στην πρόβλεψη</h4>
+          <p className="text-xs text-amber-100/70">Υπολογίζονται με υπόλοιπο και ημερομηνία πληρωμής, χωρίς να αλλάζει το module Γραμμάτια.</p>
         </div>
         <div className="max-h-56 overflow-auto">
           {openDebts.map((debt) => (
             <div key={debt.id} className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-white/5 px-4 py-2 text-xs last:border-b-0">
               <span className="text-white">{debt.title}</span>
-              <span className="text-slate-400">{debt.due_date || 'χωρίς ημερομηνία'}</span>
+              <span className="text-slate-400">{getDebtPaymentDate(debt) || 'χωρίς ημερομηνία'}</span>
               <span className="font-semibold text-amber-100">{money(toNumber(debt.remaining_amount))}</span>
             </div>
           ))}
-          {openDebts.length === 0 && <p className="px-4 py-4 text-xs text-slate-500">Δεν υπάρχουν ανοιχτές οφειλές με υπόλοιπο.</p>}
+          {openDebts.length === 0 && <p className="px-4 py-4 text-xs text-slate-500">Δεν υπάρχουν ανοιχτά γραμμάτια με υπόλοιπο.</p>}
         </div>
       </div>
       {openDebtsWithoutDate.length > 0 && (
         <p className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs text-slate-300">
-          {openDebtsWithoutDate.length} οφειλές δεν έχουν ημερομηνία πληρωμής και εμφανίζονται εδώ χωρίς να μπαίνουν σε μήνα cashflow.
+          {openDebtsWithoutDate.length} γραμμάτια δεν έχουν ημερομηνία πληρωμής και εμφανίζονται εδώ χωρίς να μπαίνουν σε μήνα cashflow.
         </p>
       )}
     </div>
@@ -745,7 +746,7 @@ function buildCashflowMatrix({
     [
       { label: 'Προβλεπόμενα έσοδα', values: income, tone: 'income' },
       { label: 'Προβλεπόμενα έξοδα', values: expenses, tone: 'expense' },
-      { label: 'Γραμμάτια / Οφειλές', values: obligations, tone: 'expense' },
+      { label: 'Γραμμάτια', values: obligations, tone: 'expense' },
       { label: 'Προκαταβολές επένδυσης', values: investment, tone: 'expense' },
       { label: 'Δόσεις επένδυσης', values: createMonthArray(), tone: 'expense' },
       { label: 'Καθαρό αποτέλεσμα μήνα', values: net, tone: 'neutral' },
@@ -808,7 +809,7 @@ function buildForecastMatrix({
     [
       { label: 'Προβλεπόμενα έσοδα', values: income, tone: 'income' },
       { label: 'Προβλεπόμενα έξοδα', values: expenses, tone: 'expense' },
-      { label: 'Γραμμάτια / Οφειλές', values: obligations, tone: 'expense' },
+      { label: 'Γραμμάτια', values: obligations, tone: 'expense' },
       { label: 'Προκαταβολές επένδυσης', values: downPayments, tone: 'expense' },
       { label: 'Δόσεις επένδυσης', values: installments, tone: 'expense' },
       { label: 'Καθαρό αποτέλεσμα μήνα', values: net, tone: 'neutral' },
@@ -822,9 +823,10 @@ function buildDebtSchedules(debts: FinancialEngineDebt[]): ScheduledPayment[] {
   const schedules: ScheduledPayment[] = [];
 
   debts.forEach((debt) => {
-    if (!isOpenDebt(debt) || !debt.due_date) return;
+    const paymentDate = getDebtPaymentDate(debt);
+    if (!isOpenDebt(debt) || !paymentDate) return;
 
-    const date = parseDate(debt.due_date);
+    const date = parseDate(paymentDate);
     if (!date) return;
 
     schedules.push({
@@ -844,6 +846,10 @@ function isOpenDebt(debt: FinancialEngineDebt) {
   const remaining = toNumber(debt.remaining_amount);
 
   return remaining > 0 || (status !== 'paid' && status !== 'πληρωμένη');
+}
+
+function getDebtPaymentDate(debt: FinancialEngineDebt) {
+  return debt.payment_date || debt.due_date || null;
 }
 
 function normalizeDebtStatus(status?: string | null) {

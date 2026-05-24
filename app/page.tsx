@@ -55,7 +55,7 @@ type WindowType =
   | 'Ταμείο'
   | 'Έσοδα'
   | 'Έξοδα'
-  | 'Οφειλές'
+  | 'Γραμμάτια'
   | 'Financial Engine'
   | 'Προμηθευτές'
   | 'Έγγραφα'
@@ -857,7 +857,7 @@ const handleSaveSupplierPayment = async () => {
       return;
     }
 
-    if (openWindows.length > 0 && !hasOpenWindow('Οφειλές') && !hasOpenWindow('Financial Engine')) {
+    if (openWindows.length > 0 && !hasOpenWindow('Γραμμάτια') && !hasOpenWindow('Financial Engine')) {
       return;
     }
 
@@ -926,8 +926,8 @@ const handleSaveSupplierPayment = async () => {
         return 'Έσοδα';
       case 'Έξοδα':
         return 'Έξοδα';
-      case 'Οφειλές':
-        return 'Οφειλές';
+      case 'Γραμμάτια':
+        return 'Γραμμάτια';
       case 'Financial Engine':
         return 'Financial Engine';
       case 'Προμηθευτές':
@@ -1487,7 +1487,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       'Ταμείο',
       'Έσοδα',
       'Έξοδα',
-      'Οφειλές',
+      'Γραμμάτια',
       'Financial Engine',
       'Προμηθευτές',
       'Έγγραφα',
@@ -1598,7 +1598,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             onUpdateKteo={handleUpdateVehicleKteo}
           />
         );
-      case 'Οφειλές':
+      case 'Γραμμάτια':
         return <DebtsManager vehicles={vehicles} suppliers={suppliers} />;
       default:
         return null;
@@ -1619,8 +1619,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return 'Έσοδα';
       case 'Έξοδα':
         return 'Έξοδα';
-      case 'Οφειλές':
-        return 'Οφειλές';
+      case 'Γραμμάτια':
+        return 'Γραμμάτια';
       case 'Financial Engine':
         return 'Financial Engine';
       case 'Προμηθευτές':
@@ -1827,16 +1827,16 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
                 <button
                   type="button"
-                  onClick={() => openWindow('Οφειλές')}
+                  onClick={() => openWindow('Γραμμάτια')}
                   className="group cursor-pointer rounded-2xl border border-amber-300/18 bg-amber-300/[0.04] p-3 text-left shadow-[0_0_24px_rgba(251,191,36,0.06)] transition duration-200 hover:-translate-y-px hover:border-amber-300/30 hover:bg-amber-300/[0.06] hover:shadow-[0_0_30px_rgba(251,191,36,0.11)]"
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-200/70">
-                    Alert Οφειλών
+                    Alert Γραμματίων
                   </p>
                   <div className="mt-3 rounded-xl border border-white/[0.055] bg-black/20 px-3 py-3 transition duration-200 group-hover:border-amber-200/12">
                     <p className="text-2xl font-semibold text-amber-100">{formatMoney(openDebtsTotal)}</p>
                     <p className="mt-1 text-xs text-amber-200/60">
-                      {openDebts.length} ανοιχτές οφειλές
+                      {openDebts.length} ανοιχτά γραμμάτια
                     </p>
                   </div>
                 </button>
@@ -1890,7 +1890,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               initialWidth={windowItem.id === 'Αναφορές' ? 1320 : undefined}
               initialHeight={windowItem.id === 'Αναφορές' ? 792 : undefined}
               financeDashboard={windowItem.id === 'Ταμείο'}
-              wide={windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Οφειλές' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα'}
+              wide={windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Γραμμάτια' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα'}
             >
               {renderWindowContent(windowItem.id)}
             </Window>
@@ -2635,9 +2635,53 @@ function VehicleLicenseViewerModal({
     fileName.toLowerCase().endsWith('.pdf') ||
     documentUrl.toLowerCase().includes('.pdf');
   const isImage = Boolean(documentUrl) && !isPdf;
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef<{
+    mouseX: number;
+    mouseY: number;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const controlButtonClass =
     'rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-sky-300/25 hover:bg-sky-300/[0.08] hover:text-white';
+
+  useEffect(() => {
+    setPan({ x: 0, y: 0 });
+  }, [document?.id, documentUrl]);
+
+  const startPan = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!isImage) return;
+
+    event.preventDefault();
+    setIsPanning(true);
+    panStartRef.current = {
+      mouseX: event.clientX,
+      mouseY: event.clientY,
+      x: pan.x,
+      y: pan.y,
+    };
+  };
+
+  const movePan = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!isPanning || !panStartRef.current) return;
+
+    setPan({
+      x: panStartRef.current.x + event.clientX - panStartRef.current.mouseX,
+      y: panStartRef.current.y + event.clientY - panStartRef.current.mouseY,
+    });
+  };
+
+  const stopPan = () => {
+    setIsPanning(false);
+    panStartRef.current = null;
+  };
+
+  const resetView = () => {
+    setPan({ x: 0, y: 0 });
+    onReset();
+  };
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-5">
@@ -2679,7 +2723,7 @@ function VehicleLicenseViewerModal({
                   <button type="button" onClick={onZoomIn} className={controlButtonClass}>
                     + Zoom
                   </button>
-                  <button type="button" onClick={onReset} className={controlButtonClass}>
+                  <button type="button" onClick={resetView} className={controlButtonClass}>
                     Reset view
                   </button>
                 </>
@@ -2706,14 +2750,23 @@ function VehicleLicenseViewerModal({
           )}
 
           {document && isImage && (
-            <div className="h-full overflow-auto rounded-3xl border border-white/[0.07] bg-black/30 p-4">
+            <div
+              className={`h-full overflow-hidden rounded-3xl border border-white/[0.07] bg-black/30 p-4 ${
+                isPanning ? 'cursor-grabbing' : 'cursor-grab'
+              }`}
+              onMouseDown={startPan}
+              onMouseMove={movePan}
+              onMouseUp={stopPan}
+              onMouseLeave={stopPan}
+            >
               <div className="flex min-h-full min-w-full items-center justify-center">
                 <img
                   src={documentUrl}
                   alt={fileName || 'Άδεια Κυκλοφορίας'}
-                  className="max-h-none max-w-none rounded-2xl shadow-[0_24px_70px_rgba(0,0,0,0.45)] transition-transform duration-200"
+                  draggable={false}
+                  className="block max-h-full max-w-full select-none rounded-2xl object-contain shadow-[0_24px_70px_rgba(0,0,0,0.45)] transition-transform duration-150"
                   style={{
-                    transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                    transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom}) rotate(${rotation}deg)`,
                     transformOrigin: 'center center',
                   }}
                 />

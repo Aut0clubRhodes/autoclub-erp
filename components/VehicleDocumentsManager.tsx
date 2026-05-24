@@ -252,15 +252,29 @@ function DocumentPreviewModal({ row, onClose }: { row: DocumentRow; onClose: () 
   const fileName = row.document.file_name || '';
   const isImage = Boolean(fileName.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif)$/));
   const [modalSize, setModalSize] = useState({ width: 1050, height: 620 });
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
   const resizeStartRef = useRef<{
     mouseX: number;
     mouseY: number;
     width: number;
     height: number;
   } | null>(null);
+  const panStartRef = useRef<{
+    mouseX: number;
+    mouseY: number;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const closeViewer = () => {
     onClose();
+  };
+
+  const resetImageView = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
   };
 
   const startResize = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -273,6 +287,37 @@ function DocumentPreviewModal({ row, onClose }: { row: DocumentRow; onClose: () 
       height: modalSize.height,
     };
   };
+
+  const startPan = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!isImage) return;
+
+    event.preventDefault();
+    setIsPanning(true);
+    panStartRef.current = {
+      mouseX: event.clientX,
+      mouseY: event.clientY,
+      x: pan.x,
+      y: pan.y,
+    };
+  };
+
+  const movePan = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!isPanning || !panStartRef.current) return;
+
+    setPan({
+      x: panStartRef.current.x + event.clientX - panStartRef.current.mouseX,
+      y: panStartRef.current.y + event.clientY - panStartRef.current.mouseY,
+    });
+  };
+
+  const stopPan = () => {
+    setIsPanning(false);
+    panStartRef.current = null;
+  };
+
+  useEffect(() => {
+    resetImageView();
+  }, [row.document.id]);
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -330,6 +375,19 @@ function DocumentPreviewModal({ row, onClose }: { row: DocumentRow; onClose: () 
         </header>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 px-6 py-4">
+          {isImage && (
+            <>
+              <button type="button" onClick={() => setZoom((value) => Math.max(0.5, value - 0.15))} className={controlButtonClass}>
+                Zoom -
+              </button>
+              <button type="button" onClick={() => setZoom((value) => Math.min(3, value + 0.15))} className={controlButtonClass}>
+                Zoom +
+              </button>
+              <button type="button" onClick={resetImageView} className={controlButtonClass}>
+                Reset view
+              </button>
+            </>
+          )}
           <a href={url} target="_blank" rel="noopener noreferrer" className={controlButtonClass}>
             Άνοιγμα σε νέα καρτέλα
           </a>
@@ -338,12 +396,25 @@ function DocumentPreviewModal({ row, onClose }: { row: DocumentRow; onClose: () 
           </a>
         </div>
 
-        <div className="mx-6 mb-6 flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-2xl bg-black/30">
+        <div
+          className={`mx-6 mb-6 flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-2xl bg-black/30 ${
+            isImage ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : ''
+          }`}
+          onMouseDown={startPan}
+          onMouseMove={movePan}
+          onMouseUp={stopPan}
+          onMouseLeave={stopPan}
+        >
           {isImage ? (
             <img
               src={url}
               alt={row.vehicle.plate}
-              className="h-full w-full object-contain"
+              draggable={false}
+              className="block max-h-full max-w-full select-none rounded-2xl object-contain transition-transform duration-150"
+              style={{
+                transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
+                transformOrigin: 'center center',
+              }}
             />
           ) : (
             <iframe

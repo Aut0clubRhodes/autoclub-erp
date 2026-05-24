@@ -69,7 +69,7 @@ const NAV_SECTIONS: NavSection[] = [
         children: [
           { label: 'Έσοδα', href: '/finance/income', icon: TrendingUp, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
           { label: 'Έξοδα', href: '/finance/expenses', icon: TrendingDown, tone: 'text-rose-300', chip: 'border-rose-400/25 bg-rose-400/10' },
-          { label: 'Οφειλές', href: '/finance/debts', icon: ReceiptText, tone: 'text-fuchsia-300', chip: 'border-fuchsia-400/25 bg-fuchsia-400/10' },
+          { label: 'Γραμμάτια', href: '/finance/debts', icon: ReceiptText, tone: 'text-fuchsia-300', chip: 'border-fuchsia-400/25 bg-fuchsia-400/10' },
         ],
       },
       { label: 'Financial Engine', href: '/financial-engine', icon: Activity, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
@@ -96,7 +96,7 @@ const WINDOW_ITEMS = [
   'Ταμείο',
   'Έσοδα',
   'Έξοδα',
-  'Οφειλές',
+  'Γραμμάτια',
   'Financial Engine',
   'Προμηθευτές',
   'Αναφορές',

@@ -138,7 +138,7 @@ if (editingDebtId) {
     });
 
     if (!created) {
-      alert('Η οφειλή δεν αποθηκεύτηκε.');
+      alert('Το γραμμάτιο δεν αποθηκεύτηκε.');
       return;
     }
 
@@ -146,14 +146,14 @@ if (editingDebtId) {
     await loadDebts();
   };
 const handleDeleteDebt = async (debtId: number) => {
-  const confirmed = window.confirm('Να διαγραφεί η οφειλή;');
+  const confirmed = window.confirm('Να διαγραφεί το γραμμάτιο;');
 
   if (!confirmed) return;
 
   const deleted = await deleteDebt(debtId);
 
   if (!deleted) {
-    alert('Η οφειλή δεν διαγράφηκε.');
+    alert('Το γραμμάτιο δεν διαγράφηκε.');
     return;
   }
 
@@ -181,7 +181,7 @@ const handleDeleteDebt = async (debtId: number) => {
 
     if (!result.success) {
       if (result.expenseCreated) {
-        alert('Η πληρωμή καταχωρήθηκε στα έξοδα αλλά δεν ενημερώθηκε η οφειλή.');
+        alert('Η πληρωμή καταχωρήθηκε στα έξοδα αλλά δεν ενημερώθηκε το γραμμάτιο.');
       }
       return;
     }
@@ -205,7 +205,7 @@ const handleDeleteDebt = async (debtId: number) => {
           onClick={() => setShowModal(true)}
           className="rounded-2xl border border-fuchsia-400/30 bg-fuchsia-400/10 px-4 py-3 text-sm font-semibold text-fuchsia-200 transition hover:bg-fuchsia-400/20"
         >
-          + Νέα Οφειλή
+          + Νέο Γραμμάτιο
         </button>
       </div>
 
@@ -304,7 +304,7 @@ const handleDeleteDebt = async (debtId: number) => {
             ))}
           </tbody>
         </table>
-        {debts.length === 0 && <p className="p-6 text-sm text-zinc-500">Δεν υπάρχουν καταχωρημένες οφειλές.</p>}
+        {debts.length === 0 && <p className="p-6 text-sm text-zinc-500">Δεν υπάρχουν καταχωρημένα γραμμάτια.</p>}
       </div>
 
       {showModal && <DebtFormModal form={form} setForm={setForm} suppliers={suppliers} vehicles={vehicles} onClose={closeModal} onSave={handleSaveDebt} />}
@@ -322,7 +322,7 @@ const handleDeleteDebt = async (debtId: number) => {
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
           <div className="flex w-[min(520px,92vw)] flex-col overflow-hidden rounded-[28px] border border-fuchsia-300/15 bg-[linear-gradient(180deg,rgba(18,24,33,0.98),rgba(8,12,18,0.98))] shadow-[0_28px_90px_rgba(0,0,0,0.62)]">
             <div className="flex items-center justify-between border-b border-white/[0.08] px-6 py-5">
-              <h2 className="text-lg font-semibold text-white">Πληρωμή Οφειλής</h2>
+              <h2 className="text-lg font-semibold text-white">Πληρωμή Γραμματίου</h2>
               <button type="button" onClick={closePaymentModal} className="rounded-xl border border-transparent p-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white">
                 ✕
               </button>
@@ -379,7 +379,7 @@ function DebtFormModal({
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
       <div className="flex max-h-[86vh] w-[min(760px,92vw)] flex-col overflow-hidden rounded-[28px] border border-fuchsia-300/15 bg-[linear-gradient(180deg,rgba(18,24,33,0.98),rgba(8,12,18,0.98))] shadow-[0_28px_90px_rgba(0,0,0,0.62)]">
         <div className="flex items-center justify-between border-b border-white/[0.08] px-6 py-5">
-          <h2 className="text-lg font-semibold text-white">Νέα Οφειλή</h2>
+          <h2 className="text-lg font-semibold text-white">Νέο Γραμμάτιο</h2>
           <button type="button" onClick={onClose} className="rounded-xl border border-transparent p-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white">
             ✕
           </button>
