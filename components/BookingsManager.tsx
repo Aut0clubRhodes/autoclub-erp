@@ -40,6 +40,7 @@ type ReservationForm = {
   returnTime: string;
   price: string;
   notes: string;
+  status: ReservationStatus;
 };
 
 type AgencyRow = {
@@ -67,10 +68,10 @@ const fallbackAgencyRepresentatives: Record<string, string[]> = {
 const fallbackAgencies = Object.keys(fallbackAgencyRepresentatives);
 const statuses: Array<ReservationStatus | 'ALL'> = ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'RETURN'];
 const statusActiveClasses: Record<ReservationStatus, string> = {
-  PENDING: 'border-amber-300/70 bg-amber-300/18 text-amber-100',
-  ACCEPTED: 'border-emerald-300/65 bg-emerald-300/18 text-emerald-100',
-  REJECTED: 'border-rose-300/70 bg-rose-300/18 text-rose-100',
-  RETURN: 'border-cyan-300/65 bg-cyan-300/18 text-cyan-100',
+  PENDING: 'border-amber-300 bg-amber-400/25 text-amber-50 shadow-[0_0_16px_rgba(251,191,36,0.14)]',
+  ACCEPTED: 'border-emerald-300 bg-emerald-400/24 text-emerald-50 shadow-[0_0_16px_rgba(52,211,153,0.14)]',
+  REJECTED: 'border-rose-300 bg-rose-400/24 text-rose-50 shadow-[0_0_16px_rgba(251,113,133,0.14)]',
+  RETURN: 'border-cyan-300 bg-cyan-400/24 text-cyan-50 shadow-[0_0_16px_rgba(34,211,238,0.14)]',
 };
 const whatsappMessages = [
   { from: 'AutoClub', text: 'Hello, your reservation request has been received.' },
@@ -91,6 +92,7 @@ const initialForm: ReservationForm = {
   returnTime: '',
   price: '',
   notes: '',
+  status: 'PENDING',
 };
 
 const initialReservations: Reservation[] = [
@@ -256,6 +258,9 @@ const formatDate = (value: string) => (value ? new Date(`${value}T00:00:00`).toL
 const withCurrentOption = (options: string[], current: string) =>
   current && !options.includes(current) ? [current, ...options] : options;
 
+const modalFieldClass =
+  'w-full rounded-[14px] border border-white/[0.08] bg-zinc-950/80 px-3.5 py-2.5 text-sm font-semibold text-zinc-50 outline-none transition placeholder:text-zinc-600 focus:border-sky-300/55 focus:bg-zinc-950 focus:ring-2 focus:ring-sky-400/10';
+
 export default function BookingsManager() {
   const [reservations, setReservations] = useState(initialReservations);
   const [selectedId, setSelectedId] = useState(initialReservations[0].id);
@@ -328,11 +333,27 @@ export default function BookingsManager() {
     reservations[0];
 
   const updateSelectedReservation = (patch: Partial<Reservation>) => {
+    if (!selectedReservation) return;
+
     setReservations((currentReservations) =>
       currentReservations.map((reservation) =>
         reservation.id === selectedReservation.id ? { ...reservation, ...patch } : reservation
       )
     );
+  };
+
+  const deleteSelectedReservation = () => {
+    if (!selectedReservation) return;
+    if (!window.confirm('Να διαγραφεί αυτή η κράτηση;')) return;
+
+    setReservations((currentReservations) => {
+      const selectedIndex = currentReservations.findIndex((reservation) => reservation.id === selectedReservation.id);
+      const nextReservations = currentReservations.filter((reservation) => reservation.id !== selectedReservation.id);
+      const nextSelectedReservation = nextReservations[selectedIndex] || nextReservations[selectedIndex - 1] || nextReservations[0];
+
+      setSelectedId(nextSelectedReservation?.id || '');
+      return nextReservations;
+    });
   };
 
   const saveMockReservation = () => {
@@ -349,7 +370,7 @@ export default function BookingsManager() {
       pickupTime: form.pickupTime,
       returnTime: form.returnTime,
       price: form.price === '' ? null : Number(form.price) || null,
-      status: 'PENDING',
+      status: form.status,
       sendReturn: false,
       licenceFront: 'empty',
       licenceBack: 'empty',
@@ -462,12 +483,20 @@ export default function BookingsManager() {
         </div>
       </section>
 
-      <ReservationInspector
-        reservation={selectedReservation}
-        agencyOptions={agencyOptions}
-        representativesByAgency={representativesByAgency}
-        onUpdate={updateSelectedReservation}
-      />
+      {selectedReservation ? (
+        <ReservationInspector
+          key={selectedReservation.id}
+          reservation={selectedReservation}
+          agencyOptions={agencyOptions}
+          representativesByAgency={representativesByAgency}
+          onUpdate={updateSelectedReservation}
+          onDelete={deleteSelectedReservation}
+        />
+      ) : (
+        <section className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-6 text-sm text-zinc-500">
+          Δεν υπάρχουν κρατήσεις.
+        </section>
+      )}
 
       {showNewModal && (
         <NewReservationModal
@@ -488,19 +517,37 @@ function ReservationInspector({
   agencyOptions,
   representativesByAgency,
   onUpdate,
+  onDelete,
 }: {
   reservation: Reservation;
   agencyOptions: string[];
   representativesByAgency: Record<string, string[]>;
   onUpdate: (patch: Partial<Reservation>) => void;
+  onDelete: () => void;
 }) {
+  const [draft, setDraft] = useState<Reservation>(reservation);
+
+  const updateDraft = (patch: Partial<Reservation>) => {
+    setDraft((currentDraft) => ({ ...currentDraft, ...patch }));
+  };
+
+  const saveDraft = () => {
+    onUpdate(draft);
+  };
+
+  const sendReminder = () => {
+    updateDraft({ sendReturn: true });
+    onUpdate({ sendReturn: true });
+  };
+
   const actions: Array<{
     label: string;
-    tone: 'reminder' | 'edit';
-    onClick?: () => void;
+    tone: 'reminder' | 'save' | 'delete';
+    onClick: () => void;
   }> = [
-    { label: 'Send reminder', tone: 'reminder' },
-    { label: 'Edit booking', tone: 'edit' },
+    { label: 'Send reminder', tone: 'reminder', onClick: sendReminder },
+    { label: 'Save changes', tone: 'save', onClick: saveDraft },
+    { label: 'Delete booking', tone: 'delete', onClick: onDelete },
   ];
 
   return (
@@ -509,50 +556,50 @@ function ReservationInspector({
         <Panel title="Reservation record" subtitle={reservation.id}>
           <div className="grid gap-1 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
             <div className="grid gap-1">
-              <EditableCompactInput label="Phone WhatsApp" value={reservation.phoneWhatsapp} onChange={(value) => onUpdate({ phoneWhatsapp: value.replace(/\s+/g, '') })} mono />
-              <EditableCompactInput label="Name" value={reservation.name} onChange={(value) => onUpdate({ name: value })} />
-              <EditableCompactInput label="Hotel and Room" value={reservation.hotelRoom} onChange={(value) => onUpdate({ hotelRoom: value })} />
-              <EditableCompactSelect label="Vehicle Group" value={reservation.vehicleGroup} options={vehicleGroups} onChange={(value) => onUpdate({ vehicleGroup: value as VehicleGroup })} />
+              <EditableCompactInput label="Phone WhatsApp" value={draft.phoneWhatsapp} onChange={(value) => updateDraft({ phoneWhatsapp: value.replace(/\s+/g, '') })} mono />
+              <EditableCompactInput label="Name" value={draft.name} onChange={(value) => updateDraft({ name: value })} />
+              <EditableCompactInput label="Hotel and Room" value={draft.hotelRoom} onChange={(value) => updateDraft({ hotelRoom: value })} />
+              <EditableCompactSelect label="Vehicle Group" value={draft.vehicleGroup} options={vehicleGroups} onChange={(value) => updateDraft({ vehicleGroup: value as VehicleGroup })} />
               <EditableCompactSelect
                 label="Agency"
-                value={reservation.agency}
-                options={withCurrentOption(agencyOptions, reservation.agency)}
-                onChange={(value) => onUpdate({ agency: value, representative: representativesByAgency[value]?.[0] || '' })}
+                value={draft.agency}
+                options={withCurrentOption(agencyOptions, draft.agency)}
+                onChange={(value) => updateDraft({ agency: value, representative: representativesByAgency[value]?.[0] || '' })}
               />
               <EditableCompactSelect
                 label="Representative"
-                value={reservation.representative}
-                options={withCurrentOption(representativesByAgency[reservation.agency] || [], reservation.representative)}
-                onChange={(value) => onUpdate({ representative: value })}
+                value={draft.representative}
+                options={withCurrentOption(representativesByAgency[draft.agency] || [], draft.representative)}
+                onChange={(value) => updateDraft({ representative: value })}
               />
             </div>
             <div className="grid gap-1">
-              <EditableCompactInput label="Pickup Date" type="date" value={reservation.pickupDate} onChange={(value) => onUpdate({ pickupDate: value })} />
-              <EditableCompactInput label="Pickup Time" value={reservation.pickupTime} placeholder="09:30" onChange={(value) => onUpdate({ pickupTime: value })} />
-              <EditableCompactInput label="Return Date" type="date" value={reservation.returnDate} onChange={(value) => onUpdate({ returnDate: value })} />
-              <EditableCompactInput label="Return Time" value={reservation.returnTime} placeholder="18:00" onChange={(value) => onUpdate({ returnTime: value })} />
-              <EditableCompactInput label="Price" type="number" value={reservation.price === null ? '' : String(reservation.price)} onChange={(value) => onUpdate({ price: value === '' ? null : Number(value) || null })} />
-              <StatusPillSelector value={reservation.status} onChange={(status) => onUpdate({ status })} />
+              <EditableCompactInput label="Pickup Date" type="date" value={draft.pickupDate} onChange={(value) => updateDraft({ pickupDate: value })} />
+              <EditableCompactInput label="Pickup Time" value={draft.pickupTime} placeholder="09:30" onChange={(value) => updateDraft({ pickupTime: value })} />
+              <EditableCompactInput label="Return Date" type="date" value={draft.returnDate} onChange={(value) => updateDraft({ returnDate: value })} />
+              <EditableCompactInput label="Return Time" value={draft.returnTime} placeholder="18:00" onChange={(value) => updateDraft({ returnTime: value })} />
+              <EditableCompactInput label="Price" type="number" value={draft.price === null ? '' : String(draft.price)} onChange={(value) => updateDraft({ price: value === '' ? null : Number(value) || null })} />
+              <StatusPillSelector value={draft.status} onChange={(status) => updateDraft({ status })} />
             </div>
           </div>
         </Panel>
 
         <Panel title="Attachments & notes" subtitle="customer files">
           <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-            <LicenceCard title="Licence Front" state={reservation.licenceFront} />
-            <LicenceCard title="Licence Back" state={reservation.licenceBack} />
+            <LicenceCard title="Licence Front" state={draft.licenceFront} />
+            <LicenceCard title="Licence Back" state={draft.licenceBack} />
           </div>
           <label className="mt-1.5 grid gap-1 text-[11px] font-semibold text-zinc-500">
             Notes
             <textarea
-              readOnly
-              value={reservation.notes}
-              className="min-h-[74px] resize-none rounded-lg border border-white/[0.065] bg-black/25 px-2.5 py-1.5 text-[12px] leading-5 text-zinc-100 outline-none"
+              value={draft.notes}
+              onChange={(event) => updateDraft({ notes: event.target.value })}
+              className="min-h-[74px] resize-none rounded-lg border border-white/[0.065] bg-black/25 px-2.5 py-1.5 text-[12px] leading-5 text-zinc-100 outline-none transition focus:border-sky-300/45"
             />
           </label>
         </Panel>
 
-        <Panel title="Workflow & WhatsApp" subtitle={reservation.phoneWhatsapp}>
+        <Panel title="Workflow & WhatsApp" subtitle={draft.phoneWhatsapp}>
           <div className="rounded-lg border border-white/[0.055] bg-black/20 p-2">
             <div className="mb-1.5 flex items-center justify-between">
               <p className="text-[11px] font-bold text-zinc-100">WhatsApp messages</p>
@@ -589,7 +636,9 @@ function ReservationInspector({
                 className={`h-8 rounded-lg border px-2.5 text-left text-[11px] font-bold tracking-[0.01em] transition duration-200 hover:-translate-y-0.5 ${
                   action.tone === 'reminder'
                     ? 'border-cyan-300/35 bg-cyan-400/14 text-cyan-50 hover:bg-cyan-400/20'
-                    : 'border-blue-300/30 bg-blue-300/12 text-blue-100 hover:border-blue-200/45 hover:bg-blue-300/18'
+                    : action.tone === 'save'
+                      ? 'border-emerald-300/35 bg-emerald-400/14 text-emerald-50 hover:bg-emerald-400/20'
+                      : 'border-rose-300/35 bg-rose-400/12 text-rose-100 hover:bg-rose-400/18'
                 }`}
               >
                 {action.label}
@@ -624,28 +673,39 @@ function NewReservationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-6 backdrop-blur-sm">
-      <div className="flex max-h-[86vh] w-[min(760px,94vw)] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#070b12] shadow-2xl">
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-white/10 px-5 py-4">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[88vh] w-[min(920px,95vw)] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,#09111d_0%,#060a11_55%,#03060a_100%)] shadow-[0_32px_110px_rgba(0,0,0,0.62)]">
+        <div className="flex flex-shrink-0 items-start justify-between border-b border-white/10 bg-white/[0.025] px-6 py-5">
           <div>
-            <h2 className="text-lg font-semibold text-white">Νέα Κράτηση</h2>
-            <p className="text-xs text-zinc-500">AutoClub reservation operations entry</p>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.24em] text-sky-200/75">BOOKINGS</p>
+            <h2 className="mt-1 text-xl font-semibold text-white">Νέα Κράτηση</h2>
+            <p className="mt-1 text-xs text-zinc-500">AutoClub reservation operations entry</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-zinc-400 transition hover:bg-white/[0.05] hover:text-white">
+          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white">
             ×
           </button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto p-5">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <section className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-zinc-100">Βασικά Στοιχεία</h3>
+                <p className="text-xs text-zinc-500">Reservation details before automation sync.</p>
+              </div>
+              <span className={`rounded-full border px-3 py-1 text-[10px] font-extrabold ${statusActiveClasses[form.status]}`}>
+                {form.status}
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Phone WhatsApp">
-              <input value={form.phoneWhatsapp} onChange={(event) => updateForm({ phoneWhatsapp: event.target.value })} className="input-dark" placeholder="+306941123011" />
+              <input value={form.phoneWhatsapp} onChange={(event) => updateForm({ phoneWhatsapp: event.target.value })} className={modalFieldClass} placeholder="+306941123011" />
             </Field>
             <Field label="Name">
-              <input value={form.name} onChange={(event) => updateForm({ name: event.target.value })} className="input-dark" />
+              <input value={form.name} onChange={(event) => updateForm({ name: event.target.value })} className={modalFieldClass} />
             </Field>
             <Field label="Vehicle Group">
-              <select value={form.vehicleGroup} onChange={(event) => updateForm({ vehicleGroup: event.target.value as VehicleGroup })} className="input-dark">
+              <select value={form.vehicleGroup} onChange={(event) => updateForm({ vehicleGroup: event.target.value as VehicleGroup })} className={modalFieldClass}>
                 {vehicleGroups.map((group) => (
                   <option key={group} value={group}>{group}</option>
                 ))}
@@ -658,7 +718,7 @@ function NewReservationModal({
                   const agency = event.target.value;
                   updateForm({ agency, representative: representativesByAgency[agency]?.[0] || '' });
                 }}
-                className="input-dark"
+                className={modalFieldClass}
               >
                 {withCurrentOption(agencyOptions, form.agency).map((agency) => (
                   <option key={agency} value={agency}>{agency}</option>
@@ -666,46 +726,45 @@ function NewReservationModal({
               </select>
             </Field>
             <Field label="Representative">
-              <select value={form.representative} onChange={(event) => updateForm({ representative: event.target.value })} className="input-dark">
+              <select value={form.representative} onChange={(event) => updateForm({ representative: event.target.value })} className={modalFieldClass}>
                 {withCurrentOption(representatives, form.representative).map((representative) => (
                   <option key={representative} value={representative}>{representative}</option>
                 ))}
               </select>
             </Field>
             <Field label="Hotel and Room">
-              <input value={form.hotelRoom} onChange={(event) => updateForm({ hotelRoom: event.target.value })} className="input-dark" />
+              <input value={form.hotelRoom} onChange={(event) => updateForm({ hotelRoom: event.target.value })} className={modalFieldClass} />
             </Field>
             <Field label="Pickup Date">
-              <input type="date" value={form.pickupDate} onChange={(event) => updateForm({ pickupDate: event.target.value })} className="input-dark" />
+              <input type="date" value={form.pickupDate} onChange={(event) => updateForm({ pickupDate: event.target.value })} className={modalFieldClass} />
             </Field>
             <Field label="Pickup Time">
-              <input value={form.pickupTime} onChange={(event) => updateForm({ pickupTime: event.target.value })} className="input-dark" placeholder="09:30" />
+              <input value={form.pickupTime} onChange={(event) => updateForm({ pickupTime: event.target.value })} className={modalFieldClass} placeholder="09:30" />
             </Field>
             <Field label="Return Date">
-              <input type="date" value={form.returnDate} onChange={(event) => updateForm({ returnDate: event.target.value })} className="input-dark" />
+              <input type="date" value={form.returnDate} onChange={(event) => updateForm({ returnDate: event.target.value })} className={modalFieldClass} />
             </Field>
             <Field label="Return Time">
-              <input value={form.returnTime} onChange={(event) => updateForm({ returnTime: event.target.value })} className="input-dark" placeholder="18:00" />
+              <input value={form.returnTime} onChange={(event) => updateForm({ returnTime: event.target.value })} className={modalFieldClass} placeholder="18:00" />
             </Field>
             <Field label="Price">
-              <input type="number" value={form.price} onChange={(event) => updateForm({ price: event.target.value })} className="input-dark" placeholder="0.00" />
+              <input type="number" value={form.price} onChange={(event) => updateForm({ price: event.target.value })} className={modalFieldClass} placeholder="0.00" />
             </Field>
-            <Field label="Status">
-              <input value="PENDING" readOnly className="input-dark opacity-70" />
-            </Field>
+            <StatusPillSelector value={form.status} onChange={(status) => updateForm({ status })} />
             <div className="sm:col-span-2">
               <Field label="Notes">
-                <textarea value={form.notes} onChange={(event) => updateForm({ notes: event.target.value })} className="input-dark min-h-[82px] resize-none" />
+                <textarea value={form.notes} onChange={(event) => updateForm({ notes: event.target.value })} className={`${modalFieldClass} min-h-[96px] resize-none`} />
               </Field>
             </div>
-          </div>
+            </div>
+          </section>
         </div>
 
-        <div className="flex flex-shrink-0 justify-end gap-2 border-t border-white/10 px-5 py-4">
-          <button type="button" onClick={onClose} className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm font-semibold text-zinc-300 transition hover:bg-white/[0.06]">
+        <div className="flex flex-shrink-0 justify-end gap-2 border-t border-white/10 bg-black/20 px-6 py-4">
+          <button type="button" onClick={onClose} className="rounded-xl border border-white/[0.08] bg-white/[0.035] px-5 py-2.5 text-sm font-semibold text-zinc-300 transition hover:bg-white/[0.07] hover:text-white">
             Ακύρωση
           </button>
-          <button type="button" onClick={onSave} className="rounded-xl border border-sky-300/25 bg-sky-300/12 px-4 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-300/18">
+          <button type="button" onClick={onSave} className="rounded-xl border border-cyan-200/35 bg-cyan-400/16 px-5 py-2.5 text-sm font-bold text-cyan-50 transition hover:-translate-y-0.5 hover:bg-cyan-400/24 hover:shadow-[0_0_24px_rgba(34,211,238,0.16)]">
             Αποθήκευση
           </button>
         </div>
@@ -715,14 +774,7 @@ function NewReservationModal({
 }
 
 function StatusBadge({ status }: { status: ReservationStatus }) {
-  const classes: Record<ReservationStatus, string> = {
-    PENDING: 'border-amber-300/70 bg-amber-300/18 text-amber-100',
-    ACCEPTED: 'border-emerald-300/65 bg-emerald-300/18 text-emerald-100',
-    REJECTED: 'border-rose-300/70 bg-rose-300/18 text-rose-100',
-    RETURN: 'border-cyan-300/65 bg-cyan-300/18 text-cyan-100',
-  };
-
-  return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black tracking-wide shadow-sm ${classes[status]}`}>{status}</span>;
+  return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black tracking-wide ${statusActiveClasses[status]}`}>{status}</span>;
 }
 
 function EditableCompactInput({
@@ -732,6 +784,7 @@ function EditableCompactInput({
   type = 'text',
   placeholder,
   mono = false,
+  disabled = false,
 }: {
   label: string;
   value: string;
@@ -739,6 +792,7 @@ function EditableCompactInput({
   type?: 'text' | 'date' | 'time' | 'number';
   placeholder?: string;
   mono?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-2 rounded-md border border-white/[0.045] bg-black/20 px-2 py-1">
@@ -747,8 +801,9 @@ function EditableCompactInput({
         type={type}
         value={value}
         placeholder={placeholder}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className={`h-6 min-w-0 rounded-md border border-white/[0.05] bg-zinc-950/70 px-2 text-[11px] font-semibold text-zinc-100 outline-none transition focus:border-sky-300/45 ${mono ? 'font-mono' : ''}`}
+        className={`h-6 min-w-0 rounded-md border border-white/[0.05] bg-zinc-950/70 px-2 text-[11px] font-semibold text-zinc-100 outline-none transition focus:border-sky-300/45 disabled:border-transparent disabled:bg-transparent disabled:px-0 disabled:text-zinc-200 ${mono ? 'font-mono' : ''}`}
       />
     </div>
   );
@@ -757,23 +812,26 @@ function EditableCompactInput({
 function StatusPillSelector({
   value,
   onChange,
+  disabled = false,
 }: {
   value: ReservationStatus;
   onChange: (status: ReservationStatus) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="grid gap-1 rounded-md border border-white/[0.045] bg-black/20 px-2 py-1">
-      <span className="text-[10px] font-semibold text-zinc-500">Status</span>
+    <div className="grid gap-1 rounded-md border border-white/[0.045] bg-black/20 px-2 py-1.5">
+      <span className="text-[10px] font-semibold text-zinc-400">Status</span>
       <div className="grid grid-cols-2 gap-1">
         {(['PENDING', 'ACCEPTED', 'REJECTED', 'RETURN'] as ReservationStatus[]).map((status) => (
           <button
             key={status}
             type="button"
+            disabled={disabled}
             onClick={() => onChange(status)}
-            className={`rounded-full border px-2 py-1 text-[9px] font-black tracking-wide transition ${
+            className={`rounded-full border px-2 py-1 text-[10px] font-black tracking-wide transition disabled:cursor-not-allowed ${
               value === status
                 ? statusActiveClasses[status]
-                : 'border-white/[0.08] bg-white/[0.025] text-zinc-500 hover:border-white/[0.16] hover:text-zinc-200'
+                : 'border-white/[0.1] bg-white/[0.035] text-zinc-300 hover:border-white/[0.2] hover:bg-white/[0.055] hover:text-white disabled:text-zinc-500 disabled:hover:border-white/[0.1] disabled:hover:bg-white/[0.035]'
             }`}
           >
             {status}
@@ -789,19 +847,22 @@ function EditableCompactSelect({
   value,
   options,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: string;
   options: string[];
   onChange: (value: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <label className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-2 rounded-md border border-white/[0.045] bg-black/20 px-2 py-1">
       <span className="text-[10px] font-semibold text-zinc-500">{label}</span>
       <select
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="h-6 min-w-0 rounded-md border border-white/[0.05] bg-zinc-950/70 px-2 text-[11px] font-semibold text-zinc-100 outline-none transition focus:border-sky-300/45"
+        className="h-6 min-w-0 rounded-md border border-white/[0.05] bg-zinc-950/70 px-2 text-[11px] font-semibold text-zinc-100 outline-none transition focus:border-sky-300/45 disabled:border-transparent disabled:bg-transparent disabled:px-0 disabled:text-zinc-200"
       >
         {options.map((option) => (
           <option key={option} value={option}>
@@ -898,27 +959,9 @@ function Panel({ title, subtitle, children }: { title: string; subtitle: string;
   );
 }
 
-function DetailRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-2 rounded-md border border-white/[0.045] bg-black/20 px-2 py-1.5">
-      <span className="text-[10px] font-semibold text-zinc-500">{label}</span>
-      <span className={`truncate text-[12px] font-semibold text-zinc-100 ${mono ? 'font-mono' : ''}`}>{value}</span>
-    </div>
-  );
-}
-
-function StatusRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-white/[0.045] bg-black/20 px-2 py-1.5">
-      <span className="text-[11px] font-semibold text-zinc-500">{label}</span>
-      {children}
-    </div>
-  );
-}
-
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="grid gap-1.5 text-xs font-semibold text-zinc-400">
+    <label className="grid gap-1.5 text-[12px] font-bold text-zinc-300">
       {label}
       {children}
     </label>
