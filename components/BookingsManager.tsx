@@ -20,6 +20,12 @@ type WorkflowEvent = {
   createdAt: string;
 };
 
+type BookingExtras = {
+  babySeat: boolean;
+  booster: boolean;
+  infantSeat: boolean;
+};
+
 type Reservation = {
   id: string;
   phoneWhatsapp: string;
@@ -38,6 +44,7 @@ type Reservation = {
   licenceFront: LicenceState;
   licenceBack: LicenceState;
   notes: string;
+  extras: BookingExtras;
   whatsappMessages?: WhatsappMessage[];
   workflowEvents?: WorkflowEvent[];
 };
@@ -56,6 +63,7 @@ type ReservationForm = {
   price: string;
   notes: string;
   status: ReservationStatus;
+  extras: BookingExtras;
 };
 
 type AgencyRow = {
@@ -93,6 +101,11 @@ const defaultWhatsappMessages: WhatsappMessage[] = [
   { id: 'msg-default-3', from: 'AutoClub', text: 'Yes, please send front and back side of the licence.', createdAt: 'mock' },
 ];
 const bookingsStorageKey = 'autoclub-bookings-v1';
+const emptyExtras: BookingExtras = {
+  babySeat: false,
+  booster: false,
+  infantSeat: false,
+};
 
 const initialForm: ReservationForm = {
   phoneWhatsapp: '',
@@ -108,6 +121,7 @@ const initialForm: ReservationForm = {
   price: '',
   notes: '',
   status: 'PENDING',
+  extras: emptyExtras,
 };
 
 const initialReservations: Reservation[] = [
@@ -129,6 +143,7 @@ const initialReservations: Reservation[] = [
     licenceFront: 'empty',
     licenceBack: 'empty',
     notes: 'Airport pickup. Needs WhatsApp confirmation before 18:00.',
+    extras: { babySeat: true, booster: false, infantSeat: false },
   },
   {
     id: 'AT-5822',
@@ -148,6 +163,7 @@ const initialReservations: Reservation[] = [
     licenceFront: 'empty',
     licenceBack: 'empty',
     notes: 'Child seat requested. Prefer FIAT 500 if available.',
+    extras: { babySeat: false, booster: true, infantSeat: false },
   },
   {
     id: 'AT-5823',
@@ -167,6 +183,7 @@ const initialReservations: Reservation[] = [
     licenceFront: 'empty',
     licenceBack: 'empty',
     notes: 'Full payment on arrival. Long booking, keep compact SUV.',
+    extras: emptyExtras,
   },
   {
     id: 'AT-5824',
@@ -186,6 +203,7 @@ const initialReservations: Reservation[] = [
     licenceFront: 'empty',
     licenceBack: 'empty',
     notes: 'Rejected due to no availability in requested group.',
+    extras: emptyExtras,
   },
   {
     id: 'AT-5825',
@@ -205,6 +223,7 @@ const initialReservations: Reservation[] = [
     licenceFront: 'empty',
     licenceBack: 'empty',
     notes: 'Returned without damage. Fuel OK.',
+    extras: emptyExtras,
   },
   {
     id: 'AT-5826',
@@ -224,6 +243,7 @@ const initialReservations: Reservation[] = [
     licenceFront: 'empty',
     licenceBack: 'empty',
     notes: 'Needs confirmation once group D is assigned.',
+    extras: { babySeat: false, booster: false, infantSeat: true },
   },
   {
     id: 'AT-5827',
@@ -243,6 +263,7 @@ const initialReservations: Reservation[] = [
     licenceFront: 'empty',
     licenceBack: 'empty',
     notes: 'Representative requested WhatsApp copy after acceptance.',
+    extras: emptyExtras,
   },
   {
     id: 'AT-5828',
@@ -262,6 +283,7 @@ const initialReservations: Reservation[] = [
     licenceFront: 'empty',
     licenceBack: 'empty',
     notes: 'Payment link pending. Ask for licence photos after confirmation.',
+    extras: emptyExtras,
   },
 ];
 
@@ -279,14 +301,36 @@ const modalFieldClass =
 const normalizeStatus = (status: unknown): ReservationStatus =>
   status === 'ACCEPTED' ? 'ACCEPTED' : status === 'REJECTED' ? 'REJECTED' : 'PENDING';
 
+const normalizeExtras = (extras?: Partial<BookingExtras>): BookingExtras => ({
+  babySeat: Boolean(extras?.babySeat),
+  booster: Boolean(extras?.booster),
+  infantSeat: Boolean(extras?.infantSeat),
+});
+
 const normalizeReservation = (reservation: Reservation): Reservation => ({
   ...reservation,
   status: normalizeStatus(reservation.status),
+  extras: normalizeExtras(reservation.extras),
   whatsappMessages: reservation.whatsappMessages || defaultWhatsappMessages,
   workflowEvents: reservation.workflowEvents || [],
 });
 
-const normalizeReservations = (reservations: Reservation[]) => reservations.map(normalizeReservation);
+const normalizeReservations = (reservations: Reservation[]) => {
+  const seenIds = new Set<string>();
+
+  return reservations.map((reservation) => {
+    const normalizedReservation = normalizeReservation(reservation);
+
+    if (!seenIds.has(normalizedReservation.id)) {
+      seenIds.add(normalizedReservation.id);
+      return normalizedReservation;
+    }
+
+    const uniqueId = createBookingId();
+    seenIds.add(uniqueId);
+    return { ...normalizedReservation, id: uniqueId };
+  });
+};
 
 const loadStoredReservations = () => {
   if (typeof window === 'undefined') {
@@ -324,9 +368,36 @@ const createWhatsappMessage = (text: string): WhatsappMessage => ({
   createdAt: new Date().toISOString(),
 });
 
+const loadInitialBookingState = () => {
+  const loadedReservations = loadStoredReservations();
+
+  return {
+    reservations: loadedReservations,
+    selectedId: loadedReservations[0]?.id || '',
+  };
+};
+
+function createBookingId() {
+  const randomId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().slice(0, 8).toUpperCase()
+      : `${Date.now()}`;
+
+  return `AT-${randomId}`;
+}
+
+const hasAcceptedRequiredFields = (reservation: Pick<Reservation, 'pickupTime' | 'returnTime' | 'price'>) =>
+  reservation.pickupTime.trim() !== '' && reservation.returnTime.trim() !== '' && reservation.price !== null;
+
+const hasAcceptedRequiredFormFields = (form: ReservationForm) =>
+  form.pickupTime.trim() !== '' && form.returnTime.trim() !== '' && form.price.trim() !== '';
+
+const acceptedValidationMessage = 'Συμπλήρωσε ώρα παραλαβής, ώρα επιστροφής και τιμή πριν κάνεις ACCEPTED.';
+
 export default function BookingsManager() {
-  const [reservations, setReservations] = useState<Reservation[]>(() => loadStoredReservations());
-  const [selectedId, setSelectedId] = useState(() => loadStoredReservations()[0]?.id || '');
+  const [bookingState] = useState(loadInitialBookingState);
+  const [reservations, setReservations] = useState<Reservation[]>(bookingState.reservations);
+  const [selectedId, setSelectedId] = useState(bookingState.selectedId);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof statuses)[number]>('ALL');
   const [showNewModal, setShowNewModal] = useState(false);
@@ -424,8 +495,13 @@ export default function BookingsManager() {
   };
 
   const saveMockReservation = () => {
+    if (form.status === 'ACCEPTED' && !hasAcceptedRequiredFormFields(form)) {
+      window.alert(acceptedValidationMessage);
+      return;
+    }
+
     const nextReservation: Reservation = {
-      id: `AT-${5821 + reservations.length}`,
+      id: createBookingId(),
       phoneWhatsapp: form.phoneWhatsapp.replace(/\s+/g, ''),
       name: form.name.trim() || 'New Customer',
       vehicleGroup: form.vehicleGroup,
@@ -442,6 +518,7 @@ export default function BookingsManager() {
       licenceFront: 'empty',
       licenceBack: 'empty',
       notes: form.notes,
+      extras: normalizeExtras(form.extras),
       whatsappMessages: defaultWhatsappMessages,
       workflowEvents: [],
     };
@@ -452,19 +529,19 @@ export default function BookingsManager() {
   };
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col gap-1.5 text-white">
-      <div className="flex flex-shrink-0 flex-col gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.018] px-2 py-1.5 md:flex-row md:items-center">
-        <h2 className="mr-1 whitespace-nowrap text-sm font-semibold text-white">Κρατήσεις</h2>
+    <div className="relative flex h-full min-h-0 flex-col gap-1 text-white">
+      <div className="flex flex-shrink-0 flex-col gap-1 rounded-lg border border-white/[0.05] bg-white/[0.016] px-2 py-1 md:flex-row md:items-center">
+        <h2 className="mr-1 whitespace-nowrap text-[13px] font-semibold text-white">Κρατήσεις</h2>
         <input
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
           placeholder="Search phone, name, group, agency, hotel..."
-          className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs text-white outline-none transition duration-200 focus:border-sky-300/60 focus:ring-2 focus:ring-sky-400/10"
+          className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-white outline-none transition duration-200 focus:border-sky-300/60 focus:ring-2 focus:ring-sky-400/10"
         />
         <select
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value as (typeof statuses)[number])}
-          className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs text-white outline-none transition duration-200 focus:border-sky-300/60"
+          className="rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-white outline-none transition duration-200 focus:border-sky-300/60"
         >
           {statuses.map((status) => (
             <option key={status} value={status}>
@@ -483,7 +560,7 @@ export default function BookingsManager() {
             });
             setShowNewModal(true);
           }}
-          className="rounded-lg border border-sky-300/20 bg-sky-300/10 px-3 py-1 text-xs font-semibold text-sky-100 transition duration-200 hover:-translate-y-0.5 hover:border-sky-200/35 hover:bg-sky-300/15"
+          className="shrink-0 rounded-lg border border-sky-300/25 bg-sky-300/12 px-3 py-1 text-xs font-bold text-sky-100 transition duration-200 hover:-translate-y-0.5 hover:border-sky-200/40 hover:bg-sky-300/18"
         >
           + Νέα Κράτηση
         </button>
@@ -507,6 +584,7 @@ export default function BookingsManager() {
                   'Price',
                   'Status',
                   'Send Return',
+                  'Extras',
                   'Licence Front',
                   'Licence Back',
                 ].map((column) => (
@@ -542,6 +620,7 @@ export default function BookingsManager() {
                     <td className="whitespace-nowrap px-2 py-1 text-right font-semibold text-white">{money(reservation.price)}</td>
                     <td className="whitespace-nowrap px-2 py-1"><StatusBadge status={reservation.status} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><BooleanBadge active={reservation.sendReturn} /></td>
+                    <td className="whitespace-nowrap px-2 py-1"><ExtrasBadges extras={reservation.extras} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={reservation.licenceFront} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={reservation.licenceBack} /></td>
                   </tr>
@@ -601,6 +680,11 @@ function ReservationInspector({
   };
 
   const saveDraft = () => {
+    if (draft.status === 'ACCEPTED' && !hasAcceptedRequiredFields(draft)) {
+      window.alert(acceptedValidationMessage);
+      return;
+    }
+
     onUpdate(draft);
   };
 
@@ -624,6 +708,11 @@ function ReservationInspector({
   };
 
   const updateStatus = (status: ReservationStatus) => {
+    if (status === 'ACCEPTED' && !hasAcceptedRequiredFields(draft)) {
+      window.alert(acceptedValidationMessage);
+      return;
+    }
+
     const patch: Partial<Reservation> = { status };
 
     if (status === 'ACCEPTED' && draft.status !== 'ACCEPTED') {
@@ -650,10 +739,11 @@ function ReservationInspector({
     { label: 'Save changes', tone: 'save', onClick: saveDraft },
     { label: 'Delete booking', tone: 'delete', onClick: onDelete },
   ];
+  const hasExtras = draft.extras.babySeat || draft.extras.booster || draft.extras.infantSeat;
 
   return (
-    <section className="min-h-0 flex-1 rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-2.5 shadow-[0_18px_55px_rgba(0,0,0,0.22)]">
-      <div className="grid h-full min-h-0 gap-2 xl:grid-cols-[minmax(390px,1.2fr)_minmax(250px,0.75fr)_minmax(230px,0.58fr)]">
+    <section className="min-h-0 flex-1 rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-2 shadow-[0_18px_55px_rgba(0,0,0,0.22)]">
+      <div className="grid h-full min-h-0 gap-1.5 xl:grid-cols-[minmax(390px,1.2fr)_minmax(250px,0.75fr)_minmax(230px,0.58fr)]">
         <Panel title="Reservation record" subtitle={reservation.id}>
           <div className="grid gap-1 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
             <div className="grid gap-1">
@@ -681,6 +771,12 @@ function ReservationInspector({
               <EditableCompactInput label="Return Time" value={draft.returnTime} placeholder="18:00" onChange={(value) => updateDraft({ returnTime: value })} />
               <EditableCompactInput label="Price" type="number" value={draft.price === null ? '' : String(draft.price)} onChange={(value) => updateDraft({ price: value === '' ? null : Number(value) || null })} />
               <StatusPillSelector value={draft.status} onChange={updateStatus} />
+              {hasExtras ? (
+                <ExtrasToggleGroup
+                  extras={draft.extras}
+                  onChange={(extras) => updateDraft({ extras })}
+                />
+              ) : null}
             </div>
           </div>
         </Panel>
@@ -698,6 +794,24 @@ function ReservationInspector({
               className="min-h-[74px] resize-none rounded-lg border border-white/[0.065] bg-black/25 px-2.5 py-1.5 text-[12px] leading-5 text-zinc-100 outline-none transition focus:border-sky-300/45"
             />
           </label>
+          <div className="mt-1.5 grid gap-1.5 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+            {actions.map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                onClick={action.onClick}
+                className={`h-8 rounded-lg border px-2.5 text-left text-[11px] font-bold tracking-[0.01em] transition duration-200 hover:-translate-y-0.5 ${
+                  action.tone === 'reminder'
+                    ? 'border-cyan-300/35 bg-cyan-400/14 text-cyan-50 hover:bg-cyan-400/20'
+                    : action.tone === 'save'
+                      ? 'border-emerald-300/35 bg-emerald-400/14 text-emerald-50 hover:bg-emerald-400/20'
+                      : 'border-rose-300/35 bg-rose-400/12 text-rose-100 hover:bg-rose-400/18'
+                }`}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
         </Panel>
 
         <Panel title="Workflow & WhatsApp" subtitle={draft.phoneWhatsapp}>
@@ -706,7 +820,7 @@ function ReservationInspector({
               <p className="text-[11px] font-bold text-zinc-100">WhatsApp messages</p>
               <span className="text-[10px] text-zinc-500">mock</span>
             </div>
-            <div className="grid gap-1 pr-1">
+            <div className="grid max-h-28 gap-1 overflow-auto pr-1">
               {(draft.whatsappMessages || defaultWhatsappMessages).map((message) => (
                 <div key={message.id} className="rounded-md border border-white/[0.045] bg-white/[0.025] px-2 py-1.5">
                   <p className="text-[10px] font-semibold text-sky-200">{message.from}</p>
@@ -733,7 +847,7 @@ function ReservationInspector({
               <p className="text-[11px] font-bold text-zinc-100">Workflow log</p>
               <span className="text-[10px] text-zinc-500">local</span>
             </div>
-            <div className="grid gap-1">
+            <div className="grid max-h-24 gap-1 overflow-auto pr-1">
               {(draft.workflowEvents || []).length > 0 ? (
                 (draft.workflowEvents || []).map((event) => (
                   <div key={event.id} className="rounded-md border border-white/[0.045] bg-white/[0.025] px-2 py-1.5 text-[11px] leading-4 text-zinc-300">
@@ -748,24 +862,6 @@ function ReservationInspector({
             </div>
           </div>
 
-          <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-            {actions.map((action) => (
-              <button
-                key={action.label}
-                type="button"
-                onClick={action.onClick}
-                className={`h-8 rounded-lg border px-2.5 text-left text-[11px] font-bold tracking-[0.01em] transition duration-200 hover:-translate-y-0.5 ${
-                  action.tone === 'reminder'
-                    ? 'border-cyan-300/35 bg-cyan-400/14 text-cyan-50 hover:bg-cyan-400/20'
-                    : action.tone === 'save'
-                      ? 'border-emerald-300/35 bg-emerald-400/14 text-emerald-50 hover:bg-emerald-400/20'
-                      : 'border-rose-300/35 bg-rose-400/12 text-rose-100 hover:bg-rose-400/18'
-                }`}
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
         </Panel>
       </div>
     </section>
@@ -871,7 +967,23 @@ function NewReservationModal({
             <Field label="Price">
               <input type="number" value={form.price} onChange={(event) => updateForm({ price: event.target.value })} className={modalFieldClass} placeholder="0.00" />
             </Field>
-            <StatusPillSelector value={form.status} onChange={(status) => updateForm({ status })} />
+            <StatusPillSelector
+              value={form.status}
+              onChange={(status) => {
+                if (status === 'ACCEPTED' && !hasAcceptedRequiredFormFields(form)) {
+                  window.alert(acceptedValidationMessage);
+                  return;
+                }
+
+                updateForm({ status });
+              }}
+            />
+            <div className="sm:col-span-2">
+              <ExtrasToggleGroup
+                extras={form.extras}
+                onChange={(extras) => updateForm({ extras })}
+              />
+            </div>
             <div className="sm:col-span-2">
               <Field label="Notes">
                 <textarea value={form.notes} onChange={(event) => updateForm({ notes: event.target.value })} className={`${modalFieldClass} min-h-[96px] resize-none`} />
@@ -942,7 +1054,7 @@ function StatusPillSelector({
   return (
     <div className="grid gap-1 rounded-md border border-white/[0.045] bg-black/20 px-2 py-1.5">
       <span className="text-[10px] font-semibold text-zinc-400">Status</span>
-      <div className="grid grid-cols-2 gap-1">
+      <div className="grid grid-cols-3 gap-1">
         {(['PENDING', 'ACCEPTED', 'REJECTED'] as ReservationStatus[]).map((status) => (
           <button
             key={status}
@@ -1054,6 +1166,74 @@ function BooleanBadge({ active }: { active: boolean }) {
   );
 }
 
+function ExtrasBadges({ extras }: { extras: BookingExtras }) {
+  const selectedExtras = [
+    extras.babySeat ? 'Baby Seat' : null,
+    extras.booster ? 'Booster' : null,
+    extras.infantSeat ? 'Infant' : null,
+  ].filter(Boolean);
+
+  if (selectedExtras.length === 0) {
+    return <span className="text-[11px] font-semibold text-zinc-600">-</span>;
+  }
+
+  return (
+    <span className="inline-flex flex-wrap gap-1">
+      {selectedExtras.map((extra) => (
+        <span
+          key={extra}
+          className="rounded-md border border-amber-300/35 bg-amber-300/14 px-1.5 py-0.5 text-[10px] font-bold text-amber-100"
+        >
+          {extra}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function ExtrasToggleGroup({
+  extras,
+  onChange,
+}: {
+  extras: BookingExtras;
+  onChange: (extras: BookingExtras) => void;
+}) {
+  const options: Array<{ key: keyof BookingExtras; label: string }> = [
+    { key: 'babySeat', label: 'Baby Seat' },
+    { key: 'booster', label: 'Booster' },
+    { key: 'infantSeat', label: 'Infant' },
+  ];
+
+  return (
+    <div className="rounded-lg border border-amber-300/20 bg-amber-300/[0.055] p-2">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-amber-100">Extras</span>
+        <ExtrasBadges extras={extras} />
+      </div>
+      <div className="grid gap-1 sm:grid-cols-3">
+        {options.map((option) => {
+          const isActive = extras[option.key];
+
+          return (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => onChange({ ...extras, [option.key]: !isActive })}
+              className={`rounded-lg border px-2 py-1.5 text-left text-[11px] font-bold transition ${
+                isActive
+                  ? 'border-amber-300 bg-amber-300/18 text-amber-50 shadow-[0_0_14px_rgba(251,191,36,0.12)]'
+                  : 'border-white/[0.08] bg-black/20 text-zinc-300 hover:border-amber-300/35 hover:text-amber-100'
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function LicenceBadge({ state }: { state: LicenceState }) {
   return (
     <span
@@ -1070,12 +1250,12 @@ function LicenceBadge({ state }: { state: LicenceState }) {
 
 function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
-    <div className="min-h-0 rounded-lg border border-white/[0.055] bg-white/[0.022] p-2">
-      <div className="flex items-start justify-between gap-2 border-b border-white/[0.045] pb-1.5">
+    <div className="min-h-0 rounded-lg border border-white/[0.055] bg-white/[0.022] p-1.5">
+      <div className="flex items-start justify-between gap-2 border-b border-white/[0.045] pb-1">
         <p className="text-[11px] font-bold text-zinc-100">{title}</p>
         <p className="truncate text-[10px] font-medium text-zinc-500">{subtitle}</p>
       </div>
-      <div className="mt-2 grid gap-1">{children}</div>
+      <div className="mt-1.5 grid gap-1">{children}</div>
     </div>
   );
 }
