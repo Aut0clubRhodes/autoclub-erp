@@ -2,6 +2,14 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import {
+  createReservation,
+  deleteReservation,
+  fetchReservations,
+  updateReservation,
+  type ReservationRequestPayload,
+  type ReservationRequestRecord,
+} from '@/lib/reservationsApi';
 
 type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
 type LicenceState = 'uploaded' | 'empty';
@@ -23,19 +31,21 @@ type WorkflowEvent = {
 type BookingExtras = {
   baby_seat_qty: number;
   booster_qty: number;
-  infant_seat_qty: number;
+  infant_qty: number;
 };
 
 type LegacyBookingExtras = Partial<BookingExtras> & {
   babySeat?: unknown;
   booster?: unknown;
   infantSeat?: unknown;
+  infant_seat_qty?: unknown;
 };
 
 type Reservation = {
   id: string;
   phoneWhatsapp: string;
   name: string;
+  email: string;
   vehicleGroup: VehicleGroup;
   agency: string;
   representative: string;
@@ -58,6 +68,7 @@ type Reservation = {
 type ReservationForm = {
   phoneWhatsapp: string;
   name: string;
+  email: string;
   vehicleGroup: VehicleGroup;
   agency: string;
   representative: string;
@@ -106,16 +117,16 @@ const defaultWhatsappMessages: WhatsappMessage[] = [
   { id: 'msg-default-2', from: 'Customer', text: 'Can I send the licence photos here?', createdAt: 'mock' },
   { id: 'msg-default-3', from: 'AutoClub', text: 'Yes, please send front and back side of the licence.', createdAt: 'mock' },
 ];
-const bookingsStorageKey = 'autoclub-bookings-v1';
 const emptyExtras: BookingExtras = {
   baby_seat_qty: 0,
   booster_qty: 0,
-  infant_seat_qty: 0,
+  infant_qty: 0,
 };
 
 const initialForm: ReservationForm = {
   phoneWhatsapp: '',
   name: '',
+  email: '',
   vehicleGroup: 'A',
   agency: fallbackAgencies[0],
   representative: fallbackAgencyRepresentatives[fallbackAgencies[0]][0],
@@ -130,169 +141,6 @@ const initialForm: ReservationForm = {
   extras: emptyExtras,
 };
 
-const initialReservations: Reservation[] = [
-  {
-    id: 'AT-5821',
-    phoneWhatsapp: '+306941123011',
-    name: 'Nikos Papadopoulos',
-    vehicleGroup: 'A',
-    agency: 'Drivealia',
-    representative: 'Maria K.',
-    hotelRoom: 'Mitsis Faliraki / 214',
-    pickupDate: '2026-06-03',
-    returnDate: '2026-06-10',
-    pickupTime: '09:30',
-    returnTime: '18:00',
-    price: 420,
-    status: 'PENDING',
-    sendReturn: false,
-    licenceFront: 'empty',
-    licenceBack: 'empty',
-    notes: 'Airport pickup. Needs WhatsApp confirmation before 18:00.',
-    extras: { baby_seat_qty: 2, booster_qty: 0, infant_seat_qty: 0 },
-  },
-  {
-    id: 'AT-5822',
-    phoneWhatsapp: '+393332219088',
-    name: 'Maria Rossi',
-    vehicleGroup: 'B',
-    agency: 'Apollo / Cardlink',
-    representative: 'Sofia',
-    hotelRoom: 'Esperos Palace / 308',
-    pickupDate: '2026-06-12',
-    returnDate: '2026-06-18',
-    pickupTime: '11:00',
-    returnTime: '10:00',
-    price: 510,
-    status: 'ACCEPTED',
-    sendReturn: true,
-    licenceFront: 'empty',
-    licenceBack: 'empty',
-    notes: 'Child seat requested. Prefer FIAT 500 if available.',
-    extras: { baby_seat_qty: 0, booster_qty: 1, infant_seat_qty: 0 },
-  },
-  {
-    id: 'AT-5823',
-    phoneWhatsapp: '+447700900123',
-    name: 'George Smith',
-    vehicleGroup: 'H2',
-    agency: 'Direct WhatsApp',
-    representative: 'Nikos',
-    hotelRoom: 'Lindos Blu / 112',
-    pickupDate: '2026-07-01',
-    returnDate: '2026-07-14',
-    pickupTime: '08:45',
-    returnTime: '19:30',
-    price: 1280,
-    status: 'ACCEPTED',
-    sendReturn: true,
-    licenceFront: 'empty',
-    licenceBack: 'empty',
-    notes: 'Full payment on arrival. Long booking, keep compact SUV.',
-    extras: emptyExtras,
-  },
-  {
-    id: 'AT-5824',
-    phoneWhatsapp: '+34600112223',
-    name: 'Elena Garcia',
-    vehicleGroup: 'A',
-    agency: 'Hotel Desk',
-    representative: 'George',
-    hotelRoom: 'Casa Cook / 55',
-    pickupDate: '2026-05-28',
-    returnDate: '2026-05-31',
-    pickupTime: '12:15',
-    returnTime: '16:00',
-    price: 180,
-    status: 'REJECTED',
-    sendReturn: false,
-    licenceFront: 'empty',
-    licenceBack: 'empty',
-    notes: 'Rejected due to no availability in requested group.',
-    extras: emptyExtras,
-  },
-  {
-    id: 'AT-5825',
-    phoneWhatsapp: '+306978814482',
-    name: 'Dimitris Ioannou',
-    vehicleGroup: 'K1',
-    agency: 'Walk-in',
-    representative: 'Office',
-    hotelRoom: 'Local customer / -',
-    pickupDate: '2026-05-10',
-    returnDate: '2026-05-16',
-    pickupTime: '10:00',
-    returnTime: '10:00',
-    price: 360,
-    status: 'ACCEPTED',
-    sendReturn: true,
-    licenceFront: 'empty',
-    licenceBack: 'empty',
-    notes: 'Returned without damage. Fuel OK.',
-    extras: emptyExtras,
-  },
-  {
-    id: 'AT-5826',
-    phoneWhatsapp: '+4915144557821',
-    name: 'Hans Muller',
-    vehicleGroup: 'D',
-    agency: 'TUI',
-    representative: 'Elena',
-    hotelRoom: 'Rodos Palace / 621',
-    pickupDate: '2026-08-04',
-    returnDate: '2026-08-15',
-    pickupTime: '14:00',
-    returnTime: '09:00',
-    price: 1540,
-    status: 'PENDING',
-    sendReturn: false,
-    licenceFront: 'empty',
-    licenceBack: 'empty',
-    notes: 'Needs confirmation once group D is assigned.',
-    extras: { baby_seat_qty: 0, booster_qty: 0, infant_seat_qty: 1 },
-  },
-  {
-    id: 'AT-5827',
-    phoneWhatsapp: '+33618452290',
-    name: 'Camille Laurent',
-    vehicleGroup: 'H5',
-    agency: 'Drivealia',
-    representative: 'Maria K.',
-    hotelRoom: 'Amada Colossos / 147',
-    pickupDate: '2026-07-22',
-    returnDate: '2026-07-29',
-    pickupTime: '17:30',
-    returnTime: '12:00',
-    price: 790,
-    status: 'ACCEPTED',
-    sendReturn: true,
-    licenceFront: 'empty',
-    licenceBack: 'empty',
-    notes: 'Representative requested WhatsApp copy after acceptance.',
-    extras: emptyExtras,
-  },
-  {
-    id: 'AT-5828',
-    phoneWhatsapp: '+31644120091',
-    name: 'Jeroen Van Dijk',
-    vehicleGroup: 'B',
-    agency: 'Apollo / Cardlink',
-    representative: 'Dimitris',
-    hotelRoom: 'Elysium / 402',
-    pickupDate: '2026-09-05',
-    returnDate: '2026-09-12',
-    pickupTime: '13:20',
-    returnTime: '11:30',
-    price: 640,
-    status: 'PENDING',
-    sendReturn: false,
-    licenceFront: 'empty',
-    licenceBack: 'empty',
-    notes: 'Payment link pending. Ask for licence photos after confirmation.',
-    extras: emptyExtras,
-  },
-];
-
 const money = (value: number | null) =>
   value === null ? '' : `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -303,6 +151,16 @@ const withCurrentOption = (options: string[], current: string) =>
 
 const modalFieldClass =
   'w-full rounded-[14px] border border-white/[0.08] bg-zinc-950/80 px-3.5 py-2.5 text-sm font-semibold text-zinc-50 outline-none transition placeholder:text-zinc-600 focus:border-sky-300/55 focus:bg-zinc-950 focus:ring-2 focus:ring-sky-400/10';
+
+const openNativeDatePicker = (input: HTMLInputElement) => {
+  if (input.type !== 'date') return;
+
+  try {
+    input.showPicker?.();
+  } catch {
+    return;
+  }
+};
 
 const normalizeStatus = (status: unknown): ReservationStatus =>
   status === 'ACCEPTED' ? 'ACCEPTED' : status === 'REJECTED' ? 'REJECTED' : 'PENDING';
@@ -317,59 +175,60 @@ const clampExtraQuantity = (value: unknown) => {
 const normalizeExtras = (extras?: LegacyBookingExtras): BookingExtras => ({
   baby_seat_qty: clampExtraQuantity(extras?.baby_seat_qty ?? (extras?.babySeat ? 1 : 0)),
   booster_qty: clampExtraQuantity(extras?.booster_qty ?? (extras?.booster ? 1 : 0)),
-  infant_seat_qty: clampExtraQuantity(extras?.infant_seat_qty ?? (extras?.infantSeat ? 1 : 0)),
+  infant_qty: clampExtraQuantity(extras?.infant_qty ?? extras?.infant_seat_qty ?? (extras?.infantSeat ? 1 : 0)),
 });
 
 const hasSelectedExtras = (extras: BookingExtras) =>
-  extras.baby_seat_qty > 0 || extras.booster_qty > 0 || extras.infant_seat_qty > 0;
+  extras.baby_seat_qty > 0 || extras.booster_qty > 0 || extras.infant_qty > 0;
 
-const normalizeReservation = (reservation: Reservation): Reservation => ({
-  ...reservation,
-  status: normalizeStatus(reservation.status),
-  extras: normalizeExtras(reservation.extras),
-  whatsappMessages: reservation.whatsappMessages || defaultWhatsappMessages,
-  workflowEvents: reservation.workflowEvents || [],
+const reservationRecordToReservation = (record: ReservationRequestRecord): Reservation => ({
+  id: String(record.id),
+  phoneWhatsapp: record.phone || '',
+  name: record.customer_name || '',
+  email: record.email || '',
+  vehicleGroup: vehicleGroups.includes(record.vehicle_group as VehicleGroup) ? (record.vehicle_group as VehicleGroup) : 'A',
+  agency: record.agency || '',
+  representative: record.representative || '',
+  hotelRoom: record.hotel_room || '',
+  pickupDate: record.pickup_date || '',
+  returnDate: record.return_date || '',
+  pickupTime: record.pickup_time || '',
+  returnTime: record.return_time || '',
+  price: record.price === null || record.price === undefined ? null : Number(record.price),
+  status: normalizeStatus(record.status),
+  sendReturn: Boolean(record.send_return),
+  licenceFront: 'empty',
+  licenceBack: 'empty',
+  notes: record.notes || '',
+  extras: normalizeExtras({
+    baby_seat_qty: record.baby_seat_qty || 0,
+    booster_qty: record.booster_qty || 0,
+    infant_qty: record.infant_qty || 0,
+  }),
+  whatsappMessages: defaultWhatsappMessages,
+  workflowEvents: [],
 });
 
-const normalizeReservations = (reservations: Reservation[]) => {
-  const seenIds = new Set<string>();
-
-  return reservations.map((reservation) => {
-    const normalizedReservation = normalizeReservation(reservation);
-
-    if (!seenIds.has(normalizedReservation.id)) {
-      seenIds.add(normalizedReservation.id);
-      return normalizedReservation;
-    }
-
-    const uniqueId = createBookingId();
-    seenIds.add(uniqueId);
-    return { ...normalizedReservation, id: uniqueId };
-  });
-};
-
-const loadStoredReservations = () => {
-  if (typeof window === 'undefined') {
-    return normalizeReservations(initialReservations);
-  }
-
-  try {
-    const storedBookings = window.localStorage.getItem(bookingsStorageKey);
-    if (!storedBookings) {
-      return normalizeReservations(initialReservations);
-    }
-
-    const parsedBookings: unknown = JSON.parse(storedBookings);
-    if (!Array.isArray(parsedBookings)) {
-      return normalizeReservations(initialReservations);
-    }
-
-    return normalizeReservations(parsedBookings as Reservation[]);
-  } catch (error) {
-    console.warn('Bookings localStorage load warning', error);
-    return normalizeReservations(initialReservations);
-  }
-};
+const reservationToPayload = (reservation: Reservation): ReservationRequestPayload => ({
+  phone: reservation.phoneWhatsapp.replace(/\s+/g, ''),
+  email: reservation.email.trim() || null,
+  customer_name: reservation.name.trim() || 'New Customer',
+  hotel_room: reservation.hotelRoom.trim() || null,
+  vehicle_group: reservation.vehicleGroup,
+  agency: reservation.agency || null,
+  representative: reservation.representative || null,
+  pickup_date: reservation.pickupDate || null,
+  return_date: reservation.returnDate || null,
+  pickup_time: reservation.pickupTime || null,
+  return_time: reservation.returnTime || null,
+  price: reservation.price,
+  status: reservation.status,
+  send_return: reservation.sendReturn,
+  baby_seat_qty: reservation.extras.baby_seat_qty,
+  booster_qty: reservation.extras.booster_qty,
+  infant_qty: reservation.extras.infant_qty,
+  notes: reservation.notes || null,
+});
 
 const createWorkflowEvent = (text: string): WorkflowEvent => ({
   id: `event-${Date.now()}-${Math.round(Math.random() * 1000)}`,
@@ -384,24 +243,6 @@ const createWhatsappMessage = (text: string): WhatsappMessage => ({
   createdAt: new Date().toISOString(),
 });
 
-const loadInitialBookingState = () => {
-  const loadedReservations = loadStoredReservations();
-
-  return {
-    reservations: loadedReservations,
-    selectedId: loadedReservations[0]?.id || '',
-  };
-};
-
-function createBookingId() {
-  const randomId =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID().slice(0, 8).toUpperCase()
-      : `${Date.now()}`;
-
-  return `AT-${randomId}`;
-}
-
 const hasAcceptedRequiredFields = (reservation: Pick<Reservation, 'pickupTime' | 'returnTime' | 'price'>) =>
   reservation.pickupTime.trim() !== '' && reservation.returnTime.trim() !== '' && reservation.price !== null;
 
@@ -411,19 +252,34 @@ const hasAcceptedRequiredFormFields = (form: ReservationForm) =>
 const acceptedValidationMessage = 'Συμπλήρωσε ώρα παραλαβής, ώρα επιστροφής και τιμή πριν κάνεις ACCEPTED.';
 
 export default function BookingsManager() {
-  const [bookingState] = useState(loadInitialBookingState);
-  const [reservations, setReservations] = useState<Reservation[]>(bookingState.reservations);
-  const [selectedId, setSelectedId] = useState(bookingState.selectedId);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [selectedId, setSelectedId] = useState('');
+  const [isLoadingReservations, setIsLoadingReservations] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof statuses)[number]>('ALL');
   const [showNewModal, setShowNewModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [form, setForm] = useState<ReservationForm>(initialForm);
   const [agencyRows, setAgencyRows] = useState<AgencyRow[]>([]);
   const [representativeRows, setRepresentativeRows] = useState<RepresentativeRow[]>([]);
 
+  const loadReservations = async () => {
+    setIsLoadingReservations(true);
+    const records = await fetchReservations();
+    const nextReservations = records.map(reservationRecordToReservation);
+
+    setReservations(nextReservations);
+    setSelectedId((currentSelectedId) =>
+      nextReservations.some((reservation) => reservation.id === currentSelectedId)
+        ? currentSelectedId
+        : nextReservations[0]?.id || ''
+    );
+    setIsLoadingReservations(false);
+  };
+
   useEffect(() => {
-    window.localStorage.setItem(bookingsStorageKey, JSON.stringify(normalizeReservations(reservations)));
-  }, [reservations]);
+    void Promise.resolve().then(loadReservations);
+  }, []);
 
   useEffect(() => {
     const loadAgencyData = async () => {
@@ -472,6 +328,7 @@ export default function BookingsManager() {
         !query ||
         reservation.phoneWhatsapp.toLowerCase().includes(query) ||
         reservation.name.toLowerCase().includes(query) ||
+        reservation.email.toLowerCase().includes(query) ||
         reservation.vehicleGroup.toLowerCase().includes(query) ||
         reservation.agency.toLowerCase().includes(query) ||
         reservation.representative.toLowerCase().includes(query) ||
@@ -486,19 +343,42 @@ export default function BookingsManager() {
     filteredReservations[0] ||
     reservations[0];
 
-  const updateSelectedReservation = (patch: Partial<Reservation>) => {
+  const updateSelectedReservation = async (patch: Partial<Reservation>) => {
     if (!selectedReservation) return;
+
+    const nextReservation = { ...selectedReservation, ...patch };
+    const updatedRecord = await updateReservation(selectedReservation.id, reservationToPayload(nextReservation));
+
+    if (!updatedRecord) {
+      window.alert('Η κράτηση δεν ενημερώθηκε.');
+      return;
+    }
+
+    const savedReservation = {
+      ...reservationRecordToReservation(updatedRecord),
+      whatsappMessages: nextReservation.whatsappMessages,
+      workflowEvents: nextReservation.workflowEvents,
+      licenceFront: nextReservation.licenceFront,
+      licenceBack: nextReservation.licenceBack,
+    };
 
     setReservations((currentReservations) =>
       currentReservations.map((reservation) =>
-        reservation.id === selectedReservation.id ? { ...reservation, ...patch } : reservation
+        reservation.id === selectedReservation.id ? savedReservation : reservation
       )
     );
   };
 
-  const deleteSelectedReservation = () => {
+  const deleteSelectedReservation = async () => {
     if (!selectedReservation) return;
     if (!window.confirm('Να διαγραφεί αυτή η κράτηση;')) return;
+
+    const deleted = await deleteReservation(selectedReservation.id);
+
+    if (!deleted) {
+      window.alert('Η κράτηση δεν διαγράφηκε.');
+      return;
+    }
 
     setReservations((currentReservations) => {
       const selectedIndex = currentReservations.findIndex((reservation) => reservation.id === selectedReservation.id);
@@ -510,16 +390,17 @@ export default function BookingsManager() {
     });
   };
 
-  const saveMockReservation = () => {
+  const saveReservation = async () => {
     if (form.status === 'ACCEPTED' && !hasAcceptedRequiredFormFields(form)) {
       window.alert(acceptedValidationMessage);
       return;
     }
 
-    const nextReservation: Reservation = {
-      id: createBookingId(),
+    const reservationDraft: Reservation = {
+      id: '',
       phoneWhatsapp: form.phoneWhatsapp.replace(/\s+/g, ''),
       name: form.name.trim() || 'New Customer',
+      email: form.email.trim(),
       vehicleGroup: form.vehicleGroup,
       agency: form.agency,
       representative: form.representative,
@@ -538,6 +419,14 @@ export default function BookingsManager() {
       whatsappMessages: defaultWhatsappMessages,
       workflowEvents: [],
     };
+    const createdRecord = await createReservation(reservationToPayload(reservationDraft));
+
+    if (!createdRecord) {
+      window.alert('Η κράτηση δεν αποθηκεύτηκε.');
+      return;
+    }
+
+    const nextReservation = reservationRecordToReservation(createdRecord);
 
     setReservations((current) => [nextReservation, ...current]);
     setSelectedId(nextReservation.id);
@@ -565,6 +454,13 @@ export default function BookingsManager() {
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          onClick={() => setShowHistoryModal(true)}
+          className="shrink-0 rounded-lg border border-violet-300/25 bg-violet-300/10 px-3 py-1 text-xs font-bold text-violet-100 transition duration-200 hover:-translate-y-0.5 hover:border-violet-200/40 hover:bg-violet-300/16"
+        >
+          Ιστορικό Κρατήσεων
+        </button>
         <button
           type="button"
           onClick={() => {
@@ -611,6 +507,20 @@ export default function BookingsManager() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.055]">
+              {isLoadingReservations && (
+                <tr>
+                  <td colSpan={15} className="px-3 py-8 text-center text-sm text-zinc-500">
+                    Φόρτωση κρατήσεων...
+                  </td>
+                </tr>
+              )}
+              {!isLoadingReservations && filteredReservations.length === 0 && (
+                <tr>
+                  <td colSpan={15} className="px-3 py-8 text-center text-sm text-zinc-500">
+                    Δεν υπάρχουν κρατήσεις.
+                  </td>
+                </tr>
+              )}
               {filteredReservations.map((reservation) => {
                 const isSelected = selectedReservation.id === reservation.id;
 
@@ -669,7 +579,18 @@ export default function BookingsManager() {
           representativesByAgency={representativesByAgency}
           onChange={setForm}
           onClose={() => setShowNewModal(false)}
-          onSave={saveMockReservation}
+          onSave={saveReservation}
+        />
+      )}
+
+      {showHistoryModal && (
+        <BookingHistoryModal
+          reservations={reservations}
+          onClose={() => setShowHistoryModal(false)}
+          onSelect={(reservationId) => {
+            setSelectedId(reservationId);
+            setShowHistoryModal(false);
+          }}
         />
       )}
     </div>
@@ -755,11 +676,9 @@ function ReservationInspector({
     { label: 'Save changes', tone: 'save', onClick: saveDraft },
     { label: 'Delete booking', tone: 'delete', onClick: onDelete },
   ];
-  const hasExtras = hasSelectedExtras(draft.extras);
-
   return (
-    <section className="min-h-0 flex-1 rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-2 shadow-[0_18px_55px_rgba(0,0,0,0.22)]">
-      <div className="grid h-full min-h-0 gap-1.5 xl:grid-cols-[minmax(390px,1.2fr)_minmax(250px,0.75fr)_minmax(230px,0.58fr)]">
+    <section className="min-h-0 flex-1 rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-1.5 shadow-[0_18px_55px_rgba(0,0,0,0.22)]">
+      <div className="grid h-full min-h-0 gap-1.5 xl:grid-cols-[minmax(390px,1.12fr)_minmax(300px,0.88fr)_minmax(230px,0.55fr)]">
         <Panel title="Reservation record" subtitle={reservation.id}>
           <div className="grid gap-1 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
             <div className="grid gap-1">
@@ -786,57 +705,60 @@ function ReservationInspector({
               <EditableCompactInput label="Return Date" type="date" value={draft.returnDate} onChange={(value) => updateDraft({ returnDate: value })} />
               <EditableCompactInput label="Return Time" value={draft.returnTime} placeholder="18:00" onChange={(value) => updateDraft({ returnTime: value })} />
               <EditableCompactInput label="Price" type="number" value={draft.price === null ? '' : String(draft.price)} onChange={(value) => updateDraft({ price: value === '' ? null : Number(value) || null })} />
+              <EditableCompactInput label="Email" type="email" value={draft.email} onChange={(value) => updateDraft({ email: value })} />
               <StatusPillSelector value={draft.status} onChange={updateStatus} />
-              {hasExtras ? (
-                <ExtrasQuantityGroup
-                  extras={draft.extras}
-                  onChange={(extras) => updateDraft({ extras })}
-                />
-              ) : null}
             </div>
           </div>
         </Panel>
 
         <Panel title="Attachments & notes" subtitle="customer files">
-          <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-            <LicenceCard title="Licence Front" state={draft.licenceFront} />
-            <LicenceCard title="Licence Back" state={draft.licenceBack} />
-          </div>
-          <label className="mt-1.5 grid gap-1 text-[11px] font-semibold text-zinc-500">
-            Notes
-            <textarea
-              value={draft.notes}
-              onChange={(event) => updateDraft({ notes: event.target.value })}
-              className="min-h-[74px] resize-none rounded-lg border border-white/[0.065] bg-black/25 px-2.5 py-1.5 text-[12px] leading-5 text-zinc-100 outline-none transition focus:border-sky-300/45"
-            />
-          </label>
-          <div className="mt-1.5 grid gap-1.5 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
-            {actions.map((action) => (
-              <button
-                key={action.label}
-                type="button"
-                onClick={action.onClick}
-                className={`h-8 rounded-lg border px-2.5 text-left text-[11px] font-bold tracking-[0.01em] transition duration-200 hover:-translate-y-0.5 ${
-                  action.tone === 'reminder'
-                    ? 'border-cyan-300/35 bg-cyan-400/14 text-cyan-50 hover:bg-cyan-400/20'
-                    : action.tone === 'save'
-                      ? 'border-emerald-300/35 bg-emerald-400/14 text-emerald-50 hover:bg-emerald-400/20'
-                      : 'border-rose-300/35 bg-rose-400/12 text-rose-100 hover:bg-rose-400/18'
-                }`}
-              >
-                {action.label}
-              </button>
-            ))}
+          <div className="grid gap-1.5 md:grid-cols-2">
+            <div className="grid gap-1.5">
+              <LicenceCard title="Licence Front" state={draft.licenceFront} />
+              <label className="grid gap-1 text-[11px] font-semibold text-zinc-500">
+                Notes
+                <textarea
+                  value={draft.notes}
+                  onChange={(event) => updateDraft({ notes: event.target.value })}
+                  className="min-h-[86px] resize-none rounded-lg border border-white/[0.065] bg-black/25 px-2.5 py-1.5 text-[12px] leading-5 text-zinc-100 outline-none transition focus:border-sky-300/45"
+                />
+              </label>
+            </div>
+            <div className="grid gap-1.5">
+              <LicenceCard title="Licence Back" state={draft.licenceBack} />
+              <ExtrasQuantityGroup
+                extras={draft.extras}
+                onChange={(extras) => updateDraft({ extras })}
+              />
+              <div className="grid gap-1 sm:grid-cols-3 md:grid-cols-1 2xl:grid-cols-3">
+                {actions.map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={action.onClick}
+                    className={`h-7 rounded-lg border px-2 text-left text-[10.5px] font-bold tracking-[0.01em] transition duration-200 hover:-translate-y-0.5 ${
+                      action.tone === 'reminder'
+                        ? 'border-cyan-300/35 bg-cyan-400/14 text-cyan-50 hover:bg-cyan-400/20'
+                        : action.tone === 'save'
+                          ? 'border-emerald-300/35 bg-emerald-400/14 text-emerald-50 hover:bg-emerald-400/20'
+                          : 'border-rose-300/35 bg-rose-400/12 text-rose-100 hover:bg-rose-400/18'
+                    }`}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </Panel>
 
         <Panel title="Workflow & WhatsApp" subtitle={draft.phoneWhatsapp}>
-          <div className="rounded-lg border border-white/[0.055] bg-black/20 p-2">
-            <div className="mb-1.5 flex items-center justify-between">
+          <div className="rounded-lg border border-white/[0.055] bg-black/20 p-1.5">
+            <div className="mb-1 flex items-center justify-between">
               <p className="text-[11px] font-bold text-zinc-100">WhatsApp messages</p>
               <span className="text-[10px] text-zinc-500">mock</span>
             </div>
-            <div className="grid max-h-28 gap-1 overflow-auto pr-1">
+            <div className="grid max-h-24 gap-1 overflow-auto pr-1">
               {(draft.whatsappMessages || defaultWhatsappMessages).map((message) => (
                 <div key={message.id} className="rounded-md border border-white/[0.045] bg-white/[0.025] px-2 py-1.5">
                   <p className="text-[10px] font-semibold text-sky-200">{message.from}</p>
@@ -844,7 +766,7 @@ function ReservationInspector({
                 </div>
               ))}
             </div>
-            <div className="mt-2 flex gap-1.5">
+            <div className="mt-1.5 flex gap-1.5">
               <input
                 placeholder="Write WhatsApp message..."
                 className="min-w-0 flex-1 rounded-lg border border-white/[0.07] bg-zinc-950 px-2 py-1.5 text-[11px] text-white outline-none focus:border-sky-300/50"
@@ -858,18 +780,29 @@ function ReservationInspector({
             </div>
           </div>
 
-          <div className="mt-2 rounded-lg border border-white/[0.055] bg-black/20 p-2">
-            <div className="mb-1.5 flex items-center justify-between">
+          <div className="mt-1.5 rounded-lg border border-white/[0.055] bg-black/20 p-1.5">
+            <div className="mb-1 flex items-center justify-between">
               <p className="text-[11px] font-bold text-zinc-100">Workflow log</p>
               <span className="text-[10px] text-zinc-500">local</span>
             </div>
-            <div className="grid max-h-24 gap-1 overflow-auto pr-1">
+            <div className="grid max-h-20 gap-1 overflow-auto pr-1">
               {(draft.workflowEvents || []).length > 0 ? (
-                (draft.workflowEvents || []).map((event) => (
-                  <div key={event.id} className="rounded-md border border-white/[0.045] bg-white/[0.025] px-2 py-1.5 text-[11px] leading-4 text-zinc-300">
-                    {event.text}
-                  </div>
-                ))
+                (draft.workflowEvents || []).map((event) => {
+                  const eventStyle = getWorkflowEventStyle(event.text);
+
+                  return (
+                    <div key={event.id} className={`rounded-md border px-2 py-1.5 text-[11px] leading-4 ${eventStyle.className}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{event.text}</span>
+                        {eventStyle.badge ? (
+                          <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[8.5px] font-black tracking-wide ${eventStyle.badgeClassName}`}>
+                            {eventStyle.badge}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })
               ) : (
                 <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
                   No workflow events yet.
@@ -937,6 +870,9 @@ function NewReservationModal({
             <Field label="Name">
               <input value={form.name} onChange={(event) => updateForm({ name: event.target.value })} className={modalFieldClass} />
             </Field>
+            <Field label="Email">
+              <input type="email" value={form.email} onChange={(event) => updateForm({ email: event.target.value })} className={modalFieldClass} placeholder="customer@email.com" />
+            </Field>
             <Field label="Vehicle Group">
               <select value={form.vehicleGroup} onChange={(event) => updateForm({ vehicleGroup: event.target.value as VehicleGroup })} className={modalFieldClass}>
                 {vehicleGroups.map((group) => (
@@ -969,13 +905,27 @@ function NewReservationModal({
               <input value={form.hotelRoom} onChange={(event) => updateForm({ hotelRoom: event.target.value })} className={modalFieldClass} />
             </Field>
             <Field label="Pickup Date">
-              <input type="date" value={form.pickupDate} onChange={(event) => updateForm({ pickupDate: event.target.value })} className={modalFieldClass} />
+              <input
+                type="date"
+                value={form.pickupDate}
+                onClick={(event) => openNativeDatePicker(event.currentTarget)}
+                onFocus={(event) => openNativeDatePicker(event.currentTarget)}
+                onChange={(event) => updateForm({ pickupDate: event.target.value })}
+                className={modalFieldClass}
+              />
             </Field>
             <Field label="Pickup Time">
               <input value={form.pickupTime} onChange={(event) => updateForm({ pickupTime: event.target.value })} className={modalFieldClass} placeholder="09:30" />
             </Field>
             <Field label="Return Date">
-              <input type="date" value={form.returnDate} onChange={(event) => updateForm({ returnDate: event.target.value })} className={modalFieldClass} />
+              <input
+                type="date"
+                value={form.returnDate}
+                onClick={(event) => openNativeDatePicker(event.currentTarget)}
+                onFocus={(event) => openNativeDatePicker(event.currentTarget)}
+                onChange={(event) => updateForm({ returnDate: event.target.value })}
+                className={modalFieldClass}
+              />
             </Field>
             <Field label="Return Time">
               <input value={form.returnTime} onChange={(event) => updateForm({ returnTime: event.target.value })} className={modalFieldClass} placeholder="18:00" />
@@ -1022,6 +972,143 @@ function NewReservationModal({
   );
 }
 
+function BookingHistoryModal({
+  reservations,
+  onClose,
+  onSelect,
+}: {
+  reservations: Reservation[];
+  onClose: () => void;
+  onSelect: (reservationId: string) => void;
+}) {
+  const [nameSearch, setNameSearch] = useState('');
+  const [phoneSearch, setPhoneSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  const results = useMemo(() => {
+    const nameQuery = nameSearch.trim().toLowerCase();
+    const phoneQuery = phoneSearch.trim().replace(/\s+/g, '').toLowerCase();
+
+    return reservations.filter((reservation) => {
+      const matchesName = !nameQuery || reservation.name.toLowerCase().includes(nameQuery);
+      const matchesPhone = !phoneQuery || reservation.phoneWhatsapp.toLowerCase().includes(phoneQuery);
+      const matchesFrom = !dateFrom || reservation.returnDate >= dateFrom;
+      const matchesTo = !dateTo || reservation.pickupDate <= dateTo;
+
+      return matchesName && matchesPhone && matchesFrom && matchesTo;
+    });
+  }, [dateFrom, dateTo, nameSearch, phoneSearch, reservations]);
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[86vh] w-[min(980px,95vw)] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,#09111d_0%,#060a11_58%,#03060a_100%)] shadow-[0_32px_110px_rgba(0,0,0,0.62)]">
+        <div className="flex flex-shrink-0 items-start justify-between border-b border-white/10 bg-white/[0.025] px-5 py-4">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-violet-200/75">BOOKINGS</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">Ιστορικό Κρατήσεων</h2>
+            <p className="mt-1 text-xs text-zinc-500">Local/mock reservation search.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white">
+            ×
+          </button>
+        </div>
+
+        <div className="grid flex-shrink-0 gap-2 border-b border-white/[0.06] bg-black/20 p-4 md:grid-cols-4">
+          <Field label="Customer name">
+            <input value={nameSearch} onChange={(event) => setNameSearch(event.target.value)} className={modalFieldClass} placeholder="Name..." />
+          </Field>
+          <Field label="Phone">
+            <input value={phoneSearch} onChange={(event) => setPhoneSearch(event.target.value)} className={modalFieldClass} placeholder="+30..." />
+          </Field>
+          <Field label="Date from">
+            <input
+              type="date"
+              value={dateFrom}
+              onClick={(event) => openNativeDatePicker(event.currentTarget)}
+              onFocus={(event) => openNativeDatePicker(event.currentTarget)}
+              onChange={(event) => setDateFrom(event.target.value)}
+              className={modalFieldClass}
+            />
+          </Field>
+          <Field label="Date to">
+            <input
+              type="date"
+              value={dateTo}
+              onClick={(event) => openNativeDatePicker(event.currentTarget)}
+              onFocus={(event) => openNativeDatePicker(event.currentTarget)}
+              onChange={(event) => setDateTo(event.target.value)}
+              className={modalFieldClass}
+            />
+          </Field>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          <table className="w-full min-w-[760px] text-left text-[12px]">
+            <thead className="sticky top-0 z-10 bg-[#101824] text-[11px] font-semibold text-zinc-200 shadow-[0_1px_0_rgba(255,255,255,0.08)]">
+              <tr>
+                {['Name', 'Phone', 'Pickup date', 'Return date', 'Vehicle group', 'Status', 'Price'].map((column) => (
+                  <th key={column} className="whitespace-nowrap px-2 py-1.5">{column}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.055]">
+              {results.map((reservation) => (
+                <tr
+                  key={reservation.id}
+                  onClick={() => onSelect(reservation.id)}
+                  className="cursor-pointer transition duration-200 hover:bg-sky-300/[0.07]"
+                >
+                  <td className="whitespace-nowrap px-2 py-1.5 font-semibold text-zinc-100">{reservation.name}</td>
+                  <td className="whitespace-nowrap px-2 py-1.5 font-mono text-sky-100">{reservation.phoneWhatsapp}</td>
+                  <td className="whitespace-nowrap px-2 py-1.5 text-zinc-300">{formatDate(reservation.pickupDate)}</td>
+                  <td className="whitespace-nowrap px-2 py-1.5 text-zinc-300">{formatDate(reservation.returnDate)}</td>
+                  <td className="whitespace-nowrap px-2 py-1.5"><VehicleGroupBadge value={reservation.vehicleGroup} /></td>
+                  <td className="whitespace-nowrap px-2 py-1.5"><StatusBadge status={reservation.status} /></td>
+                  <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold text-white">{money(reservation.price)}</td>
+                </tr>
+              ))}
+              {results.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-3 py-8 text-center text-sm text-zinc-500">
+                    Δεν βρέθηκαν κρατήσεις.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function getWorkflowEventStyle(text: string) {
+  const normalizedText = text.toLowerCase();
+
+  if (normalizedText.includes('confirmation sent')) {
+    return {
+      badge: 'SENT',
+      className: 'border-emerald-300/35 bg-emerald-400/12 text-emerald-50',
+      badgeClassName: 'border-emerald-200/35 bg-emerald-300/16 text-emerald-50',
+    };
+  }
+
+  if (normalizedText.includes('return reminder sent')) {
+    return {
+      badge: 'REMINDER SENT',
+      className: 'border-cyan-300/35 bg-cyan-400/12 text-cyan-50',
+      badgeClassName: 'border-cyan-200/35 bg-cyan-300/16 text-cyan-50',
+    };
+  }
+
+  return {
+    badge: '',
+    className: 'border-white/[0.045] bg-white/[0.025] text-zinc-300',
+    badgeClassName: '',
+  };
+}
+
 function StatusBadge({ status }: { status: ReservationStatus }) {
   return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black tracking-wide ${statusActiveClasses[status]}`}>{status}</span>;
 }
@@ -1038,7 +1125,7 @@ function EditableCompactInput({
   label: string;
   value: string;
   onChange: (value: string) => void;
-  type?: 'text' | 'date' | 'time' | 'number';
+  type?: 'text' | 'date' | 'time' | 'number' | 'email';
   placeholder?: string;
   mono?: boolean;
   disabled?: boolean;
@@ -1051,6 +1138,12 @@ function EditableCompactInput({
         value={value}
         placeholder={placeholder}
         disabled={disabled}
+        onClick={(event) => {
+          if (type === 'date') openNativeDatePicker(event.currentTarget);
+        }}
+        onFocus={(event) => {
+          if (type === 'date') openNativeDatePicker(event.currentTarget);
+        }}
         onChange={(event) => onChange(event.target.value)}
         className={`h-6 min-w-0 rounded-md border border-white/[0.05] bg-zinc-950/70 px-2 text-[11px] font-semibold text-zinc-100 outline-none transition focus:border-sky-300/45 disabled:border-transparent disabled:bg-transparent disabled:px-0 disabled:text-zinc-200 ${mono ? 'font-mono' : ''}`}
       />
@@ -1125,12 +1218,12 @@ function EditableCompactSelect({
 
 function LicenceCard({ title, state }: { title: string; state: LicenceState }) {
   return (
-    <div className="rounded-xl border border-white/[0.065] bg-black/25 p-2">
+    <div className="rounded-xl border border-white/[0.065] bg-black/25 p-1.5">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-bold text-zinc-100">{title}</p>
         <LicenceBadge state={state} />
       </div>
-      <div className="mt-1.5 flex h-16 items-center justify-center rounded-lg border border-dashed border-white/[0.12] bg-white/[0.025] text-[11px] font-semibold text-zinc-500">
+      <div className="mt-1 flex h-14 items-center justify-center rounded-lg border border-dashed border-white/[0.12] bg-white/[0.025] text-[11px] font-semibold text-zinc-500">
         {state === 'uploaded' ? 'Mock thumbnail' : 'No attachment'}
       </div>
     </div>
@@ -1186,7 +1279,7 @@ function ExtrasBadges({ extras }: { extras: BookingExtras }) {
   const selectedExtras = [
     extras.baby_seat_qty > 0 ? `Baby x${extras.baby_seat_qty}` : null,
     extras.booster_qty > 0 ? `Booster x${extras.booster_qty}` : null,
-    extras.infant_seat_qty > 0 ? `Infant x${extras.infant_seat_qty}` : null,
+    extras.infant_qty > 0 ? `Infant x${extras.infant_qty}` : null,
   ].filter(Boolean);
 
   if (selectedExtras.length === 0) {
@@ -1217,7 +1310,7 @@ function ExtrasQuantityGroup({
   const options: Array<{ key: keyof BookingExtras; label: string }> = [
     { key: 'baby_seat_qty', label: 'Baby Seat' },
     { key: 'booster_qty', label: 'Booster' },
-    { key: 'infant_seat_qty', label: 'Infant' },
+    { key: 'infant_qty', label: 'Infant' },
   ];
 
   const updateQuantity = (key: keyof BookingExtras, delta: number) => {
@@ -1226,14 +1319,21 @@ function ExtrasQuantityGroup({
       [key]: clampExtraQuantity(extras[key] + delta),
     });
   };
+  const hasExtras = hasSelectedExtras(extras);
 
   return (
-    <div className="rounded-lg border border-amber-300/20 bg-amber-300/[0.055] p-2">
-      <div className="mb-1.5 flex items-center justify-between gap-2">
+    <div
+      className={`rounded-lg border p-1.5 transition ${
+        hasExtras
+          ? 'border-amber-300/25 bg-amber-300/[0.07] shadow-[0_0_14px_rgba(251,191,36,0.08)]'
+          : 'border-white/[0.06] bg-black/20'
+      }`}
+    >
+      <div className="mb-1 flex items-center justify-between gap-2">
         <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-amber-100">Extras</span>
         <ExtrasBadges extras={extras} />
       </div>
-      <div className="grid gap-1 sm:grid-cols-3">
+      <div className="grid gap-1 sm:grid-cols-3 md:grid-cols-1 2xl:grid-cols-3">
         {options.map((option) => {
           const quantity = extras[option.key];
           const isActive = quantity > 0;
@@ -1241,29 +1341,29 @@ function ExtrasQuantityGroup({
           return (
             <div
               key={option.key}
-              className={`rounded-lg border px-2 py-1.5 transition ${
+              className={`rounded-lg border px-1.5 py-1 transition ${
                 isActive
                   ? 'border-amber-300 bg-amber-300/18 text-amber-50 shadow-[0_0_14px_rgba(251,191,36,0.12)]'
                   : 'border-white/[0.08] bg-black/20 text-zinc-300 hover:border-amber-300/35 hover:text-amber-100'
               }`}
             >
-              <div className="mb-1 text-[11px] font-bold">{option.label}</div>
+              <div className="mb-0.5 text-[10.5px] font-bold">{option.label}</div>
               <div className="flex items-center justify-between gap-1">
                 <button
                   type="button"
                   onClick={() => updateQuantity(option.key, -1)}
                   disabled={quantity <= 0}
-                  className="flex h-6 w-6 items-center justify-center rounded-md border border-white/[0.08] bg-black/25 text-sm font-black text-zinc-200 transition hover:border-amber-300/35 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-35"
+                  className="flex h-5 w-5 items-center justify-center rounded-md border border-white/[0.08] bg-black/25 text-xs font-black text-zinc-200 transition hover:border-amber-300/35 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-35"
                   aria-label={`Decrease ${option.label}`}
                 >
                   -
                 </button>
-                <span className="min-w-6 text-center text-sm font-black text-amber-50">{quantity}</span>
+                <span className="min-w-5 text-center text-xs font-black text-amber-50">{quantity}</span>
                 <button
                   type="button"
                   onClick={() => updateQuantity(option.key, 1)}
                   disabled={quantity >= 5}
-                  className="flex h-6 w-6 items-center justify-center rounded-md border border-amber-300/25 bg-amber-300/12 text-sm font-black text-amber-50 transition hover:border-amber-200/45 hover:bg-amber-300/18 disabled:cursor-not-allowed disabled:opacity-35"
+                  className="flex h-5 w-5 items-center justify-center rounded-md border border-amber-300/25 bg-amber-300/12 text-xs font-black text-amber-50 transition hover:border-amber-200/45 hover:bg-amber-300/18 disabled:cursor-not-allowed disabled:opacity-35"
                   aria-label={`Increase ${option.label}`}
                 >
                   +
@@ -1294,11 +1394,11 @@ function LicenceBadge({ state }: { state: LicenceState }) {
 function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
     <div className="min-h-0 rounded-lg border border-white/[0.055] bg-white/[0.022] p-1.5">
-      <div className="flex items-start justify-between gap-2 border-b border-white/[0.045] pb-1">
+      <div className="flex items-start justify-between gap-2 border-b border-white/[0.045] pb-0.5">
         <p className="text-[11px] font-bold text-zinc-100">{title}</p>
         <p className="truncate text-[10px] font-medium text-zinc-500">{subtitle}</p>
       </div>
-      <div className="mt-1.5 grid gap-1">{children}</div>
+      <div className="mt-1 grid gap-1">{children}</div>
     </div>
   );
 }
