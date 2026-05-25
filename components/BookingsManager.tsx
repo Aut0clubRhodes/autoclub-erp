@@ -21,9 +21,15 @@ type WorkflowEvent = {
 };
 
 type BookingExtras = {
-  babySeat: boolean;
-  booster: boolean;
-  infantSeat: boolean;
+  baby_seat_qty: number;
+  booster_qty: number;
+  infant_seat_qty: number;
+};
+
+type LegacyBookingExtras = Partial<BookingExtras> & {
+  babySeat?: unknown;
+  booster?: unknown;
+  infantSeat?: unknown;
 };
 
 type Reservation = {
@@ -102,9 +108,9 @@ const defaultWhatsappMessages: WhatsappMessage[] = [
 ];
 const bookingsStorageKey = 'autoclub-bookings-v1';
 const emptyExtras: BookingExtras = {
-  babySeat: false,
-  booster: false,
-  infantSeat: false,
+  baby_seat_qty: 0,
+  booster_qty: 0,
+  infant_seat_qty: 0,
 };
 
 const initialForm: ReservationForm = {
@@ -143,7 +149,7 @@ const initialReservations: Reservation[] = [
     licenceFront: 'empty',
     licenceBack: 'empty',
     notes: 'Airport pickup. Needs WhatsApp confirmation before 18:00.',
-    extras: { babySeat: true, booster: false, infantSeat: false },
+    extras: { baby_seat_qty: 2, booster_qty: 0, infant_seat_qty: 0 },
   },
   {
     id: 'AT-5822',
@@ -163,7 +169,7 @@ const initialReservations: Reservation[] = [
     licenceFront: 'empty',
     licenceBack: 'empty',
     notes: 'Child seat requested. Prefer FIAT 500 if available.',
-    extras: { babySeat: false, booster: true, infantSeat: false },
+    extras: { baby_seat_qty: 0, booster_qty: 1, infant_seat_qty: 0 },
   },
   {
     id: 'AT-5823',
@@ -243,7 +249,7 @@ const initialReservations: Reservation[] = [
     licenceFront: 'empty',
     licenceBack: 'empty',
     notes: 'Needs confirmation once group D is assigned.',
-    extras: { babySeat: false, booster: false, infantSeat: true },
+    extras: { baby_seat_qty: 0, booster_qty: 0, infant_seat_qty: 1 },
   },
   {
     id: 'AT-5827',
@@ -301,11 +307,21 @@ const modalFieldClass =
 const normalizeStatus = (status: unknown): ReservationStatus =>
   status === 'ACCEPTED' ? 'ACCEPTED' : status === 'REJECTED' ? 'REJECTED' : 'PENDING';
 
-const normalizeExtras = (extras?: Partial<BookingExtras>): BookingExtras => ({
-  babySeat: Boolean(extras?.babySeat),
-  booster: Boolean(extras?.booster),
-  infantSeat: Boolean(extras?.infantSeat),
+const clampExtraQuantity = (value: unknown) => {
+  const quantity = Number(value);
+
+  if (!Number.isFinite(quantity)) return 0;
+  return Math.min(5, Math.max(0, Math.trunc(quantity)));
+};
+
+const normalizeExtras = (extras?: LegacyBookingExtras): BookingExtras => ({
+  baby_seat_qty: clampExtraQuantity(extras?.baby_seat_qty ?? (extras?.babySeat ? 1 : 0)),
+  booster_qty: clampExtraQuantity(extras?.booster_qty ?? (extras?.booster ? 1 : 0)),
+  infant_seat_qty: clampExtraQuantity(extras?.infant_seat_qty ?? (extras?.infantSeat ? 1 : 0)),
 });
+
+const hasSelectedExtras = (extras: BookingExtras) =>
+  extras.baby_seat_qty > 0 || extras.booster_qty > 0 || extras.infant_seat_qty > 0;
 
 const normalizeReservation = (reservation: Reservation): Reservation => ({
   ...reservation,
@@ -739,7 +755,7 @@ function ReservationInspector({
     { label: 'Save changes', tone: 'save', onClick: saveDraft },
     { label: 'Delete booking', tone: 'delete', onClick: onDelete },
   ];
-  const hasExtras = draft.extras.babySeat || draft.extras.booster || draft.extras.infantSeat;
+  const hasExtras = hasSelectedExtras(draft.extras);
 
   return (
     <section className="min-h-0 flex-1 rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-2 shadow-[0_18px_55px_rgba(0,0,0,0.22)]">
@@ -772,7 +788,7 @@ function ReservationInspector({
               <EditableCompactInput label="Price" type="number" value={draft.price === null ? '' : String(draft.price)} onChange={(value) => updateDraft({ price: value === '' ? null : Number(value) || null })} />
               <StatusPillSelector value={draft.status} onChange={updateStatus} />
               {hasExtras ? (
-                <ExtrasToggleGroup
+                <ExtrasQuantityGroup
                   extras={draft.extras}
                   onChange={(extras) => updateDraft({ extras })}
                 />
@@ -979,7 +995,7 @@ function NewReservationModal({
               }}
             />
             <div className="sm:col-span-2">
-              <ExtrasToggleGroup
+              <ExtrasQuantityGroup
                 extras={form.extras}
                 onChange={(extras) => updateForm({ extras })}
               />
@@ -1168,9 +1184,9 @@ function BooleanBadge({ active }: { active: boolean }) {
 
 function ExtrasBadges({ extras }: { extras: BookingExtras }) {
   const selectedExtras = [
-    extras.babySeat ? 'Baby Seat' : null,
-    extras.booster ? 'Booster' : null,
-    extras.infantSeat ? 'Infant' : null,
+    extras.baby_seat_qty > 0 ? `Baby x${extras.baby_seat_qty}` : null,
+    extras.booster_qty > 0 ? `Booster x${extras.booster_qty}` : null,
+    extras.infant_seat_qty > 0 ? `Infant x${extras.infant_seat_qty}` : null,
   ].filter(Boolean);
 
   if (selectedExtras.length === 0) {
@@ -1191,7 +1207,7 @@ function ExtrasBadges({ extras }: { extras: BookingExtras }) {
   );
 }
 
-function ExtrasToggleGroup({
+function ExtrasQuantityGroup({
   extras,
   onChange,
 }: {
@@ -1199,10 +1215,17 @@ function ExtrasToggleGroup({
   onChange: (extras: BookingExtras) => void;
 }) {
   const options: Array<{ key: keyof BookingExtras; label: string }> = [
-    { key: 'babySeat', label: 'Baby Seat' },
-    { key: 'booster', label: 'Booster' },
-    { key: 'infantSeat', label: 'Infant' },
+    { key: 'baby_seat_qty', label: 'Baby Seat' },
+    { key: 'booster_qty', label: 'Booster' },
+    { key: 'infant_seat_qty', label: 'Infant' },
   ];
+
+  const updateQuantity = (key: keyof BookingExtras, delta: number) => {
+    onChange({
+      ...extras,
+      [key]: clampExtraQuantity(extras[key] + delta),
+    });
+  };
 
   return (
     <div className="rounded-lg border border-amber-300/20 bg-amber-300/[0.055] p-2">
@@ -1212,21 +1235,41 @@ function ExtrasToggleGroup({
       </div>
       <div className="grid gap-1 sm:grid-cols-3">
         {options.map((option) => {
-          const isActive = extras[option.key];
+          const quantity = extras[option.key];
+          const isActive = quantity > 0;
 
           return (
-            <button
+            <div
               key={option.key}
-              type="button"
-              onClick={() => onChange({ ...extras, [option.key]: !isActive })}
-              className={`rounded-lg border px-2 py-1.5 text-left text-[11px] font-bold transition ${
+              className={`rounded-lg border px-2 py-1.5 transition ${
                 isActive
                   ? 'border-amber-300 bg-amber-300/18 text-amber-50 shadow-[0_0_14px_rgba(251,191,36,0.12)]'
                   : 'border-white/[0.08] bg-black/20 text-zinc-300 hover:border-amber-300/35 hover:text-amber-100'
               }`}
             >
-              {option.label}
-            </button>
+              <div className="mb-1 text-[11px] font-bold">{option.label}</div>
+              <div className="flex items-center justify-between gap-1">
+                <button
+                  type="button"
+                  onClick={() => updateQuantity(option.key, -1)}
+                  disabled={quantity <= 0}
+                  className="flex h-6 w-6 items-center justify-center rounded-md border border-white/[0.08] bg-black/25 text-sm font-black text-zinc-200 transition hover:border-amber-300/35 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label={`Decrease ${option.label}`}
+                >
+                  -
+                </button>
+                <span className="min-w-6 text-center text-sm font-black text-amber-50">{quantity}</span>
+                <button
+                  type="button"
+                  onClick={() => updateQuantity(option.key, 1)}
+                  disabled={quantity >= 5}
+                  className="flex h-6 w-6 items-center justify-center rounded-md border border-amber-300/25 bg-amber-300/12 text-sm font-black text-amber-50 transition hover:border-amber-200/45 hover:bg-amber-300/18 disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label={`Increase ${option.label}`}
+                >
+                  +
+                </button>
+              </div>
+            </div>
           );
         })}
       </div>
