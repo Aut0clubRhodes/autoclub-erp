@@ -25,6 +25,13 @@ import {
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
+import {
+  createVehicleGroup,
+  deleteVehicleGroup,
+  fetchVehicleGroups,
+  updateVehicleGroup,
+  type VehicleGroupRecord,
+} from '@/lib/vehicleGroupsApi';
 
 interface NavItem {
   label: string;
@@ -86,6 +93,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Προμηθευτές', href: '/suppliers', icon: Truck, tone: 'text-violet-300', chip: 'border-violet-400/25 bg-violet-400/10' },
       { label: 'Πρακτορεία', href: '/agencies', icon: Network, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
       { label: 'Έγγραφα', href: '/vehicle-documents', icon: FolderArchive, tone: 'text-sky-300', chip: 'border-sky-400/25 bg-sky-400/10' },
+      { label: 'Κατηγορίες Οχημάτων', href: '/vehicle-groups', icon: ListTree, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
       { label: 'Κατηγορίες Εξόδων', href: '/expense-categories', icon: ListTree, tone: 'text-amber-300', chip: 'border-amber-400/25 bg-amber-400/10' },
       { label: 'Ρυθμίσεις', href: '/settings', icon: SlidersHorizontal, tone: 'text-slate-300', chip: 'border-slate-400/20 bg-slate-400/10' },
     ],
@@ -113,6 +121,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
   const pathname = usePathname();
   const [systemOpen, setSystemOpen] = useState(true);
   const [financeOpen, setFinanceOpen] = useState(true);
+  const [showVehicleGroupsPanel, setShowVehicleGroupsPanel] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem('autoclub-sidebar-collapsed') === 'true';
@@ -133,6 +142,11 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
   };
 
   const handleItemClick = (item: NavItem) => {
+    if (item.label === 'Κατηγορίες Οχημάτων') {
+      setShowVehicleGroupsPanel(true);
+      return;
+    }
+
     if (WINDOW_ITEMS.includes(item.label) && onWindowOpen) {
       onWindowOpen(item.label);
     }
@@ -144,8 +158,11 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
     const childIsActive = item.children?.some(
       (child) => activeWindow === child.label || pathname === child.href || pathname.startsWith(`${child.href}/`)
     );
+    const isVehicleGroupsItem = item.label === 'Κατηγορίες Οχημάτων';
     const isActive = isWindowItem
       ? activeWindow === item.label
+      : isVehicleGroupsItem
+        ? showVehicleGroupsPanel
       : pathname === item.href || pathname.startsWith(`${item.href}/`);
     const Icon = item.icon;
     const className = `group relative flex min-h-[35px] w-full items-center ${isCollapsed ? 'justify-center gap-0 px-1.5' : 'gap-1.5 px-2'} rounded-xl border py-0.5 text-left transition duration-200 hover:-translate-y-px ${
@@ -223,6 +240,20 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
       );
     }
 
+    if (isVehicleGroupsItem) {
+      return (
+        <button
+          key={item.href}
+          type="button"
+          onClick={() => handleItemClick(item)}
+          className={nested ? childClassName : className}
+          title={isCollapsed ? item.label : undefined}
+        >
+          {nested ? childContent : content}
+        </button>
+      );
+    }
+
     if (isWindowItem) {
       return (
         <button
@@ -245,6 +276,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
   };
 
   return (
+    <>
     <aside className={`fixed bottom-0 left-0 top-0 z-[9000] flex shrink-0 flex-col border-r border-white/[0.06] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] text-white shadow-[18px_0_48px_rgba(0,0,0,0.22)] transition-[width] duration-200 ${isCollapsed ? 'w-[72px]' : 'w-[250px]'}`}>
       <div className={`border-b border-sky-100/[0.04] ${isCollapsed ? 'px-2 pb-2 pt-3' : 'px-4 pb-2.5 pt-3.5 sm:px-4 sm:pb-3 sm:pt-4'}`}>
         <div className="mb-2 flex items-center justify-end">
@@ -316,5 +348,154 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
         {!isCollapsed && <p className="mt-2 text-center text-[9px] uppercase tracking-[0.14em] text-zinc-600">v1.0.0</p>}
       </div>
     </aside>
+    {showVehicleGroupsPanel && <VehicleGroupsPanel onClose={() => setShowVehicleGroupsPanel(false)} />}
+    </>
+  );
+}
+
+function VehicleGroupsPanel({ onClose }: { onClose: () => void }) {
+  const [groups, setGroups] = useState<VehicleGroupRecord[]>([]);
+  const [newCode, setNewCode] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [message, setMessage] = useState('');
+
+  const loadGroups = async () => {
+    setIsLoading(true);
+    const nextGroups = await fetchVehicleGroups();
+    setGroups(nextGroups);
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    void Promise.resolve().then(loadGroups);
+  }, []);
+
+  const handleCreateGroup = async () => {
+    const code = newCode.trim().toUpperCase();
+
+    if (!code) return;
+
+    const created = await createVehicleGroup(code);
+
+    if (!created) {
+      setMessage('Η κατηγορία δεν αποθηκεύτηκε.');
+      return;
+    }
+
+    setNewCode('');
+    setMessage('Η κατηγορία προστέθηκε.');
+    await loadGroups();
+  };
+
+  const handleToggleGroup = async (group: VehicleGroupRecord) => {
+    const updated = await updateVehicleGroup(group.id, { active: !group.active });
+
+    if (!updated) {
+      setMessage('Η κατηγορία δεν ενημερώθηκε.');
+      return;
+    }
+
+    setMessage('');
+    await loadGroups();
+  };
+
+  const handleDeleteGroup = async (group: VehicleGroupRecord) => {
+    if (!window.confirm(`Να διαγραφεί η κατηγορία "${group.code}";`)) return;
+
+    const deleted = await deleteVehicleGroup(group.id);
+
+    if (!deleted) {
+      setMessage('Η κατηγορία δεν διαγράφηκε.');
+      return;
+    }
+
+    setMessage('');
+    await loadGroups();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
+      <section className="flex max-h-[82vh] w-[min(720px,94vw)] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[linear-gradient(145deg,#09111d_0%,#050910_100%)] text-white shadow-[0_30px_110px_rgba(0,0,0,0.58)]">
+        <header className="flex flex-shrink-0 items-start justify-between border-b border-white/10 px-6 py-5">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-200/70">VEHICLE GROUPS</p>
+            <h2 className="mt-1 text-xl font-semibold text-white">Κατηγορίες Οχημάτων</h2>
+            <p className="mt-1 text-xs text-zinc-500">Global groups for bookings and vehicle categories.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            ×
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-auto p-5">
+          <div className="mb-4 flex gap-2">
+            <input
+              value={newCode}
+              onChange={(event) => setNewCode(event.target.value)}
+              placeholder="Νέα κατηγορία, π.χ. D1"
+              className="min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-zinc-950/80 px-4 py-2.5 text-sm font-semibold text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-300/45"
+            />
+            <button
+              type="button"
+              onClick={handleCreateGroup}
+              className="rounded-2xl border border-emerald-300/35 bg-emerald-400/15 px-4 py-2.5 text-sm font-bold text-emerald-50 transition hover:-translate-y-0.5 hover:bg-emerald-400/22"
+            >
+              Προσθήκη
+            </button>
+          </div>
+
+          {message && (
+            <p className="mb-3 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-4 py-2 text-xs text-zinc-300">
+              {message}
+            </p>
+          )}
+
+          <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-black/20">
+            <div className="grid grid-cols-[90px_1fr_120px_110px] border-b border-white/[0.07] bg-white/[0.035] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-500">
+              <span>Code</span>
+              <span>Status</span>
+              <span>Order</span>
+              <span className="text-right">Actions</span>
+            </div>
+            <div className="max-h-[46vh] overflow-auto">
+              {isLoading ? (
+                <p className="px-4 py-5 text-sm text-zinc-500">Loading vehicle groups...</p>
+              ) : groups.length > 0 ? (
+                groups.map((group) => (
+                  <div key={group.id} className="grid grid-cols-[90px_1fr_120px_110px] items-center border-b border-white/[0.045] px-4 py-2.5 last:border-b-0">
+                    <span className="font-mono text-sm font-black text-white">{group.code}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleGroup(group)}
+                      className={`w-fit rounded-full border px-2.5 py-1 text-[10px] font-black ${
+                        group.active
+                          ? 'border-emerald-300/35 bg-emerald-400/14 text-emerald-50'
+                          : 'border-zinc-600 bg-zinc-900 text-zinc-400'
+                      }`}
+                    >
+                      {group.active ? 'Active' : 'Inactive'}
+                    </button>
+                    <span className="text-xs text-zinc-400">{group.sort_order}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteGroup(group)}
+                      className="justify-self-end rounded-xl border border-rose-300/30 bg-rose-400/10 px-3 py-1.5 text-xs font-bold text-rose-100 transition hover:bg-rose-400/18"
+                    >
+                      Διαγραφή
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="px-4 py-5 text-sm text-zinc-500">Δεν υπάρχουν κατηγορίες οχημάτων.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }

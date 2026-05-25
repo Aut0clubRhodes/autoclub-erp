@@ -10,10 +10,16 @@ import {
   type ReservationRequestPayload,
   type ReservationRequestRecord,
 } from '@/lib/reservationsApi';
+import {
+  createReservationEvent,
+  fetchReservationEvents,
+  type ReservationEventRecord,
+} from '@/lib/reservationEventsApi';
+import { DEFAULT_VEHICLE_GROUP_CODES, fetchVehicleGroups } from '@/lib/vehicleGroupsApi';
 
 type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
 type LicenceState = 'uploaded' | 'empty';
-type VehicleGroup = 'A' | 'B' | 'C' | 'D' | 'E' | 'H' | 'H1' | 'H2' | 'H3' | 'H4' | 'H5' | 'K' | 'K1' | 'K2';
+type VehicleGroup = string;
 
 type WhatsappMessage = {
   id: string;
@@ -24,7 +30,8 @@ type WhatsappMessage = {
 
 type WorkflowEvent = {
   id: string;
-  text: string;
+  eventType: string;
+  message: string;
   createdAt: string;
 };
 
@@ -94,8 +101,6 @@ type RepresentativeRow = {
   agency_id: number;
 };
 
-const vehicleGroups: VehicleGroup[] = ['A', 'B', 'C', 'D', 'E', 'H', 'H1', 'H2', 'H3', 'H4', 'H5', 'K', 'K1', 'K2'];
-
 const fallbackAgencyRepresentatives: Record<string, string[]> = {
   Drivealia: ['Maria K.', 'Nikos P.', 'Elena T.'],
   'Apollo / Cardlink': ['Dimitris', 'Sofia', 'George'],
@@ -146,6 +151,8 @@ const money = (value: number | null) =>
 
 const formatDate = (value: string) => (value ? new Date(`${value}T00:00:00`).toLocaleDateString('el-GR') : '-');
 
+const formatDateTime = (value: string) => (value ? new Date(value).toLocaleString('el-GR') : '-');
+
 const withCurrentOption = (options: string[], current: string) =>
   current && !options.includes(current) ? [current, ...options] : options;
 
@@ -186,7 +193,7 @@ const reservationRecordToReservation = (record: ReservationRequestRecord): Reser
   phoneWhatsapp: record.phone || '',
   name: record.customer_name || '',
   email: record.email || '',
-  vehicleGroup: vehicleGroups.includes(record.vehicle_group as VehicleGroup) ? (record.vehicle_group as VehicleGroup) : 'A',
+  vehicleGroup: record.vehicle_group || 'A',
   agency: record.agency || '',
   representative: record.representative || '',
   hotelRoom: record.hotel_room || '',
@@ -230,10 +237,11 @@ const reservationToPayload = (reservation: Reservation): ReservationRequestPaylo
   notes: reservation.notes || null,
 });
 
-const createWorkflowEvent = (text: string): WorkflowEvent => ({
-  id: `event-${Date.now()}-${Math.round(Math.random() * 1000)}`,
-  text,
-  createdAt: new Date().toISOString(),
+const reservationEventToWorkflowEvent = (event: ReservationEventRecord): WorkflowEvent => ({
+  id: event.id,
+  eventType: event.event_type,
+  message: event.event_message,
+  createdAt: event.created_at || '',
 });
 
 const createWhatsappMessage = (text: string): WhatsappMessage => ({
@@ -255,6 +263,9 @@ export default function BookingsManager() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [isLoadingReservations, setIsLoadingReservations] = useState(true);
+  const [workflowEvents, setWorkflowEvents] = useState<WorkflowEvent[]>([]);
+  const [isLoadingWorkflowEvents, setIsLoadingWorkflowEvents] = useState(false);
+  const [vehicleGroups, setVehicleGroups] = useState<VehicleGroup[]>(DEFAULT_VEHICLE_GROUP_CODES);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof statuses)[number]>('ALL');
   const [showNewModal, setShowNewModal] = useState(false);
@@ -263,23 +274,59 @@ export default function BookingsManager() {
   const [agencyRows, setAgencyRows] = useState<AgencyRow[]>([]);
   const [representativeRows, setRepresentativeRows] = useState<RepresentativeRow[]>([]);
 
-  const loadReservations = async () => {
+  const loadReservations = async (preferredReservationId?: string) => {
     setIsLoadingReservations(true);
     const records = await fetchReservations();
     const nextReservations = records.map(reservationRecordToReservation);
 
     setReservations(nextReservations);
-    setSelectedId((currentSelectedId) =>
-      nextReservations.some((reservation) => reservation.id === currentSelectedId)
-        ? currentSelectedId
-        : nextReservations[0]?.id || ''
-    );
+    setSelectedId((currentSelectedId) => {
+      const nextSelectedId = preferredReservationId || currentSelectedId;
+
+      return nextReservations.some((reservation) => reservation.id === nextSelectedId)
+        ? nextSelectedId
+        : nextReservations[0]?.id || '';
+    });
     setIsLoadingReservations(false);
+    return nextReservations;
   };
 
   useEffect(() => {
-    void Promise.resolve().then(loadReservations);
+    void Promise.resolve().then(() => loadReservations());
   }, []);
+
+  useEffect(() => {
+    const loadVehicleGroups = async () => {
+      const groups = await fetchVehicleGroups();
+      const activeCodes = groups
+        .filter((group) => group.active)
+        .map((group) => group.code)
+        .filter(Boolean);
+
+      setVehicleGroups(activeCodes.length > 0 ? activeCodes : DEFAULT_VEHICLE_GROUP_CODES);
+    };
+
+    void Promise.resolve().then(loadVehicleGroups);
+  }, []);
+
+  const loadWorkflowEvents = async (reservationId: string) => {
+    setIsLoadingWorkflowEvents(true);
+    const events = await fetchReservationEvents(reservationId);
+
+    setWorkflowEvents(events.map(reservationEventToWorkflowEvent));
+    setIsLoadingWorkflowEvents(false);
+  };
+
+  const recordWorkflowEvent = async (reservationId: string, eventType: string, eventMessage: string) => {
+    const event = await createReservationEvent({
+      reservation_id: reservationId,
+      event_type: eventType,
+      event_message: eventMessage,
+    });
+
+    if (!event) return;
+    setWorkflowEvents((currentEvents) => [reservationEventToWorkflowEvent(event), ...currentEvents]);
+  };
 
   useEffect(() => {
     const loadAgencyData = async () => {
@@ -343,30 +390,33 @@ export default function BookingsManager() {
     filteredReservations[0] ||
     reservations[0];
 
-  const updateSelectedReservation = async (patch: Partial<Reservation>) => {
-    if (!selectedReservation) return;
-
-    const nextReservation = { ...selectedReservation, ...patch };
-    const updatedRecord = await updateReservation(selectedReservation.id, reservationToPayload(nextReservation));
-
-    if (!updatedRecord) {
-      window.alert('Η κράτηση δεν ενημερώθηκε.');
+  useEffect(() => {
+    if (!selectedReservation?.id) {
+      void Promise.resolve().then(() => setWorkflowEvents([]));
       return;
     }
 
-    const savedReservation = {
-      ...reservationRecordToReservation(updatedRecord),
-      whatsappMessages: nextReservation.whatsappMessages,
-      workflowEvents: nextReservation.workflowEvents,
-      licenceFront: nextReservation.licenceFront,
-      licenceBack: nextReservation.licenceBack,
-    };
+    void Promise.resolve().then(() => loadWorkflowEvents(selectedReservation.id));
+  }, [selectedReservation?.id]);
 
-    setReservations((currentReservations) =>
-      currentReservations.map((reservation) =>
-        reservation.id === selectedReservation.id ? savedReservation : reservation
-      )
-    );
+  const updateSelectedReservation = async (reservationDraft: Reservation) => {
+    if (!selectedReservation) return false;
+
+    const payload = reservationToPayload(reservationDraft);
+    console.log('SAVE PAYLOAD', payload);
+
+    const updatedRecord = await updateReservation(reservationDraft.id, payload);
+
+    if (!updatedRecord) {
+      window.alert('Η κράτηση δεν ενημερώθηκε.');
+      return false;
+    }
+
+    const updatedReservation = reservationRecordToReservation(updatedRecord);
+    console.log('UPDATED RESERVATION AFTER SAVE', updatedReservation);
+
+    await loadReservations(updatedReservation.id);
+    return true;
   };
 
   const deleteSelectedReservation = async () => {
@@ -427,6 +477,7 @@ export default function BookingsManager() {
     }
 
     const nextReservation = reservationRecordToReservation(createdRecord);
+    await recordWorkflowEvent(nextReservation.id, 'booking_created', 'Booking created');
 
     setReservations((current) => [nextReservation, ...current]);
     setSelectedId(nextReservation.id);
@@ -563,8 +614,12 @@ export default function BookingsManager() {
           reservation={selectedReservation}
           agencyOptions={agencyOptions}
           representativesByAgency={representativesByAgency}
+          vehicleGroups={vehicleGroups}
           onUpdate={updateSelectedReservation}
           onDelete={deleteSelectedReservation}
+          workflowEvents={workflowEvents}
+          isLoadingWorkflowEvents={isLoadingWorkflowEvents}
+          onCreateWorkflowEvent={recordWorkflowEvent}
         />
       ) : (
         <section className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-6 text-sm text-zinc-500">
@@ -577,6 +632,7 @@ export default function BookingsManager() {
           form={form}
           agencyOptions={agencyOptions}
           representativesByAgency={representativesByAgency}
+          vehicleGroups={vehicleGroups}
           onChange={setForm}
           onClose={() => setShowNewModal(false)}
           onSave={saveReservation}
@@ -601,14 +657,22 @@ function ReservationInspector({
   reservation,
   agencyOptions,
   representativesByAgency,
+  vehicleGroups,
   onUpdate,
   onDelete,
+  workflowEvents,
+  isLoadingWorkflowEvents,
+  onCreateWorkflowEvent,
 }: {
   reservation: Reservation;
   agencyOptions: string[];
   representativesByAgency: Record<string, string[]>;
-  onUpdate: (patch: Partial<Reservation>) => void;
+  vehicleGroups: VehicleGroup[];
+  onUpdate: (reservation: Reservation) => Promise<boolean>;
   onDelete: () => void;
+  workflowEvents: WorkflowEvent[];
+  isLoadingWorkflowEvents: boolean;
+  onCreateWorkflowEvent: (reservationId: string, eventType: string, eventMessage: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<Reservation>(reservation);
 
@@ -616,35 +680,42 @@ function ReservationInspector({
     setDraft((currentDraft) => ({ ...currentDraft, ...patch }));
   };
 
-  const saveDraft = () => {
+  const saveDraft = async () => {
     if (draft.status === 'ACCEPTED' && !hasAcceptedRequiredFields(draft)) {
       window.alert(acceptedValidationMessage);
       return;
     }
 
-    onUpdate(draft);
+    const updated = await onUpdate(draft);
+    if (updated) {
+      await onCreateWorkflowEvent(draft.id, 'booking_updated', 'Booking details updated');
+    }
   };
 
-  const sendReminder = () => {
+  const sendReminder = async () => {
     const nextWhatsappMessages = [
       ...(draft.whatsappMessages || defaultWhatsappMessages),
       createWhatsappMessage('Return reminder sent to customer.'),
     ];
-    const nextWorkflowEvents = [
-      ...(draft.workflowEvents || []),
-      createWorkflowEvent('Return reminder sent. Waiting for customer return confirmation.'),
-    ];
     const patch = {
       sendReturn: true,
       whatsappMessages: nextWhatsappMessages,
-      workflowEvents: nextWorkflowEvents,
     };
 
+    const nextDraft = { ...draft, ...patch };
+
     updateDraft(patch);
-    onUpdate(patch);
+    const updated = await onUpdate(nextDraft);
+    if (updated) {
+      await onCreateWorkflowEvent(
+        draft.id,
+        'return_reminder_sent',
+        'Return reminder sent. Waiting for customer return confirmation.'
+      );
+    }
   };
 
-  const updateStatus = (status: ReservationStatus) => {
+  const updateStatus = async (status: ReservationStatus) => {
     if (status === 'ACCEPTED' && !hasAcceptedRequiredFields(draft)) {
       window.alert(acceptedValidationMessage);
       return;
@@ -657,20 +728,29 @@ function ReservationInspector({
         ...(draft.whatsappMessages || defaultWhatsappMessages),
         createWhatsappMessage('Confirmation message sent with agreement/licence link.'),
       ];
-      patch.workflowEvents = [
-        ...(draft.workflowEvents || []),
-        createWorkflowEvent('Confirmation sent'),
-      ];
     }
 
     updateDraft(patch);
-    onUpdate(patch);
+    const nextDraft = { ...draft, ...patch };
+    const updated = await onUpdate(nextDraft);
+
+    if (updated) {
+      await onCreateWorkflowEvent(draft.id, 'status_changed', `Status changed to ${status}`);
+
+      if (status === 'ACCEPTED' && draft.status !== 'ACCEPTED') {
+        await onCreateWorkflowEvent(
+          draft.id,
+          'confirmation_sent',
+          'Confirmation sent with agreement/licence link'
+        );
+      }
+    }
   };
 
   const actions: Array<{
     label: string;
     tone: 'reminder' | 'save' | 'delete';
-    onClick: () => void;
+    onClick: () => void | Promise<void>;
   }> = [
     { label: 'Send reminder', tone: 'reminder', onClick: sendReminder },
     { label: 'Save changes', tone: 'save', onClick: saveDraft },
@@ -685,7 +765,7 @@ function ReservationInspector({
               <EditableCompactInput label="Phone WhatsApp" value={draft.phoneWhatsapp} onChange={(value) => updateDraft({ phoneWhatsapp: value.replace(/\s+/g, '') })} mono />
               <EditableCompactInput label="Name" value={draft.name} onChange={(value) => updateDraft({ name: value })} />
               <EditableCompactInput label="Hotel and Room" value={draft.hotelRoom} onChange={(value) => updateDraft({ hotelRoom: value })} />
-              <EditableCompactSelect label="Vehicle Group" value={draft.vehicleGroup} options={vehicleGroups} onChange={(value) => updateDraft({ vehicleGroup: value as VehicleGroup })} />
+              <EditableCompactSelect label="Vehicle Group" value={draft.vehicleGroup} options={withCurrentOption(vehicleGroups, draft.vehicleGroup)} onChange={(value) => updateDraft({ vehicleGroup: value })} />
               <EditableCompactSelect
                 label="Agency"
                 value={draft.agency}
@@ -730,18 +810,18 @@ function ReservationInspector({
                 extras={draft.extras}
                 onChange={(extras) => updateDraft({ extras })}
               />
-              <div className="grid gap-1 sm:grid-cols-3 md:grid-cols-1 2xl:grid-cols-3">
+              <div className="grid grid-cols-3 gap-1">
                 {actions.map((action) => (
                   <button
                     key={action.label}
                     type="button"
                     onClick={action.onClick}
-                    className={`h-7 rounded-lg border px-2 text-left text-[10.5px] font-bold tracking-[0.01em] transition duration-200 hover:-translate-y-0.5 ${
+                    className={`flex h-8 min-w-0 items-center justify-center whitespace-nowrap rounded-lg border px-1.5 text-center text-[10px] font-black leading-none tracking-[0.005em] transition duration-200 hover:-translate-y-0.5 ${
                       action.tone === 'reminder'
-                        ? 'border-cyan-300/35 bg-cyan-400/14 text-cyan-50 hover:bg-cyan-400/20'
+                        ? 'border-cyan-300/40 bg-cyan-400/16 text-cyan-50 shadow-[0_0_14px_rgba(34,211,238,0.08)] hover:bg-cyan-400/22'
                         : action.tone === 'save'
-                          ? 'border-emerald-300/35 bg-emerald-400/14 text-emerald-50 hover:bg-emerald-400/20'
-                          : 'border-rose-300/35 bg-rose-400/12 text-rose-100 hover:bg-rose-400/18'
+                          ? 'border-emerald-300/40 bg-emerald-400/16 text-emerald-50 shadow-[0_0_14px_rgba(52,211,153,0.08)] hover:bg-emerald-400/22'
+                          : 'border-rose-300/40 bg-rose-400/14 text-rose-50 shadow-[0_0_14px_rgba(251,113,133,0.08)] hover:bg-rose-400/20'
                     }`}
                   >
                     {action.label}
@@ -783,20 +863,32 @@ function ReservationInspector({
           <div className="mt-1.5 rounded-lg border border-white/[0.055] bg-black/20 p-1.5">
             <div className="mb-1 flex items-center justify-between">
               <p className="text-[11px] font-bold text-zinc-100">Workflow log</p>
-              <span className="text-[10px] text-zinc-500">local</span>
+              <span className="text-[10px] text-zinc-500">audit</span>
             </div>
             <div className="grid max-h-20 gap-1 overflow-auto pr-1">
-              {(draft.workflowEvents || []).length > 0 ? (
-                (draft.workflowEvents || []).map((event) => {
-                  const eventStyle = getWorkflowEventStyle(event.text);
+              {isLoadingWorkflowEvents ? (
+                <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
+                  Loading workflow events...
+                </p>
+              ) : workflowEvents.length > 0 ? (
+                workflowEvents.map((event) => {
+                  const eventStyle = getWorkflowEventStyle(event.eventType);
 
                   return (
                     <div key={event.id} className={`rounded-md border px-2 py-1.5 text-[11px] leading-4 ${eventStyle.className}`}>
-                      <div className="flex items-center justify-between gap-2">
-                        <span>{event.text}</span>
+                      <div className="flex items-start justify-between gap-2">
+                        <span>
+                          <span className="block font-semibold">{event.message}</span>
+                          <span className="mt-0.5 block text-[10px] opacity-70">{formatDateTime(event.createdAt)}</span>
+                        </span>
                         {eventStyle.badge ? (
                           <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[8.5px] font-black tracking-wide ${eventStyle.badgeClassName}`}>
                             {eventStyle.badge}
+                          </span>
+                        ) : null}
+                        {!eventStyle.badge ? (
+                          <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.035] px-1.5 py-0.5 text-[8.5px] font-black tracking-wide text-zinc-400">
+                            {event.eventType}
                           </span>
                         ) : null}
                       </div>
@@ -821,6 +913,7 @@ function NewReservationModal({
   form,
   agencyOptions,
   representativesByAgency,
+  vehicleGroups,
   onChange,
   onClose,
   onSave,
@@ -828,6 +921,7 @@ function NewReservationModal({
   form: ReservationForm;
   agencyOptions: string[];
   representativesByAgency: Record<string, string[]>;
+  vehicleGroups: VehicleGroup[];
   onChange: (form: ReservationForm) => void;
   onClose: () => void;
   onSave: () => void;
@@ -874,8 +968,8 @@ function NewReservationModal({
               <input type="email" value={form.email} onChange={(event) => updateForm({ email: event.target.value })} className={modalFieldClass} placeholder="customer@email.com" />
             </Field>
             <Field label="Vehicle Group">
-              <select value={form.vehicleGroup} onChange={(event) => updateForm({ vehicleGroup: event.target.value as VehicleGroup })} className={modalFieldClass}>
-                {vehicleGroups.map((group) => (
+              <select value={form.vehicleGroup} onChange={(event) => updateForm({ vehicleGroup: event.target.value })} className={modalFieldClass}>
+                {withCurrentOption(vehicleGroups, form.vehicleGroup).map((group) => (
                   <option key={group} value={group}>{group}</option>
                 ))}
               </select>
@@ -1084,9 +1178,7 @@ function BookingHistoryModal({
 }
 
 function getWorkflowEventStyle(text: string) {
-  const normalizedText = text.toLowerCase();
-
-  if (normalizedText.includes('confirmation sent')) {
+  if (text === 'confirmation_sent') {
     return {
       badge: 'SENT',
       className: 'border-emerald-300/35 bg-emerald-400/12 text-emerald-50',
@@ -1094,11 +1186,19 @@ function getWorkflowEventStyle(text: string) {
     };
   }
 
-  if (normalizedText.includes('return reminder sent')) {
+  if (text === 'return_reminder_sent') {
     return {
       badge: 'REMINDER SENT',
       className: 'border-cyan-300/35 bg-cyan-400/12 text-cyan-50',
       badgeClassName: 'border-cyan-200/35 bg-cyan-300/16 text-cyan-50',
+    };
+  }
+
+  if (text === 'status_changed') {
+    return {
+      badge: 'STATUS',
+      className: 'border-amber-300/25 bg-amber-400/10 text-amber-50',
+      badgeClassName: 'border-amber-200/30 bg-amber-300/14 text-amber-50',
     };
   }
 

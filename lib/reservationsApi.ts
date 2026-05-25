@@ -87,7 +87,7 @@ export async function updateReservation(id: string | number, payload: Partial<Re
     .from('reservation_requests')
     .update(payload)
     .eq('id', id)
-    .select()
+    .select('*')
     .single();
 
   if (error) {

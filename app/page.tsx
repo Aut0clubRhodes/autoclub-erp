@@ -49,6 +49,7 @@ import {
 import { fetchServicesByCarId, type ServiceRecord } from '@/lib/servicesApi';
 import { fetchCarDocuments, getCarDocumentPublicUrl, type CarDocumentRecord } from '@/lib/carDocumentsApi';
 import { fetchDebts, type DebtRecord } from '@/lib/debtsApi';
+import { DEFAULT_VEHICLE_GROUP_CODES, fetchVehicleGroups } from '@/lib/vehicleGroupsApi';
 type WindowType =
   | 'Αυτοκίνητα'
   | 'Κρατήσεις'
@@ -259,6 +260,7 @@ export default function Home() {
     notes: '',
   });
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehicleGroups, setVehicleGroups] = useState<string[]>(DEFAULT_VEHICLE_GROUP_CODES);
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [representatives, setRepresentatives] = useState<Representative[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierRecord[]>([]);
@@ -315,6 +317,25 @@ export default function Home() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!userEmail) {
+      return;
+    }
+
+    const loadVehicleGroups = async () => {
+      const groups = await fetchVehicleGroups();
+      const activeCodes = groups
+        .filter((group) => group.active)
+        .map((group) => group.code)
+        .filter(Boolean);
+
+      setVehicleGroups(activeCodes.length > 0 ? activeCodes : DEFAULT_VEHICLE_GROUP_CODES);
+    };
+
+    loadVehicleGroups();
+  }, [userEmail]);
+
 const handleAddIncome = async () => {
   if (!incomeForm.amount) {
     console.warn('Amount is required');
@@ -2506,20 +2527,11 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                       className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
                     >
                       <option value="">Επιλέξτε</option>
-                      <option value="A">A</option>
-                      <option value="B">B</option>
-                      <option value="C">C</option>
-                      <option value="D">D</option>
-                      <option value="E">E</option>
-                      <option value="H">H</option>
-                      <option value="H1">H1</option>
-                      <option value="H2">H2</option>
-                      <option value="H3">H3</option>
-                      <option value="H4">H4</option>
-                      <option value="H5">H5</option>
-                      <option value="K">K</option>
-                      <option value="K1">K1</option>
-                      <option value="K2">K2</option>
+                      {(vehicleGroups.length > 0 ? vehicleGroups : DEFAULT_VEHICLE_GROUP_CODES).map((group) => (
+                        <option key={group} value={group}>
+                          {group}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label className="space-y-2 text-sm text-zinc-300">
