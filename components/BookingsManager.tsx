@@ -28,6 +28,7 @@ import { DEFAULT_VEHICLE_GROUP_CODES, fetchVehicleGroups } from '@/lib/vehicleGr
 type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
 type LicenceState = 'uploaded' | 'empty';
 type VehicleGroup = string;
+type ReservationLanguage = 'English' | 'French' | 'Italian' | 'German' | 'Czech';
 
 type WhatsappMessage = {
   id: string;
@@ -78,6 +79,8 @@ type Reservation = {
   returnTime: string;
   price: number | null;
   status: ReservationStatus;
+  language: ReservationLanguage;
+  confirmationSent: boolean;
   sendReturn: boolean;
   licenceFront: LicenceState;
   licenceBack: LicenceState;
@@ -102,6 +105,7 @@ type ReservationForm = {
   price: string;
   notes: string;
   status: ReservationStatus;
+  language: ReservationLanguage;
   extras: BookingExtras;
 };
 
@@ -127,6 +131,7 @@ const fallbackAgencyRepresentatives: Record<string, string[]> = {
 
 const fallbackAgencies = Object.keys(fallbackAgencyRepresentatives);
 const statuses: Array<ReservationStatus | 'ALL'> = ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED'];
+const languageOptions: ReservationLanguage[] = ['English', 'French', 'Italian', 'German', 'Czech'];
 const statusActiveClasses: Record<ReservationStatus, string> = {
   PENDING: 'border-amber-300 bg-amber-400/25 text-amber-50 shadow-[0_0_16px_rgba(251,191,36,0.14)]',
   ACCEPTED: 'border-emerald-300 bg-emerald-400/24 text-emerald-50 shadow-[0_0_16px_rgba(52,211,153,0.14)]',
@@ -158,6 +163,7 @@ const initialForm: ReservationForm = {
   price: '',
   notes: '',
   status: 'PENDING',
+  language: 'English',
   extras: emptyExtras,
 };
 
@@ -186,6 +192,9 @@ const openNativeDatePicker = (input: HTMLInputElement) => {
 
 const normalizeStatus = (status: unknown): ReservationStatus =>
   status === 'ACCEPTED' ? 'ACCEPTED' : status === 'REJECTED' ? 'REJECTED' : 'PENDING';
+
+const normalizeLanguage = (language: unknown): ReservationLanguage =>
+  languageOptions.includes(language as ReservationLanguage) ? (language as ReservationLanguage) : 'English';
 
 const clampExtraQuantity = (value: unknown) => {
   const quantity = Number(value);
@@ -218,6 +227,8 @@ const reservationRecordToReservation = (record: ReservationRequestRecord): Reser
   returnTime: record.return_time || '',
   price: record.price === null || record.price === undefined ? null : Number(record.price),
   status: normalizeStatus(record.status),
+  language: normalizeLanguage(record.language),
+  confirmationSent: Boolean(record.confirmation_sent),
   sendReturn: Boolean(record.send_return),
   licenceFront: 'empty',
   licenceBack: 'empty',
@@ -245,6 +256,7 @@ const reservationToPayload = (reservation: Reservation): ReservationRequestPaylo
   return_time: reservation.returnTime || null,
   price: reservation.price,
   status: reservation.status,
+  language: reservation.language,
   send_return: reservation.sendReturn,
   baby_seat_qty: reservation.extras.baby_seat_qty,
   booster_qty: reservation.extras.booster_qty,
@@ -478,6 +490,8 @@ export default function BookingsManager() {
       returnTime: form.returnTime,
       price: form.price === '' ? null : Number(form.price) || null,
       status: form.status,
+      language: form.language,
+      confirmationSent: false,
       sendReturn: false,
       licenceFront: 'empty',
       licenceBack: 'empty',
@@ -577,7 +591,9 @@ export default function BookingsManager() {
                   'Return Time',
                   'Price',
                   'Status',
+                  'Language',
                   'Send Return',
+                  'Confirmation Sent',
                   'Extras',
                   'Licence Front',
                   'Licence Back',
@@ -591,14 +607,14 @@ export default function BookingsManager() {
             <tbody className="divide-y divide-white/[0.055]">
               {isLoadingReservations && (
                 <tr>
-                  <td colSpan={15} className="px-3 py-8 text-center text-sm text-zinc-500">
+                  <td colSpan={17} className="px-3 py-8 text-center text-sm text-zinc-500">
                     Φόρτωση κρατήσεων...
                   </td>
                 </tr>
               )}
               {!isLoadingReservations && filteredReservations.length === 0 && (
                 <tr>
-                  <td colSpan={15} className="px-3 py-8 text-center text-sm text-zinc-500">
+                  <td colSpan={17} className="px-3 py-8 text-center text-sm text-zinc-500">
                     Δεν υπάρχουν κρατήσεις.
                   </td>
                 </tr>
@@ -619,15 +635,17 @@ export default function BookingsManager() {
                     <td className="whitespace-nowrap px-2 py-1 font-mono text-[12px] text-sky-100">{reservation.phoneWhatsapp}</td>
                     <td className="whitespace-nowrap px-2 py-1"><VehicleGroupBadge value={reservation.vehicleGroup} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><AgencyBadge value={reservation.agency} /></td>
-                    <td className="whitespace-nowrap px-2 py-1 text-zinc-300">{reservation.representative}</td>
-                    <td className="whitespace-nowrap px-2 py-1 font-semibold text-zinc-100">{reservation.name}</td>
+                    <td className="max-w-[118px] truncate whitespace-nowrap px-2 py-1 text-zinc-300" title={reservation.representative}>{reservation.representative}</td>
+                    <td className="max-w-[132px] truncate whitespace-nowrap px-2 py-1 font-semibold text-zinc-100" title={reservation.name}>{reservation.name}</td>
                     <td className="whitespace-nowrap px-2 py-1 text-zinc-300">{formatDate(reservation.pickupDate)}</td>
                     <td className="whitespace-nowrap px-2 py-1 text-zinc-300">{formatDate(reservation.returnDate)}</td>
                     <td className="whitespace-nowrap px-2 py-1 text-zinc-300">{reservation.pickupTime}</td>
                     <td className="whitespace-nowrap px-2 py-1 text-zinc-300">{reservation.returnTime}</td>
                     <td className="whitespace-nowrap px-2 py-1 text-right font-semibold text-white">{money(reservation.price)}</td>
                     <td className="whitespace-nowrap px-2 py-1"><StatusBadge status={reservation.status} /></td>
+                    <td className="whitespace-nowrap px-2 py-1"><LanguageBadge language={reservation.language} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><BooleanBadge active={reservation.sendReturn} /></td>
+                    <td className="whitespace-nowrap px-2 py-1"><BooleanBadge active={reservation.confirmationSent} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><ExtrasBadges extras={reservation.extras} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={reservation.licenceFront} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={reservation.licenceBack} /></td>
@@ -828,6 +846,7 @@ function ReservationInspector({
               <EditableCompactInput label="Return Time" value={draft.returnTime} placeholder="18:00" onChange={(value) => updateDraft({ returnTime: value })} />
               <EditableCompactInput label="Price" type="number" value={draft.price === null ? '' : String(draft.price)} onChange={(value) => updateDraft({ price: value === '' ? null : Number(value) || null })} />
               <EditableCompactInput label="Email" type="email" value={draft.email} onChange={(value) => updateDraft({ email: value })} />
+              <EditableCompactSelect label="Language" value={draft.language} options={languageOptions} onChange={(value) => updateDraft({ language: normalizeLanguage(value) })} />
               <StatusPillSelector value={draft.status} onChange={updateStatus} />
             </div>
           </div>
@@ -1068,6 +1087,13 @@ function NewReservationModal({
             </Field>
             <Field label="Price">
               <input type="number" value={form.price} onChange={(event) => updateForm({ price: event.target.value })} className={modalFieldClass} placeholder="0.00" />
+            </Field>
+            <Field label="Language">
+              <select value={form.language} onChange={(event) => updateForm({ language: normalizeLanguage(event.target.value) })} className={modalFieldClass}>
+                {languageOptions.map((language) => (
+                  <option key={language} value={language}>{language}</option>
+                ))}
+              </select>
             </Field>
             <StatusPillSelector
               value={form.status}
@@ -1526,6 +1552,22 @@ function getWorkflowEventStyle(text: string) {
 
 function StatusBadge({ status }: { status: ReservationStatus }) {
   return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black tracking-wide ${statusActiveClasses[status]}`}>{status}</span>;
+}
+
+function LanguageBadge({ language }: { language: ReservationLanguage }) {
+  const languageClassName: Record<ReservationLanguage, string> = {
+    English: 'border-sky-300/35 bg-sky-300/14 text-sky-50',
+    French: 'border-indigo-300/35 bg-indigo-300/14 text-indigo-50',
+    Italian: 'border-emerald-300/35 bg-emerald-300/14 text-emerald-50',
+    German: 'border-amber-300/35 bg-amber-300/14 text-amber-50',
+    Czech: 'border-fuchsia-300/35 bg-fuchsia-300/14 text-fuchsia-50',
+  };
+
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black tracking-wide ${languageClassName[language]}`}>
+      {language}
+    </span>
+  );
 }
 
 function EditableCompactInput({

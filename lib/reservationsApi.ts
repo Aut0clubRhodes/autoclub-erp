@@ -16,6 +16,8 @@ export type ReservationRequestRecord = {
   return_time?: string | null;
   price?: number | null;
   status?: string | null;
+  language?: string | null;
+  confirmation_sent?: boolean | null;
   send_return?: boolean | null;
   baby_seat_qty?: number | null;
   booster_qty?: number | null;
@@ -37,6 +39,7 @@ export type ReservationRequestPayload = {
   return_time?: string | null;
   price?: number | null;
   status?: string | null;
+  language?: string | null;
   send_return?: boolean;
   baby_seat_qty?: number;
   booster_qty?: number;
