@@ -15,6 +15,14 @@ import {
   fetchReservationEvents,
   type ReservationEventRecord,
 } from '@/lib/reservationEventsApi';
+import {
+  fetchGroupStock,
+  upsertGroupStock,
+} from '@/lib/reservationAvailabilityApi';
+import {
+  checkGroupAvailability,
+  type GroupAvailabilityResult,
+} from '@/lib/reservationAvailabilityEngine';
 import { DEFAULT_VEHICLE_GROUP_CODES, fetchVehicleGroups } from '@/lib/vehicleGroupsApi';
 
 type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
@@ -39,6 +47,13 @@ type BookingExtras = {
   baby_seat_qty: number;
   booster_qty: number;
   infant_qty: number;
+};
+
+type AvailabilityDraftRow = {
+  vehicleGroup: string;
+  allowedStock: string;
+  active: boolean;
+  notes: string;
 };
 
 type LegacyBookingExtras = Partial<BookingExtras> & {
@@ -270,6 +285,8 @@ export default function BookingsManager() {
   const [statusFilter, setStatusFilter] = useState<(typeof statuses)[number]>('ALL');
   const [showNewModal, setShowNewModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [showAvailabilityTestModal, setShowAvailabilityTestModal] = useState(false);
   const [form, setForm] = useState<ReservationForm>(initialForm);
   const [agencyRows, setAgencyRows] = useState<AgencyRow[]>([]);
   const [representativeRows, setRepresentativeRows] = useState<RepresentativeRow[]>([]);
@@ -514,6 +531,20 @@ export default function BookingsManager() {
         </button>
         <button
           type="button"
+          onClick={() => setShowAvailabilityModal(true)}
+          className="shrink-0 rounded-lg border border-emerald-300/25 bg-emerald-300/10 px-3 py-1 text-xs font-bold text-emerald-100 transition duration-200 hover:-translate-y-0.5 hover:border-emerald-200/40 hover:bg-emerald-300/16"
+        >
+          Availability
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowAvailabilityTestModal(true)}
+          className="shrink-0 rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-xs font-bold text-cyan-100 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-cyan-300/16"
+        >
+          Check Availability
+        </button>
+        <button
+          type="button"
           onClick={() => {
             const nextAgency = agencyOptions[0] || '';
             setForm({
@@ -648,6 +679,17 @@ export default function BookingsManager() {
             setShowHistoryModal(false);
           }}
         />
+      )}
+
+      {showAvailabilityModal && (
+        <AvailabilityModal
+          vehicleGroups={vehicleGroups}
+          onClose={() => setShowAvailabilityModal(false)}
+        />
+      )}
+
+      {showAvailabilityTestModal && (
+        <AvailabilityTestModal onClose={() => setShowAvailabilityTestModal(false)} />
       )}
     </div>
   );
@@ -1173,6 +1215,279 @@ function BookingHistoryModal({
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+function AvailabilityModal({
+  vehicleGroups,
+  onClose,
+}: {
+  vehicleGroups: VehicleGroup[];
+  onClose: () => void;
+}) {
+  const [rows, setRows] = useState<AvailabilityDraftRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const loadAvailability = async () => {
+      setIsLoading(true);
+      const stockRows = await fetchGroupStock();
+      const stockByGroup = new Map(stockRows.map((stockRow) => [stockRow.vehicle_group, stockRow]));
+      const nextRows = vehicleGroups.map((vehicleGroup) => {
+        const stockRow = stockByGroup.get(vehicleGroup);
+
+        return {
+          vehicleGroup,
+          allowedStock: String(stockRow?.allowed_stock ?? 0),
+          active: stockRow?.active ?? true,
+          notes: stockRow?.notes || '',
+        };
+      });
+
+      setRows(nextRows);
+      setIsLoading(false);
+    };
+
+    void Promise.resolve().then(loadAvailability);
+  }, [vehicleGroups]);
+
+  const updateRow = (vehicleGroup: string, patch: Partial<AvailabilityDraftRow>) => {
+    setRows((currentRows) =>
+      currentRows.map((row) =>
+        row.vehicleGroup === vehicleGroup ? { ...row, ...patch } : row
+      )
+    );
+  };
+
+  const saveAvailability = async () => {
+    setIsSaving(true);
+    setMessage('');
+
+    const results = await Promise.all(
+      rows.map((row) =>
+        upsertGroupStock({
+          vehicle_group: row.vehicleGroup,
+          allowed_stock: Math.max(0, Math.trunc(Number(row.allowedStock) || 0)),
+          active: row.active,
+          notes: row.notes.trim() || null,
+        })
+      )
+    );
+
+    setIsSaving(false);
+    setMessage(results.some((result) => !result) ? 'Μερικές ομάδες δεν αποθηκεύτηκαν.' : 'Το availability ενημερώθηκε.');
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <section className="flex max-h-[88vh] w-[min(960px,95vw)] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,#09111d_0%,#060a11_55%,#03060a_100%)] text-white shadow-[0_32px_110px_rgba(0,0,0,0.62)]">
+        <header className="flex flex-shrink-0 items-start justify-between border-b border-white/10 bg-white/[0.025] px-6 py-5">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.24em] text-emerald-200/75">GROUP STOCK CONTROL</p>
+            <h2 className="mt-1 text-xl font-semibold text-white">Reservation Availability</h2>
+            <p className="mt-1 text-xs text-zinc-500">Allowed reservation stock per vehicle group.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white">
+            ×
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-auto p-5">
+          <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-black/20">
+            <div className="grid grid-cols-[120px_150px_120px_minmax(220px,1fr)] border-b border-white/[0.07] bg-white/[0.035] px-4 py-2 text-[11px] font-black uppercase tracking-[0.08em] text-zinc-200">
+              <span>Group</span>
+              <span>Allowed stock</span>
+              <span>Active</span>
+              <span>Notes</span>
+            </div>
+
+            {isLoading ? (
+              <p className="px-4 py-6 text-sm text-zinc-500">Loading availability...</p>
+            ) : rows.length > 0 ? (
+              <div className="divide-y divide-white/[0.055]">
+                {rows.map((row) => (
+                  <div key={row.vehicleGroup} className="grid grid-cols-[120px_150px_120px_minmax(220px,1fr)] items-center gap-3 px-4 py-2.5">
+                    <span className="font-mono text-sm font-black text-white">{row.vehicleGroup}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={row.allowedStock}
+                      onChange={(event) => updateRow(row.vehicleGroup, { allowedStock: event.target.value })}
+                      className="h-9 rounded-xl border border-white/[0.08] bg-zinc-950 px-3 text-sm font-bold text-white outline-none transition focus:border-emerald-300/45"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updateRow(row.vehicleGroup, { active: !row.active })}
+                      className={`h-8 rounded-full border px-3 text-[11px] font-black transition ${
+                        row.active
+                          ? 'border-emerald-300/35 bg-emerald-400/14 text-emerald-50'
+                          : 'border-zinc-600 bg-zinc-900 text-zinc-400'
+                      }`}
+                    >
+                      {row.active ? 'Active' : 'Inactive'}
+                    </button>
+                    <input
+                      value={row.notes}
+                      onChange={(event) => updateRow(row.vehicleGroup, { notes: event.target.value })}
+                      className="h-9 rounded-xl border border-white/[0.08] bg-zinc-950 px-3 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-emerald-300/45"
+                      placeholder="Notes"
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="px-4 py-6 text-sm text-zinc-500">No active vehicle groups found.</p>
+            )}
+          </div>
+
+          {message && (
+            <p className="mt-3 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-4 py-2 text-xs text-zinc-300">
+              {message}
+            </p>
+          )}
+        </div>
+
+        <footer className="flex flex-shrink-0 justify-end gap-2 border-t border-white/10 bg-black/20 px-6 py-4">
+          <button type="button" onClick={onClose} className="rounded-xl border border-white/[0.08] bg-white/[0.035] px-5 py-2.5 text-sm font-semibold text-zinc-300 transition hover:bg-white/[0.07] hover:text-white">
+            Κλείσιμο
+          </button>
+          <button
+            type="button"
+            onClick={saveAvailability}
+            disabled={isSaving || rows.length === 0}
+            className="rounded-xl border border-emerald-200/35 bg-emerald-400/16 px-5 py-2.5 text-sm font-bold text-emerald-50 transition hover:-translate-y-0.5 hover:bg-emerald-400/24 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {isSaving ? 'Αποθήκευση...' : 'Αποθήκευση'}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function AvailabilityTestModal({ onClose }: { onClose: () => void }) {
+  const [pickupDate, setPickupDate] = useState('');
+  const [returnDate, setReturnDate] = useState('');
+  const [results, setResults] = useState<GroupAvailabilityResult[]>([]);
+  const [isChecking, setIsChecking] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const runCheck = async () => {
+    if (!pickupDate || !returnDate) {
+      setMessage('Select pickup and return date first.');
+      return;
+    }
+
+    setIsChecking(true);
+    setMessage('');
+
+    const availability = await checkGroupAvailability({
+      pickup_date: pickupDate,
+      return_date: returnDate,
+    });
+
+    setResults(availability);
+    setIsChecking(false);
+    setMessage(availability.length === 0 ? 'No available groups for this date range.' : '');
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <section className="flex max-h-[84vh] w-[min(680px,94vw)] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,#09111d_0%,#060a11_58%,#03060a_100%)] text-white shadow-[0_32px_110px_rgba(0,0,0,0.62)]">
+        <header className="flex flex-shrink-0 items-start justify-between border-b border-white/10 bg-white/[0.025] px-5 py-4">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-cyan-200/75">AVAILABILITY ENGINE</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">Check Availability</h2>
+            <p className="mt-1 text-xs text-zinc-500">Test group stock against accepted reservations.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white">
+            ×
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-auto p-5">
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <Field label="Pickup date">
+              <input
+                type="date"
+                value={pickupDate}
+                onClick={(event) => openNativeDatePicker(event.currentTarget)}
+                onFocus={(event) => openNativeDatePicker(event.currentTarget)}
+                onChange={(event) => setPickupDate(event.target.value)}
+                className={modalFieldClass}
+              />
+            </Field>
+            <Field label="Return date">
+              <input
+                type="date"
+                value={returnDate}
+                onClick={(event) => openNativeDatePicker(event.currentTarget)}
+                onFocus={(event) => openNativeDatePicker(event.currentTarget)}
+                onChange={(event) => setReturnDate(event.target.value)}
+                className={modalFieldClass}
+              />
+            </Field>
+            <button
+              type="button"
+              onClick={runCheck}
+              disabled={isChecking}
+              className="h-10 rounded-xl border border-cyan-200/35 bg-cyan-400/16 px-5 text-sm font-bold text-cyan-50 transition hover:-translate-y-0.5 hover:bg-cyan-400/24 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {isChecking ? 'Checking...' : 'Check'}
+            </button>
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-2xl border border-white/[0.08] bg-black/20">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-white/[0.035] text-[11px] font-black uppercase tracking-[0.08em] text-zinc-300">
+                <tr>
+                  <th className="px-4 py-2">GROUP</th>
+                  <th className="px-4 py-2 text-right">STOCK</th>
+                  <th className="px-4 py-2 text-right">BOOKED</th>
+                  <th className="px-4 py-2 text-right">AVAILABLE</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.055]">
+                {results.length > 0 ? (
+                  results.map((result) => (
+                    <tr key={result.vehicle_group}>
+                      <td className="px-4 py-2 font-mono font-black text-white">{result.vehicle_group}</td>
+                      <td className="px-4 py-2 text-right font-semibold text-zinc-100">{result.allowed_stock}</td>
+                      <td className="px-4 py-2 text-right font-semibold text-zinc-100">{result.booked_count}</td>
+                      <td className="px-4 py-2 text-right">
+                        {result.available <= 0 ? (
+                          <span className="rounded-full border border-rose-300/35 bg-rose-400/14 px-2.5 py-1 text-[11px] font-black text-rose-50">
+                            FULL
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-emerald-300/35 bg-emerald-400/14 px-2.5 py-1 text-[11px] font-black text-emerald-50">
+                            {result.available}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-6 text-center text-sm text-zinc-500">
+                      {message || 'Run a check to see availability.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {message && results.length > 0 && (
+            <p className="mt-3 rounded-2xl border border-white/[0.07] bg-white/[0.035] px-4 py-2 text-xs text-zinc-300">
+              {message}
+            </p>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
