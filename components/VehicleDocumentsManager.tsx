@@ -28,6 +28,7 @@ export default function VehicleDocumentsManager() {
   const [vehicles, setVehicles] = useState<DocumentVehicle[]>([]);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [vehicleSelectSearchTerm, setVehicleSelectSearchTerm] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,6 +64,23 @@ export default function VehicleDocumentsManager() {
   }, []);
 
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
+
+  const filteredUploadVehicles = useMemo(() => {
+    const query = vehicleSelectSearchTerm.trim().toLowerCase();
+    if (!query) return vehicles;
+
+    return vehicles.filter((vehicle) =>
+      [vehicle.plate, vehicle.brand, vehicle.model].some((value) => value.toLowerCase().includes(query))
+    );
+  }, [vehicles, vehicleSelectSearchTerm]);
+
+  const uploadVehicleOptions = useMemo(() => {
+    if (!selectedVehicle || filteredUploadVehicles.some((vehicle) => vehicle.id === selectedVehicle.id)) {
+      return filteredUploadVehicles;
+    }
+
+    return [selectedVehicle, ...filteredUploadVehicles];
+  }, [filteredUploadVehicles, selectedVehicle]);
 
   const filteredDocuments = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -202,6 +220,15 @@ export default function VehicleDocumentsManager() {
           <p className="text-sm font-semibold text-white">Ανέβασμα Άδειας Κυκλοφορίας</p>
           <div className="mt-4 space-y-3">
             <label className="block space-y-2 text-sm text-zinc-300">
+              <span>Αναζήτηση οχήματος</span>
+              <input
+                value={vehicleSelectSearchTerm}
+                onChange={(event) => setVehicleSelectSearchTerm(event.target.value)}
+                placeholder="Πινακίδα, μάρκα ή μοντέλο..."
+                className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none transition duration-200 placeholder:text-zinc-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15"
+              />
+            </label>
+            <label className="block space-y-2 text-sm text-zinc-300">
               <span>Όχημα</span>
               <select
                 value={selectedVehicleId}
@@ -209,7 +236,7 @@ export default function VehicleDocumentsManager() {
                 className="w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-emerald-500"
               >
                 <option value="">Επιλογή οχήματος</option>
-                {vehicles.map((vehicle) => (
+                {uploadVehicleOptions.map((vehicle) => (
                   <option key={vehicle.id} value={vehicle.id}>
                     {vehicle.plate} - {vehicle.brand} {vehicle.model}
                   </option>

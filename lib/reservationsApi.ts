@@ -23,6 +23,8 @@ export type ReservationRequestRecord = {
   booster_qty?: number | null;
   infant_qty?: number | null;
   notes?: string | null;
+  licence_front_url?: string | null;
+  licence_back_url?: string | null;
 };
 
 export type ReservationRequestPayload = {

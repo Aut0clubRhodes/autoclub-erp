@@ -61,6 +61,7 @@ export default function ServicesManager() {
   const [selectedCarId, setSelectedCarId] = useState<number | null>(null);
   const [editingServiceId, setEditingServiceId] = useState<number | null>(null);
   const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
+  const [serviceSearchTerm, setServiceSearchTerm] = useState('');
   const [form, setForm] = useState(initialForm);
 
   const loadData = async () => {
@@ -144,6 +145,15 @@ export default function ServicesManager() {
       }),
     [cars, services]
   );
+
+  const filteredCarRows = useMemo(() => {
+    const query = serviceSearchTerm.trim().toLowerCase();
+    if (!query) return carRows;
+
+    return carRows.filter(({ car }) =>
+      [car.plate, car.brand, car.model].some((value) => value.toLowerCase().includes(query))
+    );
+  }, [carRows, serviceSearchTerm]);
 
   const selectedCarServiceRows = useMemo(
     () =>
@@ -469,6 +479,14 @@ export default function ServicesManager() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-3xl border border-white/[0.075] bg-white/[0.025] shadow-[0_18px_58px_rgba(0,0,0,0.24)] transition duration-200 hover:border-orange-200/12 hover:shadow-[0_22px_64px_rgba(0,0,0,0.28),0_0_30px_rgba(249,115,22,0.04)]">
+          <div className="border-b border-white/[0.06] bg-white/[0.025] p-4">
+            <input
+              value={serviceSearchTerm}
+              onChange={(event) => setServiceSearchTerm(event.target.value)}
+              placeholder="Search by plate, brand, model..."
+              className="w-full rounded-2xl border border-zinc-700 bg-zinc-950/80 px-4 py-3 text-sm text-white outline-none transition duration-200 placeholder:text-zinc-600 focus:border-orange-400/55 focus:ring-2 focus:ring-orange-400/15"
+            />
+          </div>
           <table className="w-full min-w-[920px] text-left">
             <thead className="bg-white/[0.035]">
               <tr>
@@ -488,7 +506,7 @@ export default function ServicesManager() {
               </tr>
             </thead>
             <tbody>
-              {carRows.map(({ car, latestServiceDate, serviceCount }) => (
+              {filteredCarRows.map(({ car, latestServiceDate, serviceCount }) => (
                 <tr key={car.id} className="border-t border-white/[0.055] transition duration-200 hover:bg-white/[0.035]">
                   <td className="px-4 py-4 text-sm font-medium text-white">{car.plate}</td>
                   <td className="px-4 py-4 text-sm text-zinc-200">{car.brand || '-'}</td>
@@ -516,10 +534,10 @@ export default function ServicesManager() {
                   </td>
                 </tr>
               ))}
-              {carRows.length === 0 && (
+              {filteredCarRows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-sm text-zinc-500">
-                    Δεν υπάρχουν αυτοκίνητα.
+                    {carRows.length === 0 ? 'Δεν υπάρχουν αυτοκίνητα.' : 'No vehicles match this search.'}
                   </td>
                 </tr>
               )}

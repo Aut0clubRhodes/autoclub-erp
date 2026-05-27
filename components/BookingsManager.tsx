@@ -57,6 +57,11 @@ type AvailabilityDraftRow = {
   notes: string;
 };
 
+type LicenceViewerDocument = {
+  title: string;
+  url: string;
+};
+
 type LegacyBookingExtras = Partial<BookingExtras> & {
   babySeat?: unknown;
   booster?: unknown;
@@ -84,6 +89,8 @@ type Reservation = {
   sendReturn: boolean;
   licenceFront: LicenceState;
   licenceBack: LicenceState;
+  licenceFrontUrl: string;
+  licenceBackUrl: string;
   notes: string;
   extras: BookingExtras;
   whatsappMessages?: WhatsappMessage[];
@@ -212,6 +219,19 @@ const normalizeExtras = (extras?: LegacyBookingExtras): BookingExtras => ({
 const hasSelectedExtras = (extras: BookingExtras) =>
   extras.baby_seat_qty > 0 || extras.booster_qty > 0 || extras.infant_qty > 0;
 
+const hasLicenceUrl = (url?: string | null) => typeof url === 'string' && url.trim().length > 0;
+
+const resolveLicenceUrl = (value?: string | null) => {
+  if (!value) return '';
+  const clean = value.trim();
+
+  if (clean.startsWith('http://') || clean.startsWith('https://')) {
+    return clean;
+  }
+
+  return `https://ilmwmzifvpnsajfehhir.supabase.co/storage/v1/object/public/${clean.replace(/^\/+/, '')}`;
+};
+
 const reservationRecordToReservation = (record: ReservationRequestRecord): Reservation => ({
   id: String(record.id),
   phoneWhatsapp: record.phone || '',
@@ -230,8 +250,10 @@ const reservationRecordToReservation = (record: ReservationRequestRecord): Reser
   language: normalizeLanguage(record.language),
   confirmationSent: Boolean(record.confirmation_sent),
   sendReturn: Boolean(record.send_return),
-  licenceFront: 'empty',
-  licenceBack: 'empty',
+  licenceFront: hasLicenceUrl(record.licence_front_url) ? 'uploaded' : 'empty',
+  licenceBack: hasLicenceUrl(record.licence_back_url) ? 'uploaded' : 'empty',
+  licenceFrontUrl: record.licence_front_url || '',
+  licenceBackUrl: record.licence_back_url || '',
   notes: record.notes || '',
   extras: normalizeExtras({
     baby_seat_qty: record.baby_seat_qty || 0,
@@ -495,6 +517,8 @@ export default function BookingsManager() {
       sendReturn: false,
       licenceFront: 'empty',
       licenceBack: 'empty',
+      licenceFrontUrl: '',
+      licenceBackUrl: '',
       notes: form.notes,
       extras: normalizeExtras(form.extras),
       whatsappMessages: defaultWhatsappMessages,
@@ -647,8 +671,8 @@ export default function BookingsManager() {
                     <td className="whitespace-nowrap px-2 py-1"><BooleanBadge active={reservation.sendReturn} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><BooleanBadge active={reservation.confirmationSent} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><ExtrasBadges extras={reservation.extras} /></td>
-                    <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={reservation.licenceFront} /></td>
-                    <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={reservation.licenceBack} /></td>
+                    <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={reservation.licenceFront} url={reservation.licenceFrontUrl} /></td>
+                    <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={reservation.licenceBack} url={reservation.licenceBackUrl} /></td>
                   </tr>
                 );
               })}
@@ -735,6 +759,7 @@ function ReservationInspector({
   onCreateWorkflowEvent: (reservationId: string, eventType: string, eventMessage: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<Reservation>(reservation);
+  const [viewerDocument, setViewerDocument] = useState<LicenceViewerDocument | null>(null);
 
   const updateDraft = (patch: Partial<Reservation>) => {
     setDraft((currentDraft) => ({ ...currentDraft, ...patch }));
@@ -817,6 +842,7 @@ function ReservationInspector({
     { label: 'Delete booking', tone: 'delete', onClick: onDelete },
   ];
   return (
+    <>
     <section className="min-h-0 flex-1 rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-1.5 shadow-[0_18px_55px_rgba(0,0,0,0.22)]">
       <div className="grid h-full min-h-0 gap-1.5 xl:grid-cols-[minmax(390px,1.12fr)_minmax(300px,0.88fr)_minmax(230px,0.55fr)]">
         <Panel title="Reservation record" subtitle={reservation.id}>
@@ -855,7 +881,7 @@ function ReservationInspector({
         <Panel title="Attachments & notes" subtitle="customer files">
           <div className="grid gap-1.5 md:grid-cols-2">
             <div className="grid gap-1.5">
-              <LicenceCard title="Licence Front" state={draft.licenceFront} />
+              <LicenceCard title="Licence Front" state={draft.licenceFront} url={draft.licenceFrontUrl} onOpen={setViewerDocument} />
               <label className="grid gap-1 text-[11px] font-semibold text-zinc-500">
                 Notes
                 <textarea
@@ -866,7 +892,7 @@ function ReservationInspector({
               </label>
             </div>
             <div className="grid gap-1.5">
-              <LicenceCard title="Licence Back" state={draft.licenceBack} />
+              <LicenceCard title="Licence Back" state={draft.licenceBack} url={draft.licenceBackUrl} onOpen={setViewerDocument} />
               <ExtrasQuantityGroup
                 extras={draft.extras}
                 onChange={(extras) => updateDraft({ extras })}
@@ -967,6 +993,13 @@ function ReservationInspector({
         </Panel>
       </div>
     </section>
+    {viewerDocument && (
+      <LicenceViewerModal
+        document={viewerDocument}
+        onClose={() => setViewerDocument(null)}
+      />
+    )}
+    </>
   );
 }
 
@@ -1673,32 +1706,143 @@ function EditableCompactSelect({
   );
 }
 
-function LicenceCard({ title, state }: { title: string; state: LicenceState }) {
+function LicenceCard({
+  title,
+  state,
+  url,
+  onOpen,
+}: {
+  title: string;
+  state: LicenceState;
+  url?: string;
+  onOpen: (document: LicenceViewerDocument) => void;
+}) {
+  const resolvedUrl = resolveLicenceUrl(url);
+  const isImage = /\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(resolvedUrl);
+
   return (
     <div className="rounded-xl border border-white/[0.065] bg-black/25 p-1.5">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-bold text-zinc-100">{title}</p>
         <LicenceBadge state={state} />
       </div>
-      <div className="mt-1 flex h-14 items-center justify-center rounded-lg border border-dashed border-white/[0.12] bg-white/[0.025] text-[11px] font-semibold text-zinc-500">
-        {state === 'uploaded' ? 'Mock thumbnail' : 'No attachment'}
-      </div>
+      {state === 'uploaded' && resolvedUrl ? (
+        <button
+          type="button"
+          onClick={() => onOpen({ title, url: resolvedUrl })}
+          className="mt-1 flex h-14 items-center justify-center overflow-hidden rounded-lg border border-blue-300/18 bg-blue-300/[0.045] text-[11px] font-bold text-blue-100 transition hover:border-blue-200/40 hover:bg-blue-300/[0.08]"
+        >
+          {isImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={resolvedUrl} alt={title} className="h-full w-full object-cover" />
+          ) : (
+            'Open file'
+          )}
+        </button>
+      ) : (
+        <div className="mt-1 flex h-14 items-center justify-center rounded-lg border border-dashed border-white/[0.12] bg-white/[0.025] text-[11px] font-semibold text-zinc-500">
+          No attachment
+        </div>
+      )}
     </div>
   );
 }
 
-function LicenceCell({ state }: { state: LicenceState }) {
+function LicenceCell({ state }: { state: LicenceState; url?: string }) {
+  const className = `inline-flex h-5 w-8 items-center justify-center rounded-md border text-[11px] ${
+    state === 'uploaded'
+      ? 'border-blue-300/35 bg-blue-300/14 text-blue-100'
+      : 'border-white/[0.08] bg-white/[0.025] text-zinc-500'
+  }`;
+
   return (
-    <span
-      className={`inline-flex h-5 w-8 items-center justify-center rounded-md border text-[11px] ${
-        state === 'uploaded'
-          ? 'border-blue-300/35 bg-blue-300/14 text-blue-100'
-          : 'border-white/[0.08] bg-white/[0.025] text-zinc-500'
-      }`}
-      title={state === 'uploaded' ? 'Licence photo received' : 'No attachment'}
-    >
+    <span className={className} title={state === 'uploaded' ? 'Licence file received' : 'No attachment'}>
       {state === 'uploaded' ? '▣' : '□'}
     </span>
+  );
+}
+
+function LicenceViewerModal({
+  document,
+  onClose,
+}: {
+  document: LicenceViewerDocument;
+  onClose: () => void;
+}) {
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const resolvedUrl = resolveLicenceUrl(document.url);
+  const resolvedPath = resolvedUrl.split('?')[0].toLowerCase();
+  const isPdf = resolvedPath.endsWith('.pdf');
+  const isImage =
+    resolvedPath.endsWith('.jpg') ||
+    resolvedPath.endsWith('.jpeg') ||
+    resolvedPath.endsWith('.png') ||
+    resolvedPath.endsWith('.webp');
+
+  const resetView = () => {
+    setZoom(1);
+    setRotation(0);
+  };
+  const buttonClassName =
+    'rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs font-bold text-zinc-200 transition hover:border-blue-300/30 hover:bg-blue-400/12 hover:text-blue-50';
+  console.log('licence url', resolvedUrl);
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/75 p-5 backdrop-blur-sm">
+      <section className="flex max-h-[90vh] w-[min(1120px,94vw)] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,#09111d_0%,#050910_100%)] text-white shadow-[0_32px_120px_rgba(0,0,0,0.68)]">
+        <header className="flex flex-shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-white/[0.025] px-5 py-4">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-blue-200/75">LICENCE VIEWER</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">{document.title}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/[0.08] bg-white/[0.035] px-4 py-2 text-sm font-bold text-zinc-300 transition hover:bg-white/[0.07] hover:text-white"
+          >
+            Close
+          </button>
+        </header>
+
+        <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-black/20 px-5 py-3">
+          {isImage && (
+            <>
+              <button type="button" onClick={() => setZoom((value) => Math.min(3, value + 0.15))} className={buttonClassName}>Zoom in</button>
+              <button type="button" onClick={() => setZoom((value) => Math.max(0.4, value - 0.15))} className={buttonClassName}>Zoom out</button>
+              <button type="button" onClick={() => setRotation((value) => value - 90)} className={buttonClassName}>Rotate left</button>
+              <button type="button" onClick={() => setRotation((value) => value + 90)} className={buttonClassName}>Rotate right</button>
+              <button type="button" onClick={resetView} className={buttonClassName}>Reset</button>
+            </>
+          )}
+          <a href={resolvedUrl} target="_blank" rel="noreferrer" className={`${buttonClassName} ml-auto`}>Open in new tab</a>
+        </div>
+
+        <div className="flex h-[min(66vh,680px)] min-h-0 items-center justify-center overflow-hidden bg-black/35 p-5">
+          {isPdf ? (
+            <iframe title={document.title} src={resolvedUrl} className="h-full w-full rounded-2xl border border-white/10 bg-zinc-950" />
+          ) : isImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={resolvedUrl}
+              alt={document.title}
+              className="block max-h-full max-w-full rounded-2xl object-contain transition-transform duration-200"
+              style={{
+                transform: `rotate(${rotation}deg) scale(${zoom})`,
+                transformOrigin: 'center center',
+              }}
+            />
+          ) : (
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.035] px-6 py-5 text-center">
+              <p className="text-sm font-semibold text-zinc-200">Preview is not available for this file type.</p>
+              <a href={resolvedUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-xl border border-blue-300/30 bg-blue-400/12 px-4 py-2 text-sm font-bold text-blue-100 transition hover:bg-blue-400/18">
+                Open in new tab
+              </a>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 
