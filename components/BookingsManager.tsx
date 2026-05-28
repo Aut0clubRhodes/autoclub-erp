@@ -25,6 +25,9 @@ import {
 } from '@/lib/reservationAvailabilityEngine';
 import { DEFAULT_VEHICLE_GROUP_CODES, fetchVehicleGroups } from '@/lib/vehicleGroupsApi';
 
+// Paste the real Make webhook URL here for both Send reminder buttons.
+const SEND_REMINDER_WEBHOOK_URL = 'https://hook.eu1.make.com/8hq66ccdrcx0aa56ui43o6ylpgq8bff5';
+
 type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
 type LicenceState = 'uploaded' | 'empty';
 type VehicleGroup = string;
@@ -87,6 +90,8 @@ type Reservation = {
   language: ReservationLanguage;
   confirmationSent: boolean;
   sendReturn: boolean;
+  returnReminderSent: boolean;
+  returnReminderSentAt: string;
   licenceFront: LicenceState;
   licenceBack: LicenceState;
   licenceFrontUrl: string;
@@ -250,6 +255,8 @@ const reservationRecordToReservation = (record: ReservationRequestRecord): Reser
   language: normalizeLanguage(record.language),
   confirmationSent: Boolean(record.confirmation_sent),
   sendReturn: Boolean(record.send_return),
+  returnReminderSent: Boolean(record.return_reminder_sent),
+  returnReminderSentAt: record.return_reminder_sent_at || '',
   licenceFront: hasLicenceUrl(record.licence_front_url) ? 'uploaded' : 'empty',
   licenceBack: hasLicenceUrl(record.licence_back_url) ? 'uploaded' : 'empty',
   licenceFrontUrl: record.licence_front_url || '',
@@ -280,6 +287,8 @@ const reservationToPayload = (reservation: Reservation): ReservationRequestPaylo
   status: reservation.status,
   language: reservation.language,
   send_return: reservation.sendReturn,
+  return_reminder_sent: reservation.returnReminderSent,
+  return_reminder_sent_at: reservation.returnReminderSentAt || null,
   baby_seat_qty: reservation.extras.baby_seat_qty,
   booster_qty: reservation.extras.booster_qty,
   infant_qty: reservation.extras.infant_qty,
@@ -307,6 +316,46 @@ const hasAcceptedRequiredFormFields = (form: ReservationForm) =>
   form.pickupTime.trim() !== '' && form.returnTime.trim() !== '' && form.price.trim() !== '';
 
 const acceptedValidationMessage = 'Συμπλήρωσε ώρα παραλαβής, ώρα επιστροφής και τιμή πριν κάνεις ACCEPTED.';
+const returnReminderEventType = 'return_reminder_sent';
+const returnReminderEventMessage = 'Return reminder sent. Waiting for customer return confirmation.';
+
+async function postReturnReminderWebhook(reservation: Reservation) {
+  const reminderPayload = {
+    reservation_id: reservation.id,
+    phone: reservation.phoneWhatsapp,
+    customer_name: reservation.name,
+    hotel_room: reservation.hotelRoom,
+    return_date: reservation.returnDate,
+    return_time: reservation.returnTime,
+    language: reservation.language,
+    vehicle_group: reservation.vehicleGroup,
+    price: reservation.price,
+  };
+
+  const response = await fetch(SEND_REMINDER_WEBHOOK_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(reminderPayload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+}
+
+function buildReturnReminderPatch(reservation: Reservation): Partial<Reservation> {
+  return {
+    sendReturn: true,
+    returnReminderSent: true,
+    returnReminderSentAt: new Date().toISOString(),
+    whatsappMessages: [
+      ...(reservation.whatsappMessages || defaultWhatsappMessages),
+      createWhatsappMessage('Return reminder sent to customer.'),
+    ],
+  };
+}
 
 export default function BookingsManager() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -319,6 +368,7 @@ export default function BookingsManager() {
   const [statusFilter, setStatusFilter] = useState<(typeof statuses)[number]>('ALL');
   const [showNewModal, setShowNewModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showReturnsModal, setShowReturnsModal] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [showAvailabilityTestModal, setShowAvailabilityTestModal] = useState(false);
   const [form, setForm] = useState<ReservationForm>(initialForm);
@@ -491,6 +541,50 @@ export default function BookingsManager() {
     });
   };
 
+  const sendReminder = async (reservation: Reservation) => {
+    try {
+      await postReturnReminderWebhook(reservation);
+    } catch (error) {
+      console.error('Send reminder webhook failed:', error);
+      window.alert('Το reminder δεν στάλθηκε. Δοκιμάστε ξανά.');
+      return false;
+    }
+
+    const reminderPatch = buildReturnReminderPatch(reservation);
+    const nextReservation = {
+      ...reservation,
+      ...reminderPatch,
+    };
+    const updatedRecord = await updateReservation(nextReservation.id, reservationToPayload(nextReservation));
+
+    if (!updatedRecord) {
+      window.alert('Το reminder στάλθηκε αλλά η κράτηση δεν ενημερώθηκε.');
+      return false;
+    }
+
+    const updatedReservation = {
+      ...reservationRecordToReservation(updatedRecord),
+      whatsappMessages: nextReservation.whatsappMessages,
+    };
+    setReservations((currentReservations) =>
+      currentReservations.map((currentReservation) =>
+        currentReservation.id === updatedReservation.id ? updatedReservation : currentReservation
+      )
+    );
+
+    const event = await createReservationEvent({
+      reservation_id: updatedReservation.id,
+      event_type: returnReminderEventType,
+      event_message: returnReminderEventMessage,
+    });
+
+    if (event && selectedReservation?.id === updatedReservation.id) {
+      setWorkflowEvents((currentEvents) => [reservationEventToWorkflowEvent(event), ...currentEvents]);
+    }
+
+    return updatedReservation;
+  };
+
   const saveReservation = async () => {
     if (form.status === 'ACCEPTED' && !hasAcceptedRequiredFormFields(form)) {
       window.alert(acceptedValidationMessage);
@@ -515,6 +609,8 @@ export default function BookingsManager() {
       language: form.language,
       confirmationSent: false,
       sendReturn: false,
+      returnReminderSent: false,
+      returnReminderSentAt: '',
       licenceFront: 'empty',
       licenceBack: 'empty',
       licenceFrontUrl: '',
@@ -566,6 +662,13 @@ export default function BookingsManager() {
           className="shrink-0 rounded-lg border border-violet-300/25 bg-violet-300/10 px-3 py-1 text-xs font-bold text-violet-100 transition duration-200 hover:-translate-y-0.5 hover:border-violet-200/40 hover:bg-violet-300/16"
         >
           Ιστορικό Κρατήσεων
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowReturnsModal(true)}
+          className="shrink-0 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-1 text-xs font-bold text-amber-100 transition duration-200 hover:-translate-y-0.5 hover:border-amber-200/40 hover:bg-amber-300/16"
+        >
+          Επιστροφές
         </button>
         <button
           type="button"
@@ -693,6 +796,7 @@ export default function BookingsManager() {
           workflowEvents={workflowEvents}
           isLoadingWorkflowEvents={isLoadingWorkflowEvents}
           onCreateWorkflowEvent={recordWorkflowEvent}
+          onSendReminder={sendReminder}
         />
       ) : (
         <section className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-6 text-sm text-zinc-500">
@@ -723,6 +827,14 @@ export default function BookingsManager() {
         />
       )}
 
+      {showReturnsModal && (
+        <ReturnsModal
+          reservations={reservations}
+          onClose={() => setShowReturnsModal(false)}
+          onSendReminder={sendReminder}
+        />
+      )}
+
       {showAvailabilityModal && (
         <AvailabilityModal
           vehicleGroups={vehicleGroups}
@@ -747,6 +859,7 @@ function ReservationInspector({
   workflowEvents,
   isLoadingWorkflowEvents,
   onCreateWorkflowEvent,
+  onSendReminder,
 }: {
   reservation: Reservation;
   agencyOptions: string[];
@@ -757,6 +870,7 @@ function ReservationInspector({
   workflowEvents: WorkflowEvent[];
   isLoadingWorkflowEvents: boolean;
   onCreateWorkflowEvent: (reservationId: string, eventType: string, eventMessage: string) => Promise<void>;
+  onSendReminder: (reservation: Reservation) => Promise<Reservation | false>;
 }) {
   const [draft, setDraft] = useState<Reservation>(reservation);
   const [viewerDocument, setViewerDocument] = useState<LicenceViewerDocument | null>(null);
@@ -778,25 +892,9 @@ function ReservationInspector({
   };
 
   const sendReminder = async () => {
-    const nextWhatsappMessages = [
-      ...(draft.whatsappMessages || defaultWhatsappMessages),
-      createWhatsappMessage('Return reminder sent to customer.'),
-    ];
-    const patch = {
-      sendReturn: true,
-      whatsappMessages: nextWhatsappMessages,
-    };
-
-    const nextDraft = { ...draft, ...patch };
-
-    updateDraft(patch);
-    const updated = await onUpdate(nextDraft);
+    const updated = await onSendReminder(draft);
     if (updated) {
-      await onCreateWorkflowEvent(
-        draft.id,
-        'return_reminder_sent',
-        'Return reminder sent. Waiting for customer return confirmation.'
-      );
+      setDraft(updated);
     }
   };
 
@@ -1267,6 +1365,106 @@ function BookingHistoryModal({
                 <tr>
                   <td colSpan={7} className="px-3 py-8 text-center text-sm text-zinc-500">
                     Δεν βρέθηκαν κρατήσεις.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReturnsModal({
+  reservations,
+  onClose,
+  onSendReminder,
+}: {
+  reservations: Reservation[];
+  onClose: () => void;
+  onSendReminder: (reservation: Reservation) => Promise<Reservation | false>;
+}) {
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [sendingReservationId, setSendingReservationId] = useState<string | null>(null);
+
+  const returnRows = useMemo(
+    () => reservations.filter((reservation) => reservation.returnDate === selectedDate),
+    [reservations, selectedDate]
+  );
+
+  const handleSendReminder = async (reservation: Reservation) => {
+    setSendingReservationId(reservation.id);
+    await onSendReminder(reservation);
+    setSendingReservationId(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[82vh] w-[min(980px,95vw)] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,#09111d_0%,#060a11_58%,#03060a_100%)] shadow-[0_32px_110px_rgba(0,0,0,0.62)]">
+        <div className="flex flex-shrink-0 items-start justify-between border-b border-white/10 bg-white/[0.025] px-5 py-4">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-amber-200/75">RETURNS</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">Επιστροφές</h2>
+            <p className="mt-1 text-xs text-zinc-500">Κρατήσεις με επιστροφή στην επιλεγμένη ημερομηνία.</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white">
+            ×
+          </button>
+        </div>
+
+        <div className="flex flex-shrink-0 items-end gap-3 border-b border-white/[0.06] bg-black/20 p-4">
+          <Field label="Ημερομηνία επιστροφής">
+            <input
+              type="date"
+              value={selectedDate}
+              onClick={(event) => openNativeDatePicker(event.currentTarget)}
+              onFocus={(event) => openNativeDatePicker(event.currentTarget)}
+              onChange={(event) => setSelectedDate(event.target.value)}
+              className={modalFieldClass}
+            />
+          </Field>
+          <div className="pb-2 text-xs font-semibold text-zinc-500">
+            {returnRows.length} επιστροφές
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          <table className="w-full min-w-[900px] text-left text-[12px]">
+            <thead className="sticky top-0 z-10 bg-[#101824] text-[11px] font-semibold text-zinc-200 shadow-[0_1px_0_rgba(255,255,255,0.08)]">
+              <tr>
+                {['Customer', 'Phone', 'Group', 'Hotel / Room', 'Return time', 'Language', 'Send Return', 'Reminder', 'Action'].map((column) => (
+                  <th key={column} className="whitespace-nowrap px-2 py-1.5">{column}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.055]">
+              {returnRows.map((reservation) => (
+                <tr key={reservation.id} className="transition duration-200 hover:bg-white/[0.035]">
+                  <td className="whitespace-nowrap px-2 py-2 font-semibold text-zinc-100">{reservation.name}</td>
+                  <td className="whitespace-nowrap px-2 py-2 font-mono text-sky-100">{reservation.phoneWhatsapp}</td>
+                  <td className="whitespace-nowrap px-2 py-2"><VehicleGroupBadge value={reservation.vehicleGroup} /></td>
+                  <td className="max-w-[180px] truncate whitespace-nowrap px-2 py-2 text-zinc-300" title={reservation.hotelRoom}>{reservation.hotelRoom}</td>
+                  <td className="whitespace-nowrap px-2 py-2 font-semibold text-zinc-100">{reservation.returnTime || '-'}</td>
+                  <td className="whitespace-nowrap px-2 py-2"><LanguageBadge language={reservation.language} /></td>
+                  <td className="whitespace-nowrap px-2 py-2"><BooleanBadge active={reservation.sendReturn} /></td>
+                  <td className="whitespace-nowrap px-2 py-2"><BooleanBadge active={reservation.returnReminderSent} /></td>
+                  <td className="whitespace-nowrap px-2 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleSendReminder(reservation)}
+                      disabled={sendingReservationId === reservation.id}
+                      className="rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-1.5 text-xs font-bold text-cyan-100 transition hover:border-cyan-200/40 hover:bg-cyan-300/16 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {sendingReservationId === reservation.id ? 'Sending...' : 'Send reminder'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {returnRows.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-3 py-8 text-center text-sm text-zinc-500">
+                    Δεν υπάρχουν επιστροφές για αυτή την ημερομηνία.
                   </td>
                 </tr>
               )}
