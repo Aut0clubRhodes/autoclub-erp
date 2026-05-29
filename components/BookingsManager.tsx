@@ -1068,48 +1068,80 @@ function ReservationInspector({
               <EditableCompactInput label="Price" type="number" value={draft.price === null ? '' : String(draft.price)} onChange={(value) => updateDraft({ price: value === '' ? null : Number(value) || null })} />
               <EditableCompactInput label="Email" type="email" value={draft.email} onChange={(value) => updateDraft({ email: value })} />
               <EditableCompactSelect label="Language" value={draft.language} options={languageOptions} onChange={(value) => updateDraft({ language: normalizeLanguage(value) })} />
-              <StatusPillSelector value={draft.status} onChange={updateStatus} />
             </div>
           </div>
         </Panel>
 
-        <Panel title="Attachments & notes" subtitle="customer files">
-          <div className="grid gap-1.5 md:grid-cols-2">
-            <div className="grid gap-1.5">
-              <LicenceCard title="Licence Front" state={draft.licenceFront} url={draft.licenceFrontUrl} onOpen={setViewerDocument} />
-              <label className="grid gap-1 text-[11px] font-semibold text-zinc-500">
-                Notes
-                <textarea
-                  value={draft.notes}
-                  onChange={(event) => updateDraft({ notes: event.target.value })}
-                  className="min-h-[86px] resize-none rounded-lg border border-white/[0.065] bg-black/25 px-2.5 py-1.5 text-[12px] leading-5 text-zinc-100 outline-none transition focus:border-sky-300/45"
-                />
-              </label>
-            </div>
-            <div className="grid gap-1.5">
-              <LicenceCard title="Licence Back" state={draft.licenceBack} url={draft.licenceBackUrl} onOpen={setViewerDocument} />
-              <ExtrasQuantityGroup
-                extras={draft.extras}
-                onChange={(extras) => updateDraft({ extras })}
-              />
-              <div className="grid grid-cols-3 gap-1">
+        <Panel title="Actions & files" subtitle="workflow">
+          <div className="grid min-h-0 gap-1.5 md:grid-cols-[minmax(0,1.08fr)_minmax(126px,0.72fr)]">
+            <div className="flex min-h-0 flex-col rounded-lg border border-white/[0.055] bg-black/20 p-1.5">
+              <div className="mb-1 flex items-center justify-between">
+                <p className="text-[11px] font-black text-zinc-50">Workflow log</p>
+                <span className="text-[10px] font-semibold text-zinc-500">audit</span>
+              </div>
+              <div className="grid max-h-[132px] min-h-[82px] gap-1 overflow-auto pr-1">
+                {isLoadingWorkflowEvents ? (
+                  <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
+                    Loading workflow events...
+                  </p>
+                ) : workflowEvents.length > 0 ? (
+                  workflowEvents.map((event) => {
+                    const eventStyle = getWorkflowEventStyle(event.eventType);
+
+                    return (
+                      <div key={event.id} className={`rounded-md border px-2 py-1.5 text-[11px] leading-4 ${eventStyle.className}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <span>
+                            <span className="block font-bold text-zinc-50">{event.message}</span>
+                            <span className="mt-0.5 block text-[10px] opacity-70">{formatDateTime(event.createdAt)}</span>
+                          </span>
+                          {eventStyle.badge ? (
+                            <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[8.5px] font-black tracking-wide ${eventStyle.badgeClassName}`}>
+                              {eventStyle.badge}
+                            </span>
+                          ) : null}
+                          {!eventStyle.badge ? (
+                            <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.035] px-1.5 py-0.5 text-[8.5px] font-black tracking-wide text-zinc-400">
+                              {event.eventType}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
+                    No workflow events yet.
+                  </p>
+                )}
+              </div>
+              <div className="mt-1.5 grid grid-cols-3 gap-1">
                 {actions.map((action) => (
                   <button
                     key={action.label}
                     type="button"
                     onClick={action.onClick}
-                    className={`flex h-8 min-w-0 items-center justify-center whitespace-nowrap rounded-lg border px-1.5 text-center text-[10px] font-black leading-none tracking-[0.005em] transition duration-200 hover:-translate-y-0.5 ${
+                    className={`flex h-8 min-w-0 items-center justify-center whitespace-nowrap rounded-lg border px-1.5 text-center text-[10.5px] font-black leading-none tracking-normal transition duration-200 hover:-translate-y-0.5 ${
                       action.tone === 'reminder'
-                        ? 'border-cyan-300/40 bg-cyan-400/16 text-cyan-50 shadow-[0_0_14px_rgba(34,211,238,0.08)] hover:bg-cyan-400/22'
+                        ? 'border-cyan-300/45 bg-cyan-400/14 text-cyan-50 hover:bg-cyan-400/22'
                         : action.tone === 'save'
-                          ? 'border-emerald-300/40 bg-emerald-400/16 text-emerald-50 shadow-[0_0_14px_rgba(52,211,153,0.08)] hover:bg-emerald-400/22'
-                          : 'border-rose-300/40 bg-rose-400/14 text-rose-50 shadow-[0_0_14px_rgba(251,113,133,0.08)] hover:bg-rose-400/20'
+                          ? 'border-emerald-300/45 bg-emerald-400/14 text-emerald-50 hover:bg-emerald-400/22'
+                          : 'border-rose-300/45 bg-rose-400/12 text-rose-50 hover:bg-rose-400/20'
                     }`}
                   >
                     {action.label}
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="grid gap-1.5">
+              <LicenceCard title="Licence Front" state={draft.licenceFront} url={draft.licenceFrontUrl} onOpen={setViewerDocument} />
+              <LicenceCard title="Licence Back" state={draft.licenceBack} url={draft.licenceBackUrl} onOpen={setViewerDocument} />
+              <ExtrasQuantityGroup
+                extras={draft.extras}
+                onChange={(extras) => updateDraft({ extras })}
+              />
             </div>
           </div>
         </Panel>
@@ -1142,48 +1174,14 @@ function ReservationInspector({
             </div>
           </div>
 
-          <div className="mt-1.5 rounded-lg border border-white/[0.055] bg-black/20 p-1.5">
-            <div className="mb-1 flex items-center justify-between">
-              <p className="text-[11px] font-bold text-zinc-100">Workflow log</p>
-              <span className="text-[10px] text-zinc-500">audit</span>
-            </div>
-            <div className="grid max-h-20 gap-1 overflow-auto pr-1">
-              {isLoadingWorkflowEvents ? (
-                <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
-                  Loading workflow events...
-                </p>
-              ) : workflowEvents.length > 0 ? (
-                workflowEvents.map((event) => {
-                  const eventStyle = getWorkflowEventStyle(event.eventType);
-
-                  return (
-                    <div key={event.id} className={`rounded-md border px-2 py-1.5 text-[11px] leading-4 ${eventStyle.className}`}>
-                      <div className="flex items-start justify-between gap-2">
-                        <span>
-                          <span className="block font-semibold">{event.message}</span>
-                          <span className="mt-0.5 block text-[10px] opacity-70">{formatDateTime(event.createdAt)}</span>
-                        </span>
-                        {eventStyle.badge ? (
-                          <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[8.5px] font-black tracking-wide ${eventStyle.badgeClassName}`}>
-                            {eventStyle.badge}
-                          </span>
-                        ) : null}
-                        {!eventStyle.badge ? (
-                          <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.035] px-1.5 py-0.5 text-[8.5px] font-black tracking-wide text-zinc-400">
-                            {event.eventType}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
-                  No workflow events yet.
-                </p>
-              )}
-            </div>
-          </div>
+          <label className="mt-1.5 grid gap-1 text-[11px] font-semibold text-zinc-500">
+            Notes
+            <textarea
+              value={draft.notes}
+              onChange={(event) => updateDraft({ notes: event.target.value })}
+              className="min-h-[78px] resize-none rounded-lg border border-white/[0.065] bg-black/25 px-2.5 py-1.5 text-[12px] leading-5 text-zinc-100 outline-none transition focus:border-sky-300/45"
+            />
+          </label>
 
         </Panel>
       </div>
@@ -2049,16 +2047,16 @@ function LicenceCard({
   const isImage = /\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(resolvedUrl);
 
   return (
-    <div className="rounded-xl border border-white/[0.065] bg-black/25 p-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-bold text-zinc-100">{title}</p>
+    <div className="rounded-lg border border-white/[0.065] bg-black/25 p-1">
+      <div className="flex items-center justify-between gap-1.5">
+        <p className="truncate text-[10.5px] font-black text-zinc-50">{title}</p>
         <LicenceBadge state={state} />
       </div>
       {state === 'uploaded' && resolvedUrl ? (
         <button
           type="button"
           onClick={() => onOpen({ title, url: resolvedUrl })}
-          className="mt-1 flex h-14 items-center justify-center overflow-hidden rounded-lg border border-blue-300/18 bg-blue-300/[0.045] text-[11px] font-bold text-blue-100 transition hover:border-blue-200/40 hover:bg-blue-300/[0.08]"
+          className="mt-1 flex h-10 items-center justify-center overflow-hidden rounded-md border border-blue-300/20 bg-blue-300/[0.045] text-[10.5px] font-black text-blue-50 transition hover:border-blue-200/45 hover:bg-blue-300/[0.08]"
         >
           {isImage ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -2068,7 +2066,7 @@ function LicenceCard({
           )}
         </button>
       ) : (
-        <div className="mt-1 flex h-14 items-center justify-center rounded-lg border border-dashed border-white/[0.12] bg-white/[0.025] text-[11px] font-semibold text-zinc-500">
+        <div className="mt-1 flex h-10 items-center justify-center rounded-md border border-dashed border-white/[0.12] bg-white/[0.025] text-[10.5px] font-bold text-zinc-500">
           No attachment
         </div>
       )}
@@ -2309,10 +2307,10 @@ function ExtrasQuantityGroup({
 function LicenceBadge({ state }: { state: LicenceState }) {
   return (
     <span
-      className={`inline-flex rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${
+      className={`inline-flex rounded-md border px-1.5 py-0.5 text-[9.5px] font-black leading-none ${
         state === 'uploaded'
-          ? 'border-blue-300/30 bg-blue-300/12 text-blue-100'
-          : 'border-white/[0.08] bg-white/[0.025] text-zinc-500'
+          ? 'border-blue-300/40 bg-blue-300/14 text-blue-50'
+          : 'border-white/[0.1] bg-white/[0.03] text-zinc-400'
       }`}
     >
       {state === 'uploaded' ? 'Uploaded' : 'Empty'}
