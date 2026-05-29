@@ -32,6 +32,13 @@ type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'RETURN';
 type LicenceState = 'uploaded' | 'empty';
 type VehicleGroup = string;
 type ReservationLanguage = 'English' | 'French' | 'Italian' | 'German' | 'Czech';
+type QuickReservationFilter =
+  | 'latest20'
+  | 'returnsToday'
+  | 'pickupsToday'
+  | 'pickupsTomorrow'
+  | 'returnsTomorrow'
+  | 'all';
 
 type WhatsappMessage = {
   id: string;
@@ -74,6 +81,7 @@ type LegacyBookingExtras = Partial<BookingExtras> & {
 
 type Reservation = {
   id: string;
+  createdAt: string;
   phoneWhatsapp: string;
   name: string;
   email: string;
@@ -146,6 +154,14 @@ const fallbackAgencyRepresentatives: Record<string, string[]> = {
 const fallbackAgencies = Object.keys(fallbackAgencyRepresentatives);
 const statuses: Array<ReservationStatus | 'ALL'> = ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'RETURN'];
 const languageOptions: ReservationLanguage[] = ['English', 'French', 'Italian', 'German', 'Czech'];
+const quickReservationFilters: Array<{ id: QuickReservationFilter; label: string }> = [
+  { id: 'latest20', label: 'Τελευταίες 20' },
+  { id: 'returnsToday', label: 'Επιστροφές σήμερα' },
+  { id: 'pickupsToday', label: 'Παραδόσεις σήμερα' },
+  { id: 'pickupsTomorrow', label: 'Παραδόσεις αύριο' },
+  { id: 'returnsTomorrow', label: 'Επιστροφές αύριο' },
+  { id: 'all', label: 'Όλες' },
+];
 const statusActiveClasses: Record<ReservationStatus, string> = {
   PENDING: 'border-amber-300 bg-amber-400/25 text-amber-50 shadow-[0_0_16px_rgba(251,191,36,0.14)]',
   ACCEPTED: 'border-emerald-300 bg-emerald-400/24 text-emerald-50 shadow-[0_0_16px_rgba(52,211,153,0.14)]',
@@ -188,6 +204,34 @@ const money = (value: number | null) =>
 const formatDate = (value: string) => (value ? new Date(`${value}T00:00:00`).toLocaleDateString('el-GR') : '-');
 
 const formatDateTime = (value: string) => (value ? new Date(value).toLocaleString('el-GR') : '-');
+
+const formatDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
+const todayDateValue = () => formatDateInputValue(new Date());
+
+const tomorrowDateValue = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  return formatDateInputValue(tomorrow);
+};
+
+const reservationSortValue = (reservation: Reservation) => {
+  const createdAt = reservation.createdAt ? new Date(reservation.createdAt).getTime() : Number.NaN;
+
+  if (Number.isFinite(createdAt)) {
+    return createdAt;
+  }
+
+  const pickupDate = reservation.pickupDate ? new Date(`${reservation.pickupDate}T00:00:00`).getTime() : Number.NaN;
+  return Number.isFinite(pickupDate) ? pickupDate : 0;
+};
 
 const withCurrentOption = (options: string[], current: string) =>
   current && !options.includes(current) ? [current, ...options] : options;
@@ -242,6 +286,7 @@ const resolveLicenceUrl = (value?: string | null) => {
 
 const reservationRecordToReservation = (record: ReservationRequestRecord): Reservation => ({
   id: String(record.id),
+  createdAt: record.created_at || '',
   phoneWhatsapp: record.phone || '',
   name: record.customer_name || '',
   email: record.email || '',
@@ -373,6 +418,7 @@ export default function BookingsManager() {
   const [vehicleGroups, setVehicleGroups] = useState<VehicleGroup[]>(DEFAULT_VEHICLE_GROUP_CODES);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof statuses)[number]>('ALL');
+  const [quickFilter, setQuickFilter] = useState<QuickReservationFilter>('latest20');
   const [showNewModal, setShowNewModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showReturnsModal, setShowReturnsModal] = useState(false);
@@ -476,8 +522,25 @@ export default function BookingsManager() {
 
   const filteredReservations = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
+    const today = todayDateValue();
+    const tomorrow = tomorrowDateValue();
 
-    return reservations.filter((reservation) => {
+    const reservationsForQuickFilter = reservations.filter((reservation) => {
+      if (quickFilter === 'returnsToday') return reservation.returnDate === today;
+      if (quickFilter === 'pickupsToday') return reservation.pickupDate === today;
+      if (quickFilter === 'pickupsTomorrow') return reservation.pickupDate === tomorrow;
+      if (quickFilter === 'returnsTomorrow') return reservation.returnDate === tomorrow;
+      return true;
+    });
+
+    const visibleReservations =
+      quickFilter === 'latest20'
+        ? [...reservationsForQuickFilter]
+            .sort((firstReservation, secondReservation) => reservationSortValue(secondReservation) - reservationSortValue(firstReservation))
+            .slice(0, 20)
+        : reservationsForQuickFilter;
+
+    return visibleReservations.filter((reservation) => {
       const matchesStatus = statusFilter === 'ALL' || reservation.status === statusFilter;
       const matchesSearch =
         !query ||
@@ -491,7 +554,7 @@ export default function BookingsManager() {
 
       return matchesStatus && matchesSearch;
     });
-  }, [reservations, searchTerm, statusFilter]);
+  }, [quickFilter, reservations, searchTerm, statusFilter]);
 
   const selectedReservation =
     filteredReservations.find((reservation) => reservation.id === selectedId) ||
@@ -600,6 +663,7 @@ export default function BookingsManager() {
 
     const reservationDraft: Reservation = {
       id: '',
+      createdAt: '',
       phoneWhatsapp: form.phoneWhatsapp.replace(/\s+/g, ''),
       name: form.name.trim() || 'New Customer',
       email: form.email.trim(),
@@ -710,6 +774,27 @@ export default function BookingsManager() {
         </button>
       </div>
 
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 rounded-lg border border-white/[0.045] bg-white/[0.012] px-2 py-1">
+        {quickReservationFilters.map((filter) => {
+          const isActive = quickFilter === filter.id;
+
+          return (
+            <button
+              key={filter.id}
+              type="button"
+              onClick={() => setQuickFilter(filter.id)}
+              className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold transition duration-200 ${
+                isActive
+                  ? 'border-sky-300/35 bg-sky-300/12 text-sky-50 shadow-[0_0_16px_rgba(56,189,248,0.08)]'
+                  : 'border-white/[0.055] bg-black/20 text-zinc-400 hover:border-sky-300/20 hover:bg-sky-300/[0.055] hover:text-zinc-100'
+              }`}
+            >
+              {filter.label}
+            </button>
+          );
+        })}
+      </div>
+
       <section className="h-[46%] min-h-[276px] flex-shrink-0 overflow-hidden rounded-xl border border-white/[0.07] bg-[#060a11]">
         <div className="h-full overflow-auto">
           <table className="w-full min-w-[1430px] text-left text-[12px]">
@@ -757,6 +842,7 @@ export default function BookingsManager() {
               )}
               {filteredReservations.map((reservation) => {
                 const isSelected = selectedReservation.id === reservation.id;
+                const isReturned = reservation.status === 'RETURN';
 
                 return (
                   <tr
@@ -765,18 +851,20 @@ export default function BookingsManager() {
                     className={`cursor-pointer transition duration-200 hover:bg-white/[0.045] ${
                       isSelected
                         ? 'bg-sky-300/[0.075] shadow-[inset_2px_0_0_rgba(125,211,252,0.8)]'
-                        : 'odd:bg-white/[0.012] even:bg-black/[0.05]'
+                        : isReturned
+                          ? 'bg-cyan-300/[0.06] text-cyan-50 shadow-[inset_3px_0_0_rgba(34,211,238,0.5)] hover:bg-cyan-300/[0.09]'
+                          : 'odd:bg-white/[0.012] even:bg-black/[0.05]'
                     }`}
                   >
-                    <td className="whitespace-nowrap px-2 py-1 font-mono text-[12px] text-sky-100">{reservation.phoneWhatsapp}</td>
+                    <td className={`whitespace-nowrap px-2 py-1 font-mono text-[12px] ${isReturned ? 'font-semibold text-cyan-50' : 'text-sky-100'}`}>{reservation.phoneWhatsapp}</td>
                     <td className="whitespace-nowrap px-2 py-1"><VehicleGroupBadge value={reservation.vehicleGroup} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><AgencyBadge value={reservation.agency} /></td>
-                    <td className="max-w-[118px] truncate whitespace-nowrap px-2 py-1 text-zinc-300" title={reservation.representative}>{reservation.representative}</td>
-                    <td className="max-w-[132px] truncate whitespace-nowrap px-2 py-1 font-semibold text-zinc-100" title={reservation.name}>{reservation.name}</td>
-                    <td className="whitespace-nowrap px-2 py-1 text-zinc-300">{formatDate(reservation.pickupDate)}</td>
-                    <td className="whitespace-nowrap px-2 py-1 text-zinc-300">{formatDate(reservation.returnDate)}</td>
-                    <td className="whitespace-nowrap px-2 py-1 text-zinc-300">{reservation.pickupTime}</td>
-                    <td className="whitespace-nowrap px-2 py-1 text-zinc-300">{reservation.returnTime}</td>
+                    <td className={`max-w-[118px] truncate whitespace-nowrap px-2 py-1 ${isReturned ? 'text-cyan-100' : 'text-zinc-300'}`} title={reservation.representative}>{reservation.representative}</td>
+                    <td className={`max-w-[132px] truncate whitespace-nowrap px-2 py-1 font-semibold ${isReturned ? 'text-cyan-50' : 'text-zinc-100'}`} title={reservation.name}>{reservation.name}</td>
+                    <td className={`whitespace-nowrap px-2 py-1 ${isReturned ? 'text-cyan-100' : 'text-zinc-300'}`}>{formatDate(reservation.pickupDate)}</td>
+                    <td className={`whitespace-nowrap px-2 py-1 ${isReturned ? 'font-semibold text-cyan-50' : 'text-zinc-300'}`}>{formatDate(reservation.returnDate)}</td>
+                    <td className={`whitespace-nowrap px-2 py-1 ${isReturned ? 'text-cyan-100' : 'text-zinc-300'}`}>{reservation.pickupTime}</td>
+                    <td className={`whitespace-nowrap px-2 py-1 ${isReturned ? 'font-semibold text-cyan-50' : 'text-zinc-300'}`}>{reservation.returnTime}</td>
                     <td className="whitespace-nowrap px-2 py-1 text-right font-semibold text-white">{money(reservation.price)}</td>
                     <td className="whitespace-nowrap px-2 py-1"><StatusBadge status={reservation.status} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><LanguageBadge language={reservation.language} /></td>
