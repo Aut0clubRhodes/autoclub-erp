@@ -22,6 +22,18 @@ const logNotificationWarning = (label: string, error: unknown) => {
   });
 };
 
+const logNotificationError = (label: string, error: unknown) => {
+  const notificationError = error as { message?: string; details?: string; hint?: string; code?: string } | null;
+
+  console.error(label, {
+    message: notificationError?.message || 'Unknown notifications error',
+    details: notificationError?.details || '',
+    hint: notificationError?.hint || '',
+    code: notificationError?.code || '',
+    raw: error,
+  });
+};
+
 export async function fetchLatestNotifications(limit = 12): Promise<NotificationRecord[]> {
   const { data, error } = await supabase
     .from('notifications')
@@ -56,7 +68,7 @@ export async function createNotification(payload: {
     .single();
 
   if (error) {
-    logNotificationWarning('Create notification warning:', error);
+    logNotificationError('Create notification error:', error);
     return null;
   }
 

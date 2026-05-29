@@ -13,6 +13,8 @@ type ReturnConfirmClientProps = {
 
 type PageState = 'loading' | 'ready' | 'confirming' | 'confirmed' | 'error';
 
+const GOOGLE_REVIEW_URL = 'https://g.page/r/CYOr9zt3_-KVEBM/review';
+
 const logReturnConfirmError = (label: string, error: unknown) => {
   const supabaseError = error as { message?: string; details?: string; hint?: string; code?: string } | null;
 
@@ -45,6 +47,7 @@ export default function ReturnConfirmClient({ reservationId }: ReturnConfirmClie
   const [pageState, setPageState] = useState<PageState>(reservationId ? 'loading' : 'error');
   const [message, setMessage] = useState(reservationId ? '' : 'Missing reservation id.');
   const [rating, setRating] = useState(0);
+  const [ratingMessage, setRatingMessage] = useState('');
 
   useEffect(() => {
     if (!reservationId) return;
@@ -111,15 +114,30 @@ export default function ReturnConfirmClient({ reservationId }: ReturnConfirmClie
       event_message: 'Customer confirmed vehicle return.',
     });
 
-    await createNotification({
+    const notification = await createNotification({
       reservation_id: reservationId,
       type: 'return_confirmed',
       title: 'Vehicle return confirmed',
       message: notificationMessage,
     });
 
+    if (!notification) {
+      console.error('Return confirmation notification insert failed.');
+    }
+
     setReservation(data as ReservationRequestRecord);
     setPageState('confirmed');
+  };
+
+  const handleRating = (nextRating: number) => {
+    setRating(nextRating);
+
+    if (nextRating >= 4) {
+      window.location.assign(GOOGLE_REVIEW_URL);
+      return;
+    }
+
+    setRatingMessage('Thank you for your feedback.');
   };
 
   return (
@@ -192,17 +210,18 @@ export default function ReturnConfirmClient({ reservationId }: ReturnConfirmClie
                       <button
                         key={star}
                         type="button"
-                        onClick={() => setRating(star)}
-                        className={`text-3xl transition duration-200 hover:-translate-y-px ${
+                        onClick={() => handleRating(star)}
+                        className={`rounded-xl px-1 text-3xl leading-none transition duration-200 hover:-translate-y-px focus:outline-none focus:ring-2 focus:ring-amber-300/40 ${
                           star <= rating ? 'text-amber-300' : 'text-zinc-700 hover:text-amber-200'
                         }`}
                         aria-label={`Rate ${star} stars`}
                       >
-                        ★
+                        {star <= rating ? '\u2605' : '\u2606'}
                       </button>
                     ))}
                   </div>
                   {rating > 0 && <p className="mt-3 text-xs font-semibold text-zinc-400">Rating selected: {rating}/5</p>}
+                  {ratingMessage && <p className="mt-2 text-xs font-semibold text-emerald-100/75">{ratingMessage}</p>}
                 </div>
               </div>
             )}
