@@ -6,7 +6,7 @@ export type NotificationRecord = {
   type: string;
   title: string;
   message: string;
-  is_read: boolean;
+  read: boolean;
   created_at: string;
 };
 
@@ -37,7 +37,7 @@ const logNotificationError = (label: string, error: unknown) => {
 export async function fetchLatestNotifications(limit = 12): Promise<NotificationRecord[]> {
   const { data, error } = await supabase
     .from('notifications')
-    .select('id, reservation_id, type, title, message, is_read, created_at')
+    .select('id, reservation_id, type, title, message, read, created_at')
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -62,9 +62,9 @@ export async function createNotification(payload: {
       type: payload.type,
       title: payload.title,
       message: payload.message,
-      is_read: false,
+      read: false,
     })
-    .select('id, reservation_id, type, title, message, is_read, created_at')
+    .select('id, reservation_id, type, title, message, read, created_at')
     .single();
 
   if (error) {
@@ -78,7 +78,7 @@ export async function createNotification(payload: {
 export async function markNotificationRead(id: string) {
   const { error } = await supabase
     .from('notifications')
-    .update({ is_read: true })
+    .update({ read: true })
     .eq('id', id);
 
   if (error) {
@@ -92,8 +92,8 @@ export async function markNotificationRead(id: string) {
 export async function markAllNotificationsRead() {
   const { error } = await supabase
     .from('notifications')
-    .update({ is_read: true })
-    .eq('is_read', false);
+    .update({ read: true })
+    .eq('read', false);
 
   if (error) {
     logNotificationWarning('Mark all notifications read warning:', error);

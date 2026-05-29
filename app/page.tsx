@@ -247,15 +247,15 @@ export default function Home() {
     return () => window.clearInterval(intervalId);
   }, [userEmail]);
 
-  const unreadNotificationsCount = notifications.filter((notification) => !notification.is_read).length;
+  const unreadNotificationsCount = notifications.filter((notification) => notification.read === false).length;
 
   const handleNotificationClick = async (notification: NotificationRecord) => {
-    if (!notification.is_read) {
+    if (notification.read === false) {
       const updated = await markNotificationRead(notification.id);
       if (updated) {
         setNotifications((currentNotifications) =>
           currentNotifications.map((currentNotification) =>
-            currentNotification.id === notification.id ? { ...currentNotification, is_read: true } : currentNotification
+            currentNotification.id === notification.id ? { ...currentNotification, read: true } : currentNotification
           )
         );
       }
@@ -267,7 +267,7 @@ export default function Home() {
     if (!updated) return;
 
     setNotifications((currentNotifications) =>
-      currentNotifications.map((notification) => ({ ...notification, is_read: true }))
+      currentNotifications.map((notification) => ({ ...notification, read: true }))
     );
   };
 
@@ -2773,7 +2773,7 @@ function NotificationBell({
                     type="button"
                     onClick={() => onMarkRead(notification)}
                     className={`w-full rounded-2xl border px-3.5 py-3 text-left transition duration-200 hover:-translate-y-px hover:border-sky-300/25 hover:bg-sky-300/[0.055] ${
-                      notification.is_read
+                      notification.read
                         ? 'border-white/[0.045] bg-white/[0.02]'
                         : 'border-sky-300/20 bg-sky-300/[0.06] shadow-[0_0_18px_rgba(56,189,248,0.08)]'
                     }`}
@@ -2783,7 +2783,7 @@ function NotificationBell({
                         <p className="truncate text-sm font-semibold text-white">{notification.title}</p>
                         <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-400">{notification.message}</p>
                       </div>
-                      {!notification.is_read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-sky-300" />}
+                      {notification.read === false && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-sky-300" />}
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-600">
                       <span className="truncate">{notification.type.replace(/_/g, ' ')}</span>
