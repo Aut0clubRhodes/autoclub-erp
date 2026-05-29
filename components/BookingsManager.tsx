@@ -45,6 +45,17 @@ type WhatsappMessage = {
   from: 'AutoClub' | 'Customer';
   text: string;
   createdAt: string;
+  isUnread?: boolean;
+};
+
+type WhatsappMessageRow = {
+  id: string;
+  reservation_id: string;
+  phone?: string | null;
+  message?: string | null;
+  direction?: string | null;
+  is_read?: boolean | null;
+  created_at?: string | null;
 };
 
 type WorkflowEvent = {
@@ -361,6 +372,14 @@ const createWhatsappMessage = (text: string): WhatsappMessage => ({
   createdAt: new Date().toISOString(),
 });
 
+const whatsappRowToMessage = (row: WhatsappMessageRow): WhatsappMessage => ({
+  id: row.id,
+  from: row.direction === 'incoming' ? 'Customer' : 'AutoClub',
+  text: row.message || '',
+  createdAt: row.created_at || '',
+  isUnread: row.direction === 'incoming' && row.is_read === false,
+});
+
 const hasAcceptedRequiredFields = (reservation: Pick<Reservation, 'pickupTime' | 'returnTime' | 'price'>) =>
   reservation.pickupTime.trim() !== '' && reservation.returnTime.trim() !== '' && reservation.price !== null;
 
@@ -415,6 +434,9 @@ export default function BookingsManager() {
   const [isLoadingReservations, setIsLoadingReservations] = useState(true);
   const [workflowEvents, setWorkflowEvents] = useState<WorkflowEvent[]>([]);
   const [isLoadingWorkflowEvents, setIsLoadingWorkflowEvents] = useState(false);
+  const [whatsappMessages, setWhatsappMessages] = useState<WhatsappMessage[]>([]);
+  const [isLoadingWhatsappMessages, setIsLoadingWhatsappMessages] = useState(false);
+  const [unreadWhatsappReservationIds, setUnreadWhatsappReservationIds] = useState<Set<string>>(new Set());
   const [vehicleGroups, setVehicleGroups] = useState<VehicleGroup[]>(DEFAULT_VEHICLE_GROUP_CODES);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof statuses)[number]>('ALL');
@@ -424,6 +446,7 @@ export default function BookingsManager() {
   const [showReturnsModal, setShowReturnsModal] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [showAvailabilityTestModal, setShowAvailabilityTestModal] = useState(false);
+  const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
   const [form, setForm] = useState<ReservationForm>(initialForm);
   const [agencyRows, setAgencyRows] = useState<AgencyRow[]>([]);
   const [representativeRows, setRepresentativeRows] = useState<RepresentativeRow[]>([]);
@@ -447,6 +470,7 @@ export default function BookingsManager() {
 
   useEffect(() => {
     void Promise.resolve().then(() => loadReservations());
+    void Promise.resolve().then(() => loadUnreadWhatsappReservations());
   }, []);
 
   useEffect(() => {
@@ -469,6 +493,72 @@ export default function BookingsManager() {
 
     setWorkflowEvents(events.map(reservationEventToWorkflowEvent));
     setIsLoadingWorkflowEvents(false);
+  };
+
+  const loadUnreadWhatsappReservations = async () => {
+    const { data, error } = await supabase
+      .from('whatsapp_messages')
+      .select('reservation_id')
+      .eq('direction', 'incoming')
+      .eq('is_read', false);
+
+    console.log('WhatsApp unread query result', data || []);
+    console.log('WhatsApp unread query error', error);
+
+    if (error) {
+      console.warn('Fetch unread whatsapp messages warning', error);
+      return;
+    }
+
+    setUnreadWhatsappReservationIds(
+      new Set((data || []).map((row) => String((row as { reservation_id?: string | number }).reservation_id)).filter(Boolean))
+    );
+  };
+
+  const loadWhatsappMessages = async (reservationId: string) => {
+    console.log('Selected reservation id for WhatsApp messages:', reservationId);
+    setIsLoadingWhatsappMessages(true);
+    const { data, error } = await supabase
+      .from('whatsapp_messages')
+      .select('id, reservation_id, phone, message, direction, is_read, created_at')
+      .eq('reservation_id', reservationId)
+      .order('created_at', { ascending: false });
+
+    console.log('WhatsApp query result', data || []);
+    console.log('WhatsApp query error', error);
+
+    if (error) {
+      console.warn('Fetch whatsapp messages warning', error);
+      setWhatsappMessages([]);
+      setIsLoadingWhatsappMessages(false);
+      return;
+    }
+
+    const rows = (data || []) as WhatsappMessageRow[];
+    console.log('Loaded whatsapp_messages:', rows);
+    setWhatsappMessages(rows.map(whatsappRowToMessage));
+
+    const hasUnreadIncoming = rows.some((row) => row.direction === 'incoming' && row.is_read === false);
+    if (hasUnreadIncoming) {
+      const { error: updateError } = await supabase
+        .from('whatsapp_messages')
+        .update({ is_read: true })
+        .eq('reservation_id', reservationId)
+        .eq('direction', 'incoming')
+        .eq('is_read', false);
+
+      if (updateError) {
+        console.warn('Mark whatsapp messages read warning', updateError);
+      } else {
+        setUnreadWhatsappReservationIds((currentIds) => {
+          const nextIds = new Set(currentIds);
+          nextIds.delete(reservationId);
+          return nextIds;
+        });
+      }
+    }
+
+    setIsLoadingWhatsappMessages(false);
   };
 
   const recordWorkflowEvent = async (reservationId: string, eventType: string, eventMessage: string) => {
@@ -564,10 +654,12 @@ export default function BookingsManager() {
   useEffect(() => {
     if (!selectedReservation?.id) {
       void Promise.resolve().then(() => setWorkflowEvents([]));
+      void Promise.resolve().then(() => setWhatsappMessages([]));
       return;
     }
 
     void Promise.resolve().then(() => loadWorkflowEvents(selectedReservation.id));
+    void Promise.resolve().then(() => loadWhatsappMessages(selectedReservation.id));
   }, [selectedReservation?.id]);
 
   const updateSelectedReservation = async (reservationDraft: Reservation) => {
@@ -587,6 +679,27 @@ export default function BookingsManager() {
     console.log('UPDATED RESERVATION AFTER SAVE', updatedReservation);
 
     await loadReservations(updatedReservation.id);
+    return true;
+  };
+
+  const saveEditedReservation = async (reservationDraft: Reservation) => {
+    if (reservationDraft.status === 'ACCEPTED' && !hasAcceptedRequiredFields(reservationDraft)) {
+      window.alert(acceptedValidationMessage);
+      return false;
+    }
+
+    const updatedRecord = await updateReservation(reservationDraft.id, reservationToPayload(reservationDraft));
+
+    if (!updatedRecord) {
+      window.alert('Η κράτηση δεν ενημερώθηκε.');
+      return false;
+    }
+
+    const updatedReservation = reservationRecordToReservation(updatedRecord);
+    await loadReservations(updatedReservation.id);
+    setSelectedId(updatedReservation.id);
+    setEditingReservation(null);
+    await recordWorkflowEvent(updatedReservation.id, 'booking_updated', 'Booking details updated');
     return true;
   };
 
@@ -843,11 +956,17 @@ export default function BookingsManager() {
               {filteredReservations.map((reservation) => {
                 const isSelected = selectedReservation.id === reservation.id;
                 const isReturned = reservation.status === 'RETURN';
+                const hasUnreadWhatsapp =
+                  unreadWhatsappReservationIds.has(reservation.id) ||
+                  (selectedReservation.id === reservation.id && whatsappMessages.some((message) => message.isUnread));
 
                 return (
                   <tr
                     key={reservation.id}
-                    onClick={() => setSelectedId(reservation.id)}
+                    onClick={() => {
+                      setSelectedId(reservation.id);
+                      setEditingReservation(reservation);
+                    }}
                     className={`cursor-pointer transition duration-200 hover:bg-white/[0.045] ${
                       isSelected
                         ? 'bg-sky-300/[0.075] shadow-[inset_2px_0_0_rgba(125,211,252,0.8)]'
@@ -856,7 +975,19 @@ export default function BookingsManager() {
                           : 'odd:bg-white/[0.012] even:bg-black/[0.05]'
                     }`}
                   >
-                    <td className={`whitespace-nowrap px-2 py-1 font-mono text-[12px] ${isReturned ? 'font-semibold text-cyan-50' : 'text-sky-100'}`}>{reservation.phoneWhatsapp}</td>
+                    <td className={`whitespace-nowrap px-2 py-1 font-mono text-[12px] ${isReturned ? 'font-semibold text-cyan-50' : 'text-sky-100'}`}>
+                      <span className="inline-flex items-center gap-1.5">
+                        {hasUnreadWhatsapp && (
+                          <span className="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.65)]" title="Unread WhatsApp message" />
+                        )}
+                        {reservation.phoneWhatsapp}
+                        {hasUnreadWhatsapp && !isReturned && (
+                          <span className="rounded-full border border-rose-300/45 bg-rose-500 px-1.5 py-0.5 text-[9px] font-black leading-none text-white">
+                            NEW
+                          </span>
+                        )}
+                      </span>
+                    </td>
                     <td className="whitespace-nowrap px-2 py-1"><VehicleGroupBadge value={reservation.vehicleGroup} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><AgencyBadge value={reservation.agency} /></td>
                     <td className={`max-w-[118px] truncate whitespace-nowrap px-2 py-1 ${isReturned ? 'text-cyan-100' : 'text-zinc-300'}`} title={reservation.representative}>{reservation.representative}</td>
@@ -892,6 +1023,9 @@ export default function BookingsManager() {
           onDelete={deleteSelectedReservation}
           workflowEvents={workflowEvents}
           isLoadingWorkflowEvents={isLoadingWorkflowEvents}
+          whatsappMessages={whatsappMessages}
+          isLoadingWhatsappMessages={isLoadingWhatsappMessages}
+          unreadWhatsappCount={whatsappMessages.filter((message) => message.isUnread).length}
           onCreateWorkflowEvent={recordWorkflowEvent}
           onSendReminder={sendReminder}
         />
@@ -910,6 +1044,17 @@ export default function BookingsManager() {
           onChange={setForm}
           onClose={() => setShowNewModal(false)}
           onSave={saveReservation}
+        />
+      )}
+
+      {editingReservation && (
+        <EditReservationModal
+          reservation={editingReservation}
+          agencyOptions={agencyOptions}
+          representativesByAgency={representativesByAgency}
+          vehicleGroups={vehicleGroups}
+          onClose={() => setEditingReservation(null)}
+          onSave={saveEditedReservation}
         />
       )}
 
@@ -955,6 +1100,9 @@ function ReservationInspector({
   onDelete,
   workflowEvents,
   isLoadingWorkflowEvents,
+  whatsappMessages,
+  isLoadingWhatsappMessages,
+  unreadWhatsappCount,
   onCreateWorkflowEvent,
   onSendReminder,
 }: {
@@ -966,6 +1114,9 @@ function ReservationInspector({
   onDelete: () => void;
   workflowEvents: WorkflowEvent[];
   isLoadingWorkflowEvents: boolean;
+  whatsappMessages: WhatsappMessage[];
+  isLoadingWhatsappMessages: boolean;
+  unreadWhatsappCount: number;
   onCreateWorkflowEvent: (reservationId: string, eventType: string, eventMessage: string) => Promise<void>;
   onSendReminder: (reservation: Reservation) => Promise<Reservation | false>;
 }) {
@@ -1150,15 +1301,48 @@ function ReservationInspector({
           <div className="rounded-lg border border-white/[0.055] bg-black/20 p-1.5">
             <div className="mb-1 flex items-center justify-between">
               <p className="text-[11px] font-bold text-zinc-100">WhatsApp messages</p>
-              <span className="text-[10px] text-zinc-500">mock</span>
+              {unreadWhatsappCount > 0 ? (
+                <span className="rounded-full border border-rose-300/40 bg-rose-500 px-1.5 py-0.5 text-[9px] font-black leading-none text-white">
+                  {unreadWhatsappCount} unread
+                </span>
+              ) : (
+                <span className="text-[10px] text-zinc-500">live</span>
+              )}
             </div>
             <div className="grid max-h-24 gap-1 overflow-auto pr-1">
-              {(draft.whatsappMessages || defaultWhatsappMessages).map((message) => (
-                <div key={message.id} className="rounded-md border border-white/[0.045] bg-white/[0.025] px-2 py-1.5">
-                  <p className="text-[10px] font-semibold text-sky-200">{message.from}</p>
-                  <p className="text-[11px] leading-4 text-zinc-300">{message.text}</p>
-                </div>
-              ))}
+              {isLoadingWhatsappMessages ? (
+                <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
+                  Loading WhatsApp messages...
+                </p>
+              ) : whatsappMessages.length > 0 ? (
+                whatsappMessages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`rounded-md border px-2 py-1.5 ${
+                      message.from === 'Customer'
+                        ? 'ml-0 mr-5 border-emerald-300/20 bg-emerald-300/[0.07]'
+                        : 'ml-5 mr-0 border-sky-300/18 bg-sky-300/[0.06]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`text-[10px] font-black ${message.from === 'Customer' ? 'text-emerald-100' : 'text-sky-100'}`}>
+                        {message.from}
+                      </p>
+                      {message.isUnread && (
+                        <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[8.5px] font-black leading-none text-white">
+                          NEW
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-[11px] leading-4 text-zinc-200">{message.text || '-'}</p>
+                    {message.createdAt && <p className="mt-0.5 text-[9.5px] font-semibold text-zinc-500">{formatDateTime(message.createdAt)}</p>}
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
+                  No WhatsApp messages yet.
+                </p>
+              )}
             </div>
             <div className="mt-1.5 flex gap-1.5">
               <input
@@ -1353,6 +1537,134 @@ function NewReservationModal({
           </button>
           <button type="button" onClick={onSave} className="rounded-xl border border-cyan-200/35 bg-cyan-400/16 px-5 py-2.5 text-sm font-bold text-cyan-50 transition hover:-translate-y-0.5 hover:bg-cyan-400/24 hover:shadow-[0_0_24px_rgba(34,211,238,0.16)]">
             Αποθήκευση
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditReservationModal({
+  reservation,
+  agencyOptions,
+  representativesByAgency,
+  vehicleGroups,
+  onClose,
+  onSave,
+}: {
+  reservation: Reservation;
+  agencyOptions: string[];
+  representativesByAgency: Record<string, string[]>;
+  vehicleGroups: VehicleGroup[];
+  onClose: () => void;
+  onSave: (reservation: Reservation) => Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState<Reservation>(reservation);
+  const representatives = representativesByAgency[draft.agency] || [];
+
+  const updateDraft = (patch: Partial<Reservation>) => {
+    setDraft((currentDraft) => ({ ...currentDraft, ...patch }));
+  };
+
+  const saveDraft = async () => {
+    await onSave(draft);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[88vh] w-[min(980px,95vw)] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,#09111d_0%,#060a11_55%,#03060a_100%)] shadow-[0_32px_110px_rgba(0,0,0,0.62)]">
+        <div className="flex flex-shrink-0 items-start justify-between border-b border-white/10 bg-white/[0.025] px-6 py-5">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.24em] text-sky-200/75">BOOKINGS</p>
+            <h2 className="mt-1 text-xl font-semibold text-white">Edit reservation</h2>
+            <p className="mt-1 text-xs text-zinc-500">{reservation.id}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white">
+            ×
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto p-5">
+          <section className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Phone WhatsApp">
+                <input value={draft.phoneWhatsapp} onChange={(event) => updateDraft({ phoneWhatsapp: event.target.value.replace(/\s+/g, '') })} className={modalFieldClass} />
+              </Field>
+              <Field label="Name">
+                <input value={draft.name} onChange={(event) => updateDraft({ name: event.target.value })} className={modalFieldClass} />
+              </Field>
+              <Field label="Email">
+                <input type="email" value={draft.email} onChange={(event) => updateDraft({ email: event.target.value })} className={modalFieldClass} />
+              </Field>
+              <Field label="Hotel and Room">
+                <input value={draft.hotelRoom} onChange={(event) => updateDraft({ hotelRoom: event.target.value })} className={modalFieldClass} />
+              </Field>
+              <Field label="Vehicle Group">
+                <select value={draft.vehicleGroup} onChange={(event) => updateDraft({ vehicleGroup: event.target.value })} className={modalFieldClass}>
+                  {withCurrentOption(vehicleGroups, draft.vehicleGroup).map((group) => (
+                    <option key={group} value={group}>{group}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Agency">
+                <select value={draft.agency} onChange={(event) => updateDraft({ agency: event.target.value, representative: representativesByAgency[event.target.value]?.[0] || '' })} className={modalFieldClass}>
+                  {withCurrentOption(agencyOptions, draft.agency).map((agency) => (
+                    <option key={agency} value={agency}>{agency}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Representative">
+                <select value={draft.representative} onChange={(event) => updateDraft({ representative: event.target.value })} className={modalFieldClass}>
+                  {withCurrentOption(representatives, draft.representative).map((representative) => (
+                    <option key={representative} value={representative}>{representative}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Language">
+                <select value={draft.language} onChange={(event) => updateDraft({ language: normalizeLanguage(event.target.value) })} className={modalFieldClass}>
+                  {languageOptions.map((language) => (
+                    <option key={language} value={language}>{language}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Pickup Date">
+                <input type="date" value={draft.pickupDate} onClick={(event) => openNativeDatePicker(event.currentTarget)} onFocus={(event) => openNativeDatePicker(event.currentTarget)} onChange={(event) => updateDraft({ pickupDate: event.target.value })} className={modalFieldClass} />
+              </Field>
+              <Field label="Pickup Time">
+                <input value={draft.pickupTime} placeholder="09:30" onChange={(event) => updateDraft({ pickupTime: event.target.value })} className={modalFieldClass} />
+              </Field>
+              <Field label="Return Date">
+                <input type="date" value={draft.returnDate} onClick={(event) => openNativeDatePicker(event.currentTarget)} onFocus={(event) => openNativeDatePicker(event.currentTarget)} onChange={(event) => updateDraft({ returnDate: event.target.value })} className={modalFieldClass} />
+              </Field>
+              <Field label="Return Time">
+                <input value={draft.returnTime} placeholder="18:00" onChange={(event) => updateDraft({ returnTime: event.target.value })} className={modalFieldClass} />
+              </Field>
+              <Field label="Price">
+                <input type="number" value={draft.price === null ? '' : String(draft.price)} onChange={(event) => updateDraft({ price: event.target.value === '' ? null : Number(event.target.value) || null })} className={modalFieldClass} />
+              </Field>
+              <Field label="Status">
+                <select value={draft.status} onChange={(event) => updateDraft({ status: normalizeStatus(event.target.value) })} className={modalFieldClass}>
+                  {statuses.filter((status) => status !== 'ALL').map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </Field>
+              <div className="md:col-span-2">
+                <ExtrasQuantityGroup extras={draft.extras} onChange={(extras) => updateDraft({ extras })} />
+              </div>
+              <Field label="Notes">
+                <textarea value={draft.notes} onChange={(event) => updateDraft({ notes: event.target.value })} className={`${modalFieldClass} min-h-[96px] resize-none`} />
+              </Field>
+            </div>
+          </section>
+        </div>
+
+        <div className="flex flex-shrink-0 justify-end gap-3 border-t border-white/10 bg-black/20 px-6 py-4">
+          <button type="button" onClick={onClose} className="rounded-2xl border border-white/[0.08] bg-white/[0.035] px-5 py-2.5 text-sm font-bold text-zinc-200 transition hover:bg-white/[0.06]">
+            Cancel
+          </button>
+          <button type="button" onClick={saveDraft} className="rounded-2xl border border-emerald-300/30 bg-emerald-400 px-5 py-2.5 text-sm font-black text-zinc-950 transition hover:bg-emerald-300">
+            Save changes
           </button>
         </div>
       </div>
