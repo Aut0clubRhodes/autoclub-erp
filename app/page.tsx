@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import Image from 'next/image';
+import { Bell } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import Window from '@/components/Window';
 import LoginScreen from '@/components/LoginScreen';
@@ -50,6 +51,12 @@ import { fetchServicesByCarId, type ServiceRecord } from '@/lib/servicesApi';
 import { fetchCarDocuments, getCarDocumentPublicUrl, type CarDocumentRecord } from '@/lib/carDocumentsApi';
 import { fetchDebts, type DebtRecord } from '@/lib/debtsApi';
 import { DEFAULT_VEHICLE_GROUP_CODES, fetchVehicleGroups } from '@/lib/vehicleGroupsApi';
+import {
+  fetchLatestNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  type NotificationRecord,
+} from '@/lib/notificationsApi';
 type WindowType =
   | 'Αυτοκίνητα'
   | 'Κρατήσεις'
@@ -211,6 +218,8 @@ export default function Home() {
   });
   const [openWindows, setOpenWindows] = useState<OpenWindow[]>([]);
   const [topZIndex, setTopZIndex] = useState(50);
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   const sidebarWidth = isSidebarCollapsed ? 72 : 250;
   const visibleWindows = openWindows.filter((windowItem) => !windowItem.isMinimized);
   const activeWindow = visibleWindows.length
@@ -221,6 +230,46 @@ export default function Home() {
   useEffect(() => {
     document.documentElement.style.setProperty('--autoclub-sidebar-width', `${sidebarWidth}px`);
   }, [sidebarWidth]);
+
+  const loadNotifications = async () => {
+    const latestNotifications = await fetchLatestNotifications();
+    setNotifications(latestNotifications);
+  };
+
+  useEffect(() => {
+    if (!userEmail) return;
+
+    void loadNotifications();
+    const intervalId = window.setInterval(() => {
+      void loadNotifications();
+    }, 30000);
+
+    return () => window.clearInterval(intervalId);
+  }, [userEmail]);
+
+  const unreadNotificationsCount = notifications.filter((notification) => !notification.is_read).length;
+
+  const handleNotificationClick = async (notification: NotificationRecord) => {
+    if (!notification.is_read) {
+      const updated = await markNotificationRead(notification.id);
+      if (updated) {
+        setNotifications((currentNotifications) =>
+          currentNotifications.map((currentNotification) =>
+            currentNotification.id === notification.id ? { ...currentNotification, is_read: true } : currentNotification
+          )
+        );
+      }
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    const updated = await markAllNotificationsRead();
+    if (!updated) return;
+
+    setNotifications((currentNotifications) =>
+      currentNotifications.map((notification) => ({ ...notification, is_read: true }))
+    );
+  };
 
   const [showAddCar, setShowAddCar] = useState(false);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
@@ -1814,6 +1863,15 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           </div>
         )}
 
+        <NotificationBell
+          notifications={notifications}
+          unreadCount={unreadNotificationsCount}
+          isOpen={showNotifications}
+          onToggle={() => setShowNotifications((current) => !current)}
+          onMarkRead={handleNotificationClick}
+          onMarkAllRead={handleMarkAllNotificationsRead}
+        />
+
         {/* Homepage with centered logo */}
         {openWindows.length === 0 && (
           <div className="flex h-full w-full items-center justify-center px-4 py-8">
@@ -2639,6 +2697,109 @@ function formatEuro(value: string) {
 
   return `€${numericValue.toLocaleString()}`;
 }
+function formatNotificationDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toLocaleString('el-GR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function NotificationBell({
+  notifications,
+  unreadCount,
+  isOpen,
+  onToggle,
+  onMarkRead,
+  onMarkAllRead,
+}: {
+  notifications: NotificationRecord[];
+  unreadCount: number;
+  isOpen: boolean;
+  onToggle: () => void;
+  onMarkRead: (notification: NotificationRecord) => void;
+  onMarkAllRead: () => void;
+}) {
+  return (
+    <div className="fixed right-4 top-2 z-[9100]">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="relative flex h-10 w-10 items-center justify-center rounded-2xl border border-white/[0.08] bg-zinc-950/90 text-zinc-300 shadow-[0_12px_34px_rgba(0,0,0,0.35)] backdrop-blur transition duration-200 hover:-translate-y-px hover:border-sky-300/25 hover:bg-zinc-900 hover:text-white"
+        aria-label="Notifications"
+      >
+        <Bell className="h-4 w-4" />
+        {unreadCount > 0 && (
+          <span className="absolute -right-1 -top-1 min-w-5 rounded-full border border-zinc-950 bg-rose-500 px-1.5 py-0.5 text-center text-[10px] font-black leading-none text-white shadow-[0_0_16px_rgba(244,63,94,0.45)]">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-3 w-[360px] overflow-hidden rounded-3xl border border-white/[0.08] bg-zinc-950/96 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-xl">
+          <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-white">Notifications</p>
+              <p className="text-[11px] text-zinc-500">{unreadCount} unread</p>
+            </div>
+            <button
+              type="button"
+              onClick={onMarkAllRead}
+              disabled={unreadCount === 0}
+              className="rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[11px] font-semibold text-zinc-300 transition hover:border-sky-300/25 hover:bg-sky-300/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Mark all read
+            </button>
+          </div>
+
+          <div className="max-h-[420px] overflow-y-auto p-2">
+            {notifications.length === 0 ? (
+              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] px-4 py-6 text-center text-sm text-zinc-500">
+                No notifications yet.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {notifications.map((notification) => (
+                  <button
+                    key={notification.id}
+                    type="button"
+                    onClick={() => onMarkRead(notification)}
+                    className={`w-full rounded-2xl border px-3.5 py-3 text-left transition duration-200 hover:-translate-y-px hover:border-sky-300/25 hover:bg-sky-300/[0.055] ${
+                      notification.is_read
+                        ? 'border-white/[0.045] bg-white/[0.02]'
+                        : 'border-sky-300/20 bg-sky-300/[0.06] shadow-[0_0_18px_rgba(56,189,248,0.08)]'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-white">{notification.title}</p>
+                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-400">{notification.message}</p>
+                      </div>
+                      {!notification.is_read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-sky-300" />}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-600">
+                      <span className="truncate">{notification.type.replace(/_/g, ' ')}</span>
+                      <span className="shrink-0">{formatNotificationDate(notification.created_at)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function VehiclesTable({
   vehicles,
   sort,

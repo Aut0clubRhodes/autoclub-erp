@@ -21,6 +21,8 @@ export type ReservationRequestRecord = {
   send_return?: boolean | null;
   return_reminder_sent?: boolean | null;
   return_reminder_sent_at?: string | null;
+  return_confirmed?: boolean | null;
+  return_confirmed_at?: string | null;
   baby_seat_qty?: number | null;
   booster_qty?: number | null;
   infant_qty?: number | null;
@@ -47,6 +49,8 @@ export type ReservationRequestPayload = {
   send_return?: boolean;
   return_reminder_sent?: boolean;
   return_reminder_sent_at?: string | null;
+  return_confirmed?: boolean;
+  return_confirmed_at?: string | null;
   baby_seat_qty?: number;
   booster_qty?: number;
   infant_qty?: number;

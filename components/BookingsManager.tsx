@@ -28,7 +28,7 @@ import { DEFAULT_VEHICLE_GROUP_CODES, fetchVehicleGroups } from '@/lib/vehicleGr
 // Paste the real Make webhook URL here for both Send reminder buttons.
 const SEND_REMINDER_WEBHOOK_URL = 'https://hook.eu1.make.com/8hq66ccdrcx0aa56ui43o6ylpgq8bff5';
 
-type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
+type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'RETURN';
 type LicenceState = 'uploaded' | 'empty';
 type VehicleGroup = string;
 type ReservationLanguage = 'English' | 'French' | 'Italian' | 'German' | 'Czech';
@@ -92,6 +92,8 @@ type Reservation = {
   sendReturn: boolean;
   returnReminderSent: boolean;
   returnReminderSentAt: string;
+  returnConfirmed: boolean;
+  returnConfirmedAt: string;
   licenceFront: LicenceState;
   licenceBack: LicenceState;
   licenceFrontUrl: string;
@@ -142,12 +144,13 @@ const fallbackAgencyRepresentatives: Record<string, string[]> = {
 };
 
 const fallbackAgencies = Object.keys(fallbackAgencyRepresentatives);
-const statuses: Array<ReservationStatus | 'ALL'> = ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED'];
+const statuses: Array<ReservationStatus | 'ALL'> = ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'RETURN'];
 const languageOptions: ReservationLanguage[] = ['English', 'French', 'Italian', 'German', 'Czech'];
 const statusActiveClasses: Record<ReservationStatus, string> = {
   PENDING: 'border-amber-300 bg-amber-400/25 text-amber-50 shadow-[0_0_16px_rgba(251,191,36,0.14)]',
   ACCEPTED: 'border-emerald-300 bg-emerald-400/24 text-emerald-50 shadow-[0_0_16px_rgba(52,211,153,0.14)]',
   REJECTED: 'border-rose-300 bg-rose-400/24 text-rose-50 shadow-[0_0_16px_rgba(251,113,133,0.14)]',
+  RETURN: 'border-cyan-300 bg-cyan-400/24 text-cyan-50 shadow-[0_0_16px_rgba(34,211,238,0.14)]',
 };
 const defaultWhatsappMessages: WhatsappMessage[] = [
   { id: 'msg-default-1', from: 'AutoClub', text: 'Hello, your reservation request has been received.', createdAt: 'mock' },
@@ -203,7 +206,7 @@ const openNativeDatePicker = (input: HTMLInputElement) => {
 };
 
 const normalizeStatus = (status: unknown): ReservationStatus =>
-  status === 'ACCEPTED' ? 'ACCEPTED' : status === 'REJECTED' ? 'REJECTED' : 'PENDING';
+  status === 'ACCEPTED' ? 'ACCEPTED' : status === 'REJECTED' ? 'REJECTED' : status === 'RETURN' ? 'RETURN' : 'PENDING';
 
 const normalizeLanguage = (language: unknown): ReservationLanguage =>
   languageOptions.includes(language as ReservationLanguage) ? (language as ReservationLanguage) : 'English';
@@ -257,6 +260,8 @@ const reservationRecordToReservation = (record: ReservationRequestRecord): Reser
   sendReturn: Boolean(record.send_return),
   returnReminderSent: Boolean(record.return_reminder_sent),
   returnReminderSentAt: record.return_reminder_sent_at || '',
+  returnConfirmed: Boolean(record.return_confirmed),
+  returnConfirmedAt: record.return_confirmed_at || '',
   licenceFront: hasLicenceUrl(record.licence_front_url) ? 'uploaded' : 'empty',
   licenceBack: hasLicenceUrl(record.licence_back_url) ? 'uploaded' : 'empty',
   licenceFrontUrl: record.licence_front_url || '',
@@ -289,6 +294,8 @@ const reservationToPayload = (reservation: Reservation): ReservationRequestPaylo
   send_return: reservation.sendReturn,
   return_reminder_sent: reservation.returnReminderSent,
   return_reminder_sent_at: reservation.returnReminderSentAt || null,
+  return_confirmed: reservation.returnConfirmed,
+  return_confirmed_at: reservation.returnConfirmedAt || null,
   baby_seat_qty: reservation.extras.baby_seat_qty,
   booster_qty: reservation.extras.booster_qty,
   infant_qty: reservation.extras.infant_qty,
@@ -611,6 +618,8 @@ export default function BookingsManager() {
       sendReturn: false,
       returnReminderSent: false,
       returnReminderSentAt: '',
+      returnConfirmed: false,
+      returnConfirmedAt: '',
       licenceFront: 'empty',
       licenceBack: 'empty',
       licenceFrontUrl: '',
@@ -1400,8 +1409,8 @@ function ReturnsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[82vh] w-[min(980px,95vw)] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,#09111d_0%,#060a11_58%,#03060a_100%)] shadow-[0_32px_110px_rgba(0,0,0,0.62)]">
+    <div className="pointer-events-none absolute inset-y-0 right-0 z-40 flex justify-end">
+      <div className="pointer-events-auto flex h-full w-full max-w-[520px] flex-col overflow-hidden border-l border-white/10 bg-[linear-gradient(145deg,#09111d_0%,#060a11_58%,#03060a_100%)] shadow-[-24px_0_70px_rgba(0,0,0,0.48)] sm:rounded-l-[24px]">
         <div className="flex flex-shrink-0 items-start justify-between border-b border-white/10 bg-white/[0.025] px-5 py-4">
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-amber-200/75">RETURNS</p>
@@ -1430,26 +1439,61 @@ function ReturnsModal({
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto p-4">
-          <table className="w-full min-w-[900px] text-left text-[12px]">
-            <thead className="sticky top-0 z-10 bg-[#101824] text-[11px] font-semibold text-zinc-200 shadow-[0_1px_0_rgba(255,255,255,0.08)]">
-              <tr>
-                {['Customer', 'Phone', 'Group', 'Hotel / Room', 'Return time', 'Language', 'Send Return', 'Reminder', 'Action'].map((column) => (
-                  <th key={column} className="whitespace-nowrap px-2 py-1.5">{column}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/[0.055]">
-              {returnRows.map((reservation) => (
-                <tr key={reservation.id} className="transition duration-200 hover:bg-white/[0.035]">
-                  <td className="whitespace-nowrap px-2 py-2 font-semibold text-zinc-100">{reservation.name}</td>
-                  <td className="whitespace-nowrap px-2 py-2 font-mono text-sky-100">{reservation.phoneWhatsapp}</td>
-                  <td className="whitespace-nowrap px-2 py-2"><VehicleGroupBadge value={reservation.vehicleGroup} /></td>
-                  <td className="max-w-[180px] truncate whitespace-nowrap px-2 py-2 text-zinc-300" title={reservation.hotelRoom}>{reservation.hotelRoom}</td>
-                  <td className="whitespace-nowrap px-2 py-2 font-semibold text-zinc-100">{reservation.returnTime || '-'}</td>
-                  <td className="whitespace-nowrap px-2 py-2"><LanguageBadge language={reservation.language} /></td>
-                  <td className="whitespace-nowrap px-2 py-2"><BooleanBadge active={reservation.sendReturn} /></td>
-                  <td className="whitespace-nowrap px-2 py-2"><BooleanBadge active={reservation.returnReminderSent} /></td>
-                  <td className="whitespace-nowrap px-2 py-2 text-right">
+          <div className="space-y-3">
+            {returnRows.map((reservation) => {
+              const returnConfirmed = reservation.returnConfirmed;
+
+              return (
+                <article
+                  key={reservation.id}
+                  className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3 transition duration-200 hover:border-amber-200/18 hover:bg-white/[0.04]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-white">{reservation.name || '-'}</p>
+                      <p className="mt-1 font-mono text-xs text-sky-100">{reservation.phoneWhatsapp || '-'}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <VehicleGroupBadge value={reservation.vehicleGroup} />
+                      <LanguageBadge language={reservation.language} />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-xl border border-white/[0.055] bg-black/20 px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-600">Hotel / Room</p>
+                      <p className="mt-1 truncate font-semibold text-zinc-200" title={reservation.hotelRoom}>
+                        {reservation.hotelRoom || '-'}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-white/[0.055] bg-black/20 px-3 py-2">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-600">Return time</p>
+                      <p className="mt-1 font-semibold text-zinc-100">{reservation.returnTime || '-'}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${
+                        reservation.returnReminderSent
+                          ? 'border-cyan-300/35 bg-cyan-300/12 text-cyan-100'
+                          : 'border-zinc-600/60 bg-zinc-900/80 text-zinc-300'
+                      }`}
+                    >
+                      {reservation.returnReminderSent ? 'Reminder sent' : 'Not sent'}
+                    </span>
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${
+                        returnConfirmed
+                          ? 'border-emerald-300/35 bg-emerald-300/12 text-emerald-100'
+                          : 'border-amber-300/35 bg-amber-300/12 text-amber-100'
+                      }`}
+                    >
+                      {returnConfirmed ? 'Returned' : 'Pending return'}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex justify-end">
                     <button
                       type="button"
                       onClick={() => handleSendReminder(reservation)}
@@ -1458,18 +1502,16 @@ function ReturnsModal({
                     >
                       {sendingReservationId === reservation.id ? 'Sending...' : 'Send reminder'}
                     </button>
-                  </td>
-                </tr>
-              ))}
-              {returnRows.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="px-3 py-8 text-center text-sm text-zinc-500">
-                    Δεν υπάρχουν επιστροφές για αυτή την ημερομηνία.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                  </div>
+                </article>
+              );
+            })}
+            {returnRows.length === 0 && (
+              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] px-4 py-8 text-center text-sm text-zinc-500">
+                Δεν υπάρχουν επιστροφές για αυτή την ημερομηνία.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
