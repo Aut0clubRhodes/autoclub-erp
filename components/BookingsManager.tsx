@@ -1038,7 +1038,7 @@ function ReservationInspector({
   ];
   return (
     <>
-    <section className="min-h-0 flex-1 rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-1.5 shadow-[0_18px_55px_rgba(0,0,0,0.22)]">
+    <section className="mt-1.5 min-h-0 flex-1 rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-1.5 shadow-[0_18px_55px_rgba(0,0,0,0.22)]">
       <div className="grid h-full min-h-0 gap-1.5 xl:grid-cols-[minmax(390px,1.12fr)_minmax(300px,0.88fr)_minmax(230px,0.55fr)]">
         <Panel title="Reservation record" subtitle={reservation.id}>
           <div className="grid gap-1 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
@@ -1073,13 +1073,13 @@ function ReservationInspector({
         </Panel>
 
         <Panel title="Actions & files" subtitle="workflow">
-          <div className="grid min-h-0 gap-1.5 md:grid-cols-[minmax(0,1.08fr)_minmax(126px,0.72fr)]">
+          <div className="grid min-h-0 gap-1.5 md:grid-cols-[minmax(0,1.08fr)_minmax(126px,0.72fr)] xl:mt-4 2xl:mt-5">
             <div className="flex min-h-0 flex-col rounded-lg border border-white/[0.055] bg-black/20 p-1.5">
               <div className="mb-1 flex items-center justify-between">
                 <p className="text-[11px] font-black text-zinc-50">Workflow log</p>
                 <span className="text-[10px] font-semibold text-zinc-500">audit</span>
               </div>
-              <div className="grid max-h-[132px] min-h-[82px] gap-1 overflow-auto pr-1">
+              <div className="grid max-h-[154px] min-h-[104px] gap-1 overflow-auto pr-1">
                 {isLoadingWorkflowEvents ? (
                   <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
                     Loading workflow events...
@@ -1115,7 +1115,7 @@ function ReservationInspector({
                   </p>
                 )}
               </div>
-              <div className="mt-1.5 grid grid-cols-3 gap-1">
+              <div className="mt-auto grid grid-cols-3 gap-1 pt-2">
                 {actions.map((action) => (
                   <button
                     key={action.label}
