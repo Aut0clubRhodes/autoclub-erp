@@ -50,6 +50,7 @@ export async function createNotification(payload: {
       type: payload.type,
       title: payload.title,
       message: payload.message,
+      is_read: false,
     })
     .select('id, reservation_id, type, title, message, is_read, created_at')
     .single();

@@ -77,13 +77,7 @@ export default function ReturnConfirmClient({ reservationId }: ReturnConfirmClie
   const notificationMessage = useMemo(() => {
     if (!reservation) return 'Customer confirmed vehicle return.';
 
-    return [
-      reservation.customer_name || reservation.phone || 'Customer',
-      reservation.vehicle_group ? `Group ${reservation.vehicle_group}` : '',
-      reservation.return_time ? `Return ${reservation.return_time}` : '',
-    ]
-      .filter(Boolean)
-      .join(' - ');
+    return `${reservation.customer_name || reservation.phone || 'Customer'} confirmed vehicle return.`;
   }, [reservation]);
 
   const confirmReturn = async () => {
@@ -120,7 +114,7 @@ export default function ReturnConfirmClient({ reservationId }: ReturnConfirmClie
     await createNotification({
       reservation_id: reservationId,
       type: 'return_confirmed',
-      title: 'Return confirmed',
+      title: 'Vehicle return confirmed',
       message: notificationMessage,
     });
 
