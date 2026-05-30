@@ -1876,8 +1876,11 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
   if (userRole === 'bookings' && isMobileViewport) {
     return (
-      <main className="fixed inset-0 flex w-screen max-w-none flex-col overflow-x-hidden bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] text-white">
-        <header className="flex h-[64px] w-screen flex-shrink-0 items-center justify-between border-b border-white/[0.08] bg-black/20 px-4">
+      <main
+        className="fixed inset-0 z-[9999] flex h-[100dvh] w-[100dvw] max-w-none flex-col overflow-x-hidden overscroll-none bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] text-white"
+        style={{ width: '100dvw', maxWidth: 'none' }}
+      >
+        <header className="flex h-[64px] w-[100dvw] flex-shrink-0 items-center justify-between border-b border-white/[0.08] bg-black/20 px-4">
           <div className="relative h-10 w-28">
             <Image src="/logo.png" alt="AUTOCLUB" fill priority className="object-cover object-center" sizes="112px" />
           </div>
@@ -1890,11 +1893,11 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           </button>
         </header>
 
-        <section className="min-h-0 w-screen flex-1 overflow-hidden pb-[calc(76px+env(safe-area-inset-bottom))]">
+        <section className="min-h-0 w-[100dvw] flex-1 overflow-hidden pb-[calc(76px+env(safe-area-inset-bottom))]">
           <BookingsManager mobileMode mobileFocus={bookingsMobileTab} />
         </section>
 
-        <nav className="fixed bottom-0 left-0 right-0 z-[9000] grid w-screen grid-cols-3 gap-2 border-t border-white/[0.08] bg-black/70 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">
+        <nav className="fixed bottom-0 left-0 right-0 z-[10000] grid w-[100dvw] grid-cols-3 gap-2 border-t border-white/[0.08] bg-black/70 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">
           {[
             { id: 'dashboard', label: 'Πίνακας' },
             { id: 'bookings', label: 'Κρατήσεις' },
