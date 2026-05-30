@@ -435,7 +435,13 @@ function buildReturnReminderPatch(reservation: Reservation): Partial<Reservation
   };
 }
 
-export default function BookingsManager() {
+export default function BookingsManager({
+  mobileMode = false,
+  mobileFocus = 'bookings',
+}: {
+  mobileMode?: boolean;
+  mobileFocus?: 'dashboard' | 'bookings' | 'whatsapp';
+}) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [isLoadingReservations, setIsLoadingReservations] = useState(true);
@@ -456,6 +462,7 @@ export default function BookingsManager() {
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [showAvailabilityTestModal, setShowAvailabilityTestModal] = useState(false);
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
+  const [mobileReservationId, setMobileReservationId] = useState('');
   const [form, setForm] = useState<ReservationForm>(initialForm);
   const [agencyRows, setAgencyRows] = useState<AgencyRow[]>([]);
   const [representativeRows, setRepresentativeRows] = useState<RepresentativeRow[]>([]);
@@ -673,6 +680,9 @@ export default function BookingsManager() {
     filteredReservations.find((reservation) => reservation.id === selectedId) ||
     filteredReservations[0] ||
     reservations[0];
+  const mobileReservation =
+    reservations.find((reservation) => reservation.id === mobileReservationId) ||
+    filteredReservations.find((reservation) => reservation.id === mobileReservationId);
 
   useEffect(() => {
     if (!selectedReservation?.id) {
@@ -859,6 +869,114 @@ export default function BookingsManager() {
     setSelectedId(nextReservation.id);
     setShowNewModal(false);
   };
+
+  if (mobileMode) {
+    const mobileReservations =
+      mobileFocus === 'whatsapp'
+        ? [...filteredReservations].sort((firstReservation, secondReservation) => {
+            const firstUnread = unreadWhatsappReservationIds.has(firstReservation.id) ? 1 : 0;
+            const secondUnread = unreadWhatsappReservationIds.has(secondReservation.id) ? 1 : 0;
+            return secondUnread - firstUnread || reservationSortValue(secondReservation) - reservationSortValue(firstReservation);
+          })
+        : filteredReservations;
+
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] px-3 pb-3 pt-2 text-white">
+        <div className="flex flex-shrink-0 gap-2 pb-2">
+          <input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search booking..."
+            className="min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-zinc-950/90 px-3 py-2.5 text-sm text-white outline-none transition focus:border-sky-300/55"
+          />
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as (typeof statuses)[number])}
+            className="w-[112px] rounded-2xl border border-white/[0.08] bg-zinc-950/90 px-2 py-2.5 text-xs font-bold text-white outline-none transition focus:border-sky-300/55"
+          >
+            {statuses.map((status) => (
+              <option key={status} value={status}>
+                {status === 'ALL' ? 'All' : status}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+          {isLoadingReservations ? (
+            <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-5 text-center text-sm text-zinc-400">
+              Φόρτωση κρατήσεων...
+            </div>
+          ) : mobileReservations.length > 0 ? (
+            <div className="space-y-2.5">
+              {mobileReservations.map((reservation) => {
+                const hasUnreadWhatsapp = unreadWhatsappReservationIds.has(reservation.id);
+
+                return (
+                  <button
+                    key={reservation.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedId(reservation.id);
+                      setMobileReservationId(reservation.id);
+                    }}
+                    className="w-full rounded-3xl border border-white/[0.075] bg-white/[0.035] p-3 text-left shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition active:scale-[0.99]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          {hasUnreadWhatsapp && <span className="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.75)]" />}
+                          <p className="truncate text-base font-black text-white">{reservation.name || 'Customer'}</p>
+                        </div>
+                        <p className="mt-1 font-mono text-xs text-sky-100/80">{reservation.phoneWhatsapp || '-'}</p>
+                      </div>
+                      <StatusBadge status={reservation.status} />
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
+                        <p className="text-zinc-500">Group</p>
+                        <p className="mt-1 font-black text-sky-100">{reservation.vehicleGroup || '-'}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
+                        <p className="text-zinc-500">Pickup</p>
+                        <p className="mt-1 font-semibold text-zinc-100">{formatDate(reservation.pickupDate)} {reservation.pickupTime}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
+                        <p className="text-zinc-500">Return</p>
+                        <p className="mt-1 font-semibold text-zinc-100">{formatDate(reservation.returnDate)} {reservation.returnTime}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
+                        <p className="text-zinc-500">Hotel</p>
+                        <p className="mt-1 truncate font-semibold text-zinc-100">{reservation.hotelRoom || '-'}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-5 text-center text-sm text-zinc-400">
+              Δεν υπάρχουν κρατήσεις.
+            </div>
+          )}
+        </div>
+
+        {mobileReservation && (
+          <MobileReservationModal
+            reservation={mobileReservation}
+            agencyOptions={agencyOptions}
+            representativesByAgency={representativesByAgency}
+            vehicleGroups={vehicleGroups}
+            whatsappMessages={whatsappMessages}
+            isLoadingWhatsappMessages={isLoadingWhatsappMessages}
+            onClose={() => setMobileReservationId('')}
+            onUpdate={updateSelectedReservation}
+            onSendReminder={sendReminder}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex h-full min-h-0 flex-col gap-1 text-white">
@@ -1721,6 +1839,142 @@ function NewReservationModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function MobileReservationModal({
+  reservation,
+  agencyOptions,
+  representativesByAgency,
+  vehicleGroups,
+  whatsappMessages,
+  isLoadingWhatsappMessages,
+  onClose,
+  onUpdate,
+  onSendReminder,
+}: {
+  reservation: Reservation;
+  agencyOptions: string[];
+  representativesByAgency: Record<string, string[]>;
+  vehicleGroups: VehicleGroup[];
+  whatsappMessages: WhatsappMessage[];
+  isLoadingWhatsappMessages: boolean;
+  onClose: () => void;
+  onUpdate: (reservation: Reservation) => Promise<boolean>;
+  onSendReminder: (reservation: Reservation) => Promise<Reservation | false>;
+}) {
+  const [draft, setDraft] = useState(reservation);
+  const representatives = representativesByAgency[draft.agency] || [];
+  const sortedMessages = [...whatsappMessages].sort((firstMessage, secondMessage) => {
+    const firstDate = firstMessage.createdAt ? new Date(firstMessage.createdAt).getTime() : 0;
+    const secondDate = secondMessage.createdAt ? new Date(secondMessage.createdAt).getTime() : 0;
+    return firstDate - secondDate;
+  });
+
+  useEffect(() => {
+    setDraft(reservation);
+  }, [reservation]);
+
+  const updateDraft = (patch: Partial<Reservation>) => {
+    setDraft((currentDraft) => ({ ...currentDraft, ...patch }));
+  };
+
+  const saveDraft = async () => {
+    if (draft.status === 'ACCEPTED' && !hasAcceptedRequiredFields(draft)) {
+      window.alert(acceptedValidationMessage);
+      return;
+    }
+
+    await onUpdate(draft);
+  };
+
+  const sendReminder = async () => {
+    const updated = await onSendReminder(draft);
+    if (updated) {
+      setDraft(updated);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex flex-col bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] text-white">
+      <header className="flex flex-shrink-0 items-center justify-between border-b border-white/[0.08] px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-200/65">Reservation</p>
+          <h2 className="truncate text-lg font-black text-white">{draft.name || 'Customer'}</h2>
+          <p className="font-mono text-xs text-sky-100/75">{draft.phoneWhatsapp || '-'}</p>
+        </div>
+        <button type="button" onClick={onClose} className="rounded-2xl border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xl text-zinc-300">
+          ×
+        </button>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        <section className="rounded-3xl border border-white/[0.07] bg-white/[0.03] p-3">
+          <div className="grid gap-2">
+            <EditableCompactInput label="Phone WhatsApp" value={draft.phoneWhatsapp} onChange={(value) => updateDraft({ phoneWhatsapp: value.replace(/\s+/g, '') })} mono />
+            <EditableCompactInput label="Name" value={draft.name} onChange={(value) => updateDraft({ name: value })} />
+            <EditableCompactInput label="Hotel and Room" value={draft.hotelRoom} onChange={(value) => updateDraft({ hotelRoom: value })} />
+            <EditableCompactSelect label="Vehicle Group" value={draft.vehicleGroup} options={withCurrentOption(vehicleGroups, draft.vehicleGroup)} onChange={(value) => updateDraft({ vehicleGroup: value })} />
+            <EditableCompactSelect
+              label="Agency"
+              value={draft.agency}
+              options={withCurrentOption(agencyOptions, draft.agency)}
+              onChange={(value) => updateDraft({ agency: value, representative: representativesByAgency[value]?.[0] || '' })}
+            />
+            <EditableCompactSelect
+              label="Representative"
+              value={draft.representative}
+              options={withCurrentOption(representatives, draft.representative)}
+              onChange={(value) => updateDraft({ representative: value })}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <EditableCompactInput label="Pickup Date" type="date" value={draft.pickupDate} onChange={(value) => updateDraft({ pickupDate: value })} />
+              <EditableCompactInput label="Pickup Time" value={draft.pickupTime} placeholder="09:30" onChange={(value) => updateDraft({ pickupTime: value })} />
+              <EditableCompactInput label="Return Date" type="date" value={draft.returnDate} onChange={(value) => updateDraft({ returnDate: value })} />
+              <EditableCompactInput label="Return Time" value={draft.returnTime} placeholder="18:00" onChange={(value) => updateDraft({ returnTime: value })} />
+            </div>
+            <EditableCompactInput label="Price" type="number" value={draft.price === null ? '' : String(draft.price)} onChange={(value) => updateDraft({ price: value === '' ? null : Number(value) || null })} />
+            <EditableCompactSelect label="Status" value={draft.status} options={statuses.filter((status) => status !== 'ALL')} onChange={(value) => updateDraft({ status: normalizeStatus(value) })} />
+          </div>
+        </section>
+
+        <section className="mt-3 rounded-3xl border border-white/[0.07] bg-white/[0.03] p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-black text-white">WhatsApp</h3>
+            <span className="text-[10px] font-semibold text-zinc-500">live</span>
+          </div>
+          <div className="max-h-[260px] space-y-2 overflow-y-auto pr-1">
+            {isLoadingWhatsappMessages ? (
+              <p className="rounded-2xl border border-white/[0.06] bg-black/20 p-3 text-sm text-zinc-500">Loading messages...</p>
+            ) : sortedMessages.length > 0 ? (
+              sortedMessages.map((message) => {
+                const isCustomer = message.from === 'Customer';
+
+                return (
+                  <div key={message.id} className={`flex ${isCustomer ? 'justify-start' : 'justify-end'}`}>
+                    <div className={`max-w-[86%] rounded-2xl border px-3 py-2 ${isCustomer ? 'border-emerald-300/20 bg-emerald-300/[0.08]' : 'border-sky-300/20 bg-sky-300/[0.09]'}`}>
+                      <p className={`text-[10px] font-black ${isCustomer ? 'text-emerald-100' : 'text-sky-100'}`}>{message.from}</p>
+                      <p className="mt-1 text-sm leading-5 text-zinc-100">{message.text || '-'}</p>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="rounded-2xl border border-white/[0.06] bg-black/20 p-3 text-sm text-zinc-500">No WhatsApp messages yet.</p>
+            )}
+          </div>
+        </section>
+      </div>
+
+      <footer className="grid flex-shrink-0 grid-cols-2 gap-2 border-t border-white/[0.08] bg-black/28 p-3">
+        <button type="button" onClick={sendReminder} className="rounded-2xl border border-cyan-300/35 bg-cyan-400/14 px-3 py-3 text-sm font-black text-cyan-50">
+          Send reminder
+        </button>
+        <button type="button" onClick={saveDraft} className="rounded-2xl border border-emerald-300/35 bg-emerald-400/18 px-3 py-3 text-sm font-black text-emerald-50">
+          Save changes
+        </button>
+      </footer>
     </div>
   );
 }

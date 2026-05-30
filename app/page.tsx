@@ -221,6 +221,8 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<AppRole | null>(null);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [bookingsMobileTab, setBookingsMobileTab] = useState<'dashboard' | 'bookings' | 'whatsapp'>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem('autoclub-sidebar-collapsed') === 'true';
@@ -240,6 +242,16 @@ export default function Home() {
   useEffect(() => {
     document.documentElement.style.setProperty('--autoclub-sidebar-width', `${sidebarWidth}px`);
   }, [sidebarWidth]);
+
+  useEffect(() => {
+    const updateViewportMode = () => {
+      setIsMobileViewport(window.innerWidth < 1024);
+    };
+
+    updateViewportMode();
+    window.addEventListener('resize', updateViewportMode);
+    return () => window.removeEventListener('resize', updateViewportMode);
+  }, []);
 
   const loadNotifications = async () => {
     const latestNotifications = await fetchLatestNotifications();
@@ -1852,6 +1864,67 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
   if (!userEmail) {
     return <LoginScreen />;
+  }
+
+  if (userRole === 'bookings' && isMobileViewport) {
+    return (
+      <main className="flex min-h-screen flex-col bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] text-white">
+        <header className="flex h-[64px] flex-shrink-0 items-center justify-between border-b border-white/[0.08] bg-black/20 px-4">
+          <div className="relative h-10 w-28">
+            <Image src="/logo.png" alt="AUTOCLUB" fill priority className="object-cover object-center" sizes="112px" />
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="rounded-2xl border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs font-bold text-zinc-200"
+          >
+            Logout
+          </button>
+        </header>
+
+        <section className="min-h-0 flex-1 overflow-hidden">
+          {bookingsMobileTab === 'dashboard' ? (
+            <div className="flex h-full items-center justify-center px-5">
+              <div className="relative flex h-[240px] w-full max-w-[390px] flex-col items-center justify-center">
+                <div className="absolute inset-10 rounded-full bg-sky-400/[0.08] blur-3xl" />
+                <div className="absolute inset-0 rounded-[28px] border border-sky-200/[0.16] bg-[linear-gradient(135deg,rgba(56,189,248,0.065),rgba(9,18,29,0.74)_35%,rgba(34,197,94,0.045))] shadow-[0_0_34px_rgba(0,160,255,0.09)]" />
+                <Image src="/logo.png" alt="AUTOCLUB" fill priority className="relative object-cover object-center opacity-95" sizes="390px" />
+                <p className="absolute bottom-7 text-[10px] font-medium uppercase tracking-[0.24em] text-[#8e99a8]">
+                  Bookings Operations
+                </p>
+              </div>
+            </div>
+          ) : (
+            <BookingsManager mobileMode mobileFocus={bookingsMobileTab} />
+          )}
+        </section>
+
+        <nav className="grid h-[68px] flex-shrink-0 grid-cols-3 border-t border-white/[0.08] bg-black/35 px-2 py-2">
+          {[
+            { id: 'dashboard', label: 'Πίνακας' },
+            { id: 'bookings', label: 'Κρατήσεις' },
+            { id: 'whatsapp', label: 'WhatsApp' },
+          ].map((item) => {
+            const isActive = bookingsMobileTab === item.id;
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setBookingsMobileTab(item.id as 'dashboard' | 'bookings' | 'whatsapp')}
+                className={`mx-1 rounded-2xl border text-xs font-black transition ${
+                  isActive
+                    ? 'border-sky-300/35 bg-sky-300/14 text-sky-50'
+                    : 'border-white/[0.055] bg-white/[0.02] text-zinc-400'
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+      </main>
+    );
   }
 
   return (
