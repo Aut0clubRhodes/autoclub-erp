@@ -179,6 +179,12 @@ const statusActiveClasses: Record<ReservationStatus, string> = {
   REJECTED: 'border-rose-300 bg-rose-400/24 text-rose-50 shadow-[0_0_16px_rgba(251,113,133,0.14)]',
   RETURN: 'border-cyan-300 bg-cyan-400/24 text-cyan-50 shadow-[0_0_16px_rgba(34,211,238,0.14)]',
 };
+const statusSelectClasses: Record<ReservationStatus, string> = {
+  PENDING: 'border-amber-300/45 text-amber-100 focus:border-amber-300/65',
+  ACCEPTED: 'border-emerald-300/45 text-emerald-100 focus:border-emerald-300/65',
+  REJECTED: 'border-rose-300/45 text-rose-100 focus:border-rose-300/65',
+  RETURN: 'border-cyan-300/45 text-cyan-100 focus:border-cyan-300/65',
+};
 const defaultWhatsappMessages: WhatsappMessage[] = [
   { id: 'msg-default-1', from: 'AutoClub', text: 'Hello, your reservation request has been received.', createdAt: 'mock' },
   { id: 'msg-default-2', from: 'Customer', text: 'Can I send the licence photos here?', createdAt: 'mock' },
@@ -1219,6 +1225,7 @@ function ReservationInspector({
               <EditableCompactInput label="Price" type="number" value={draft.price === null ? '' : String(draft.price)} onChange={(value) => updateDraft({ price: value === '' ? null : Number(value) || null })} />
               <EditableCompactInput label="Email" type="email" value={draft.email} onChange={(value) => updateDraft({ email: value })} />
               <EditableCompactSelect label="Language" value={draft.language} options={languageOptions} onChange={(value) => updateDraft({ language: normalizeLanguage(value) })} />
+              <CompactStatusButtons value={draft.status} onChange={updateStatus} />
             </div>
           </div>
         </Panel>
@@ -2312,18 +2319,54 @@ function StatusPillSelector({
   );
 }
 
+function CompactStatusButtons({
+  value,
+  onChange,
+}: {
+  value: ReservationStatus;
+  onChange: (status: ReservationStatus) => void;
+}) {
+  return (
+    <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-2 rounded-md border border-white/[0.045] bg-black/20 px-2 py-1">
+      <span className="text-[10px] font-semibold text-zinc-500">Status</span>
+      <div className="grid grid-cols-3 gap-1">
+        {(['PENDING', 'ACCEPTED', 'REJECTED'] as ReservationStatus[]).map((status) => (
+          <button
+            key={status}
+            type="button"
+            onClick={() => onChange(status)}
+            className={`h-6 rounded-md border px-1 text-[9.5px] font-black leading-none transition hover:-translate-y-px ${
+              value === status
+                ? statusActiveClasses[status]
+                : status === 'PENDING'
+                  ? 'border-amber-300/25 bg-amber-300/[0.055] text-amber-100 hover:border-amber-300/45'
+                  : status === 'ACCEPTED'
+                    ? 'border-emerald-300/25 bg-emerald-300/[0.055] text-emerald-100 hover:border-emerald-300/45'
+                    : 'border-rose-300/25 bg-rose-300/[0.055] text-rose-100 hover:border-rose-300/45'
+            }`}
+          >
+            {status}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function EditableCompactSelect({
   label,
   value,
   options,
   onChange,
   disabled = false,
+  inputClassName = '',
 }: {
   label: string;
   value: string;
   options: string[];
   onChange: (value: string) => void;
   disabled?: boolean;
+  inputClassName?: string;
 }) {
   return (
     <label className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-2 rounded-md border border-white/[0.045] bg-black/20 px-2 py-1">
@@ -2331,9 +2374,9 @@ function EditableCompactSelect({
       <select
         value={value}
         disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-6 min-w-0 rounded-md border border-white/[0.05] bg-zinc-950/70 px-2 text-[11px] font-semibold text-zinc-100 outline-none transition focus:border-sky-300/45 disabled:border-transparent disabled:bg-transparent disabled:px-0 disabled:text-zinc-200"
-      >
+      onChange={(event) => onChange(event.target.value)}
+      className={`h-6 min-w-0 rounded-md border border-white/[0.05] bg-zinc-950/70 px-2 text-[11px] font-semibold text-zinc-100 outline-none transition focus:border-sky-300/45 disabled:border-transparent disabled:bg-transparent disabled:px-0 disabled:text-zinc-200 ${inputClassName}`}
+    >
         {options.map((option) => (
           <option key={option} value={option}>
             {option}
