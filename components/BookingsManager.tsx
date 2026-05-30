@@ -201,7 +201,7 @@ const initialForm: ReservationForm = {
   phoneWhatsapp: '',
   name: '',
   email: '',
-  vehicleGroup: 'A',
+  vehicleGroup: '',
   agency: fallbackAgencies[0],
   representative: fallbackAgencyRepresentatives[fallbackAgencies[0]][0],
   hotelRoom: '',
@@ -797,6 +797,22 @@ export default function BookingsManager() {
       return;
     }
 
+    if (!form.vehicleGroup || !form.pickupDate || !form.returnDate) {
+      window.alert('Select vehicle group, pickup date and return date before saving.');
+      return;
+    }
+
+    const availability = await checkGroupAvailability({
+      pickup_date: form.pickupDate,
+      return_date: form.returnDate,
+    });
+    const selectedGroupAvailability = availability.find((group) => group.vehicle_group === form.vehicleGroup);
+
+    if (!selectedGroupAvailability || selectedGroupAvailability.available <= 0) {
+      window.alert('No availability for this vehicle group on the selected dates.');
+      return;
+    }
+
     const reservationDraft: Reservation = {
       id: '',
       createdAt: '',
@@ -1017,6 +1033,9 @@ export default function BookingsManager() {
                   <tr
                     key={reservation.id}
                     onClick={() => {
+                      setSelectedId(reservation.id);
+                    }}
+                    onDoubleClick={() => {
                       setSelectedId(reservation.id);
                       setEditingReservation(reservation);
                     }}
@@ -1477,10 +1496,55 @@ function NewReservationModal({
   onSave: () => void;
 }) {
   const representatives = representativesByAgency[form.agency] || [];
+  const [availabilityState, setAvailabilityState] = useState<{
+    status: 'idle' | 'checking' | 'ready' | 'empty';
+    groups: GroupAvailabilityResult[];
+  }>({ status: 'idle', groups: [] });
+  const datesReady = Boolean(form.pickupDate && form.returnDate);
+  const availableVehicleGroups = availabilityState.groups.map((group) => group.vehicle_group);
+  const selectedGroupAvailability = availabilityState.groups.find((group) => group.vehicle_group === form.vehicleGroup);
+  const vehicleGroupSelectDisabled =
+    !datesReady || availabilityState.status === 'checking' || availabilityState.status === 'empty';
+
+  useEffect(() => {
+    if (!form.pickupDate || !form.returnDate) {
+      setAvailabilityState({ status: 'idle', groups: [] });
+      return;
+    }
+
+    let isCurrentCheck = true;
+    setAvailabilityState({ status: 'checking', groups: [] });
+
+    const runAvailabilityCheck = async () => {
+      const availability = await checkGroupAvailability({
+        pickup_date: form.pickupDate,
+        return_date: form.returnDate,
+      });
+      const availableGroups = availability.filter((group) => group.available > 0);
+
+      if (!isCurrentCheck) return;
+
+      if (availableGroups.length === 0) {
+        setAvailabilityState({ status: 'empty', groups: [] });
+        return;
+      }
+
+      setAvailabilityState({ status: 'ready', groups: availableGroups });
+    };
+
+    void runAvailabilityCheck();
+
+    return () => {
+      isCurrentCheck = false;
+    };
+  }, [form.pickupDate, form.returnDate]);
 
   const updateForm = (patch: Partial<ReservationForm>) => {
     onChange({ ...form, ...patch });
   };
+
+  const isSaveDisabled =
+    !form.vehicleGroup || availabilityState.status === 'checking' || availabilityState.status === 'empty';
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
@@ -1517,12 +1581,15 @@ function NewReservationModal({
             <Field label="Email">
               <input type="email" value={form.email} onChange={(event) => updateForm({ email: event.target.value })} className={modalFieldClass} placeholder="customer@email.com" />
             </Field>
-            <Field label="Vehicle Group">
-              <select value={form.vehicleGroup} onChange={(event) => updateForm({ vehicleGroup: event.target.value })} className={modalFieldClass}>
-                {withCurrentOption(vehicleGroups, form.vehicleGroup).map((group) => (
-                  <option key={group} value={group}>{group}</option>
-                ))}
-              </select>
+            <Field label="Pickup Date">
+              <input
+                type="date"
+                value={form.pickupDate}
+                onClick={(event) => openNativeDatePicker(event.currentTarget)}
+                onFocus={(event) => openNativeDatePicker(event.currentTarget)}
+                onChange={(event) => updateForm({ pickupDate: event.target.value, vehicleGroup: '' })}
+                className={modalFieldClass}
+              />
             </Field>
             <Field label="Agency">
               <select
@@ -1538,38 +1605,68 @@ function NewReservationModal({
                 ))}
               </select>
             </Field>
-            <Field label="Representative">
-              <select value={form.representative} onChange={(event) => updateForm({ representative: event.target.value })} className={modalFieldClass}>
-                {withCurrentOption(representatives, form.representative).map((representative) => (
-                  <option key={representative} value={representative}>{representative}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Hotel and Room">
-              <input value={form.hotelRoom} onChange={(event) => updateForm({ hotelRoom: event.target.value })} className={modalFieldClass} />
-            </Field>
-            <Field label="Pickup Date">
-              <input
-                type="date"
-                value={form.pickupDate}
-                onClick={(event) => openNativeDatePicker(event.currentTarget)}
-                onFocus={(event) => openNativeDatePicker(event.currentTarget)}
-                onChange={(event) => updateForm({ pickupDate: event.target.value })}
-                className={modalFieldClass}
-              />
-            </Field>
-            <Field label="Pickup Time">
-              <input value={form.pickupTime} onChange={(event) => updateForm({ pickupTime: event.target.value })} className={modalFieldClass} placeholder="09:30" />
-            </Field>
             <Field label="Return Date">
               <input
                 type="date"
                 value={form.returnDate}
                 onClick={(event) => openNativeDatePicker(event.currentTarget)}
                 onFocus={(event) => openNativeDatePicker(event.currentTarget)}
-                onChange={(event) => updateForm({ returnDate: event.target.value })}
+                onChange={(event) => updateForm({ returnDate: event.target.value, vehicleGroup: '' })}
                 className={modalFieldClass}
               />
+            </Field>
+            <Field label="Hotel and Room">
+              <input value={form.hotelRoom} onChange={(event) => updateForm({ hotelRoom: event.target.value })} className={modalFieldClass} />
+            </Field>
+            <Field label="Vehicle Group">
+              <select
+                value={form.vehicleGroup}
+                onChange={(event) => updateForm({ vehicleGroup: event.target.value })}
+                disabled={vehicleGroupSelectDisabled}
+                className={`${modalFieldClass} disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-zinc-950/80 disabled:text-zinc-500`}
+              >
+                {!datesReady && <option value="">Select dates first</option>}
+                {datesReady && availabilityState.status === 'checking' && <option value="">Checking availability...</option>}
+                {datesReady && availabilityState.status === 'empty' && <option value="">No available groups</option>}
+                {datesReady && availabilityState.status === 'ready' && (
+                  <>
+                    <option value="">Select available group</option>
+                    {availableVehicleGroups.map((group) => (
+                      <option key={group} value={group}>{group}</option>
+                    ))}
+                  </>
+                )}
+              </select>
+              {availabilityState.status === 'checking' && (
+                <p className="mt-2 rounded-xl border border-sky-300/20 bg-sky-400/10 px-3 py-2 text-xs font-semibold text-sky-100">
+                  Checking availability...
+                </p>
+              )}
+              {availabilityState.status === 'empty' && (
+                <p className="mt-2 rounded-xl border border-rose-300/35 bg-rose-500/12 px-3 py-2 text-xs font-bold text-rose-100">
+                  No vehicle groups available for selected dates.
+                </p>
+              )}
+              {availabilityState.status === 'ready' && !form.vehicleGroup && (
+                <p className="mt-2 rounded-xl border border-emerald-300/20 bg-emerald-400/8 px-3 py-2 text-xs font-semibold text-emerald-100">
+                  Select one of the available vehicle groups.
+                </p>
+              )}
+              {availabilityState.status === 'ready' && form.vehicleGroup && selectedGroupAvailability && (
+                <p className="mt-2 rounded-xl border border-emerald-300/30 bg-emerald-400/12 px-3 py-2 text-xs font-bold text-emerald-100">
+                  Available for selected dates · {selectedGroupAvailability.available} left.
+                </p>
+              )}
+            </Field>
+            <Field label="Pickup Time">
+              <input value={form.pickupTime} onChange={(event) => updateForm({ pickupTime: event.target.value })} className={modalFieldClass} placeholder="09:30" />
+            </Field>
+            <Field label="Representative">
+              <select value={form.representative} onChange={(event) => updateForm({ representative: event.target.value })} className={modalFieldClass}>
+                {withCurrentOption(representatives, form.representative).map((representative) => (
+                  <option key={representative} value={representative}>{representative}</option>
+                ))}
+              </select>
             </Field>
             <Field label="Return Time">
               <input value={form.returnTime} onChange={(event) => updateForm({ returnTime: event.target.value })} className={modalFieldClass} placeholder="18:00" />
@@ -1614,8 +1711,13 @@ function NewReservationModal({
           <button type="button" onClick={onClose} className="rounded-xl border border-white/[0.08] bg-white/[0.035] px-5 py-2.5 text-sm font-semibold text-zinc-300 transition hover:bg-white/[0.07] hover:text-white">
             Ακύρωση
           </button>
-          <button type="button" onClick={onSave} className="rounded-xl border border-cyan-200/35 bg-cyan-400/16 px-5 py-2.5 text-sm font-bold text-cyan-50 transition hover:-translate-y-0.5 hover:bg-cyan-400/24 hover:shadow-[0_0_24px_rgba(34,211,238,0.16)]">
-            Αποθήκευση
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={isSaveDisabled}
+            className="rounded-xl border border-cyan-200/35 bg-cyan-400/16 px-5 py-2.5 text-sm font-bold text-cyan-50 transition hover:-translate-y-0.5 hover:bg-cyan-400/24 hover:shadow-[0_0_24px_rgba(34,211,238,0.16)] disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-900/70 disabled:text-zinc-500 disabled:shadow-none disabled:hover:translate-y-0"
+          >
+            {availabilityState.status === 'checking' ? 'Checking...' : 'Αποθήκευση'}
           </button>
         </div>
       </div>
