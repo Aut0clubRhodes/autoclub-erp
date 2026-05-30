@@ -27,6 +27,7 @@ import { DEFAULT_VEHICLE_GROUP_CODES, fetchVehicleGroups } from '@/lib/vehicleGr
 
 // Paste the real Make webhook URL here for both Send reminder buttons.
 const SEND_REMINDER_WEBHOOK_URL = 'https://hook.eu1.make.com/8hq66ccdrcx0aa56ui43o6ylpgq8bff5';
+const WHATSAPP_SEND_WEBHOOK_URL = 'https://hook.eu1.make.com/d2vag9sqf3q6akb9iwk4jx8rbuo84tx2';
 
 type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'RETURN';
 type LicenceState = 'uploaded' | 'empty';
@@ -443,6 +444,7 @@ export default function BookingsManager() {
   const [whatsappMessages, setWhatsappMessages] = useState<WhatsappMessage[]>([]);
   const [isLoadingWhatsappMessages, setIsLoadingWhatsappMessages] = useState(false);
   const [unreadWhatsappReservationIds, setUnreadWhatsappReservationIds] = useState<Set<string>>(new Set());
+  const [showWhatsappChat, setShowWhatsappChat] = useState(false);
   const [vehicleGroups, setVehicleGroups] = useState<VehicleGroup[]>(DEFAULT_VEHICLE_GROUP_CODES);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof statuses)[number]>('ALL');
@@ -1032,6 +1034,7 @@ export default function BookingsManager() {
           whatsappMessages={whatsappMessages}
           isLoadingWhatsappMessages={isLoadingWhatsappMessages}
           unreadWhatsappCount={whatsappMessages.filter((message) => message.isUnread).length}
+          onOpenWhatsappChat={() => setShowWhatsappChat(true)}
           onCreateWorkflowEvent={recordWorkflowEvent}
           onSendReminder={sendReminder}
         />
@@ -1093,6 +1096,15 @@ export default function BookingsManager() {
       {showAvailabilityTestModal && (
         <AvailabilityTestModal onClose={() => setShowAvailabilityTestModal(false)} />
       )}
+
+      {showWhatsappChat && selectedReservation && (
+        <WhatsappChatPopup
+          reservation={selectedReservation}
+          messages={whatsappMessages}
+          onReloadMessages={loadWhatsappMessages}
+          onClose={() => setShowWhatsappChat(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1109,6 +1121,7 @@ function ReservationInspector({
   whatsappMessages,
   isLoadingWhatsappMessages,
   unreadWhatsappCount,
+  onOpenWhatsappChat,
   onCreateWorkflowEvent,
   onSendReminder,
 }: {
@@ -1123,6 +1136,7 @@ function ReservationInspector({
   whatsappMessages: WhatsappMessage[];
   isLoadingWhatsappMessages: boolean;
   unreadWhatsappCount: number;
+  onOpenWhatsappChat: () => void;
   onCreateWorkflowEvent: (reservationId: string, eventType: string, eventMessage: string) => Promise<void>;
   onSendReminder: (reservation: Reservation) => Promise<Reservation | false>;
 }) {
@@ -1305,7 +1319,17 @@ function ReservationInspector({
         </Panel>
 
         <Panel title="Workflow & WhatsApp" subtitle={draft.phoneWhatsapp}>
-          <div className="rounded-lg border border-white/[0.055] bg-black/20 p-1.5">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={onOpenWhatsappChat}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              onOpenWhatsappChat();
+            }}
+            className="cursor-pointer rounded-lg border border-white/[0.055] bg-black/20 p-1.5 transition hover:border-sky-300/20 hover:bg-sky-300/[0.035]"
+          >
             <div className="mb-1 flex items-center justify-between">
               <p className="text-[11px] font-bold text-zinc-100">WhatsApp messages</p>
               {unreadWhatsappCount > 0 ? (
@@ -1354,10 +1378,13 @@ function ReservationInspector({
             <div className="mt-1.5 flex gap-1.5">
               <input
                 placeholder="Write WhatsApp message..."
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
                 className="min-w-0 flex-1 rounded-lg border border-white/[0.07] bg-zinc-950 px-2 py-1.5 text-[11px] text-white outline-none focus:border-sky-300/50"
               />
               <button
                 type="button"
+                onClick={(event) => event.stopPropagation()}
                 className="rounded-lg border border-sky-300/25 bg-sky-300/12 px-3 py-1.5 text-[11px] font-semibold text-sky-100 transition hover:bg-sky-300/18"
               >
                 Send
@@ -1547,6 +1574,124 @@ function NewReservationModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function WhatsappChatPopup({
+  reservation,
+  messages,
+  onReloadMessages,
+  onClose,
+}: {
+  reservation: Reservation;
+  messages: WhatsappMessage[];
+  onReloadMessages: (reservationId: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [draftMessage, setDraftMessage] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const sortedMessages = [...messages].sort((firstMessage, secondMessage) => {
+    const firstDate = firstMessage.createdAt ? new Date(firstMessage.createdAt).getTime() : 0;
+    const secondDate = secondMessage.createdAt ? new Date(secondMessage.createdAt).getTime() : 0;
+    return firstDate - secondDate;
+  });
+
+  const handleSend = async () => {
+    const message = draftMessage.trim();
+
+    if (!message || isSending) return;
+
+    setIsSending(true);
+    try {
+      const response = await fetch(WHATSAPP_SEND_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reservation_id: reservation.id,
+          phone: reservation.phoneWhatsapp,
+          message,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      await onReloadMessages(reservation.id);
+      setDraftMessage('');
+    } catch (error) {
+      console.error('WhatsApp send webhook failed:', error);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10000] flex items-end justify-end bg-black/35 p-4 backdrop-blur-[2px]">
+      <section className="flex h-[min(620px,86vh)] w-[min(440px,96vw)] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,#09111d_0%,#060a11_58%,#03060a_100%)] text-white shadow-[0_28px_90px_rgba(0,0,0,0.58)]">
+        <header className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-white/10 bg-white/[0.025] px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-sky-200/70">WHATSAPP CHAT</p>
+            <h2 className="mt-1 truncate text-lg font-semibold text-white">{reservation.name || 'Customer'}</h2>
+            <p className="mt-1 font-mono text-xs text-sky-100/80">{reservation.phoneWhatsapp || '-'}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white">
+            ×
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto bg-black/18 px-4 py-3">
+          {sortedMessages.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {sortedMessages.map((message) => {
+                const isCustomer = message.from === 'Customer';
+
+                return (
+                  <div key={message.id} className={`flex ${isCustomer ? 'justify-start' : 'justify-end'}`}>
+                    <div
+                      className={`max-w-[82%] rounded-2xl border px-3 py-2 ${
+                        isCustomer
+                          ? 'rounded-bl-md border-emerald-300/20 bg-emerald-300/[0.08] text-zinc-100'
+                          : 'rounded-br-md border-sky-300/20 bg-sky-300/[0.09] text-zinc-100'
+                      }`}
+                    >
+                      <p className={`text-[10px] font-black ${isCustomer ? 'text-emerald-100' : 'text-sky-100'}`}>
+                        {message.from}
+                      </p>
+                      <p className="mt-1 text-sm leading-5">{message.text || '-'}</p>
+                      {message.createdAt && <p className="mt-1 text-[10px] font-semibold text-zinc-500">{formatDateTime(message.createdAt)}</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 text-center text-sm text-zinc-500">
+              No WhatsApp messages yet.
+            </div>
+          )}
+        </div>
+
+        <footer className="flex flex-shrink-0 gap-2 border-t border-white/10 bg-black/25 p-3">
+          <input
+            value={draftMessage}
+            onChange={(event) => setDraftMessage(event.target.value)}
+            placeholder="Write WhatsApp message..."
+            className="min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-zinc-950 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-sky-300/50"
+          />
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={isSending || draftMessage.trim() === ''}
+            className="rounded-2xl border border-sky-300/25 bg-sky-300/12 px-4 py-2.5 text-sm font-black text-sky-100 transition hover:bg-sky-300/18 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSending ? 'Sending...' : 'Send'}
+          </button>
+        </footer>
+      </section>
     </div>
   );
 }
