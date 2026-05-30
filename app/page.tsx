@@ -221,7 +221,10 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<AppRole | null>(null);
-  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 1023px)').matches;
+  });
   const [bookingsMobileTab, setBookingsMobileTab] = useState<'dashboard' | 'bookings' | 'whatsapp'>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -244,13 +247,18 @@ export default function Home() {
   }, [sidebarWidth]);
 
   useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 1023px)');
     const updateViewportMode = () => {
-      setIsMobileViewport(window.innerWidth < 1024);
+      setIsMobileViewport(mediaQuery.matches);
     };
 
     updateViewportMode();
-    window.addEventListener('resize', updateViewportMode);
-    return () => window.removeEventListener('resize', updateViewportMode);
+    mediaQuery.addEventListener('change', updateViewportMode);
+    window.addEventListener('orientationchange', updateViewportMode);
+    return () => {
+      mediaQuery.removeEventListener('change', updateViewportMode);
+      window.removeEventListener('orientationchange', updateViewportMode);
+    };
   }, []);
 
   const loadNotifications = async () => {
@@ -1883,20 +1891,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         </header>
 
         <section className="min-h-0 flex-1 overflow-hidden">
-          {bookingsMobileTab === 'dashboard' ? (
-            <div className="flex h-full items-center justify-center px-5">
-              <div className="relative flex h-[240px] w-full max-w-[390px] flex-col items-center justify-center">
-                <div className="absolute inset-10 rounded-full bg-sky-400/[0.08] blur-3xl" />
-                <div className="absolute inset-0 rounded-[28px] border border-sky-200/[0.16] bg-[linear-gradient(135deg,rgba(56,189,248,0.065),rgba(9,18,29,0.74)_35%,rgba(34,197,94,0.045))] shadow-[0_0_34px_rgba(0,160,255,0.09)]" />
-                <Image src="/logo.png" alt="AUTOCLUB" fill priority className="relative object-cover object-center opacity-95" sizes="390px" />
-                <p className="absolute bottom-7 text-[10px] font-medium uppercase tracking-[0.24em] text-[#8e99a8]">
-                  Bookings Operations
-                </p>
-              </div>
-            </div>
-          ) : (
-            <BookingsManager mobileMode mobileFocus={bookingsMobileTab} />
-          )}
+          <BookingsManager mobileMode mobileFocus={bookingsMobileTab} />
         </section>
 
         <nav className="grid h-[68px] flex-shrink-0 grid-cols-3 border-t border-white/[0.08] bg-black/35 px-2 py-2">

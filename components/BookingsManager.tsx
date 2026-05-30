@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import Image from 'next/image';
 import { supabase } from '@/lib/supabaseClient';
 import {
   createReservation,
@@ -416,6 +417,24 @@ async function postReturnReminderWebhook(reservation: Reservation) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(reminderPayload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+}
+
+async function postWhatsappMessageWebhook(reservation: Reservation, message: string) {
+  const response = await fetch(WHATSAPP_SEND_WEBHOOK_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      reservation_id: reservation.id,
+      phone: reservation.phoneWhatsapp,
+      message,
+    }),
   });
 
   if (!response.ok) {
@@ -871,6 +890,10 @@ export default function BookingsManager({
   };
 
   if (mobileMode) {
+    const today = todayDateValue();
+    const reservationsToday = reservations.filter((reservation) => reservation.pickupDate === today).length;
+    const returnsToday = reservations.filter((reservation) => reservation.returnDate === today).length;
+    const unreadWhatsappCount = unreadWhatsappReservationIds.size;
     const mobileReservations =
       mobileFocus === 'whatsapp'
         ? [...filteredReservations].sort((firstReservation, secondReservation) => {
@@ -879,6 +902,36 @@ export default function BookingsManager({
             return secondUnread - firstUnread || reservationSortValue(secondReservation) - reservationSortValue(firstReservation);
           })
         : filteredReservations;
+
+    if (mobileFocus === 'dashboard') {
+      return (
+        <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] px-4 py-5 text-white">
+          <div className="mx-auto flex w-full max-w-[420px] flex-col items-center gap-4">
+            <div className="relative flex h-[238px] w-full flex-col items-center justify-center">
+              <div className="absolute inset-10 rounded-full bg-sky-400/[0.08] blur-3xl" />
+              <div className="absolute inset-0 rounded-[28px] border border-sky-200/[0.16] bg-[linear-gradient(135deg,rgba(56,189,248,0.065),rgba(9,18,29,0.74)_35%,rgba(34,197,94,0.045))] shadow-[0_0_34px_rgba(0,160,255,0.09)]" />
+              <Image src="/logo.png" alt="AUTOCLUB" fill priority className="relative object-cover object-center opacity-95" sizes="420px" />
+              <p className="absolute bottom-7 text-[10px] font-medium uppercase tracking-[0.24em] text-[#8e99a8]">
+                Bookings Operations
+              </p>
+            </div>
+
+            <div className="grid w-full gap-2">
+              {[
+                { label: 'Reservations today', value: reservationsToday, tone: 'text-sky-100 border-sky-300/18 bg-sky-300/[0.06]' },
+                { label: 'Returns today', value: returnsToday, tone: 'text-amber-100 border-amber-300/18 bg-amber-300/[0.06]' },
+                { label: 'Unread WhatsApp', value: unreadWhatsappCount, tone: 'text-rose-100 border-rose-300/18 bg-rose-300/[0.06]' },
+              ].map((item) => (
+                <div key={item.label} className={`flex items-center justify-between rounded-3xl border px-4 py-3 ${item.tone}`}>
+                  <span className="text-sm font-bold">{item.label}</span>
+                  <span className="text-2xl font-black">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] px-3 pb-3 pt-2 text-white">
@@ -972,6 +1025,7 @@ export default function BookingsManager({
             onClose={() => setMobileReservationId('')}
             onUpdate={updateSelectedReservation}
             onSendReminder={sendReminder}
+            onReloadWhatsappMessages={loadWhatsappMessages}
           />
         )}
       </div>
@@ -1853,6 +1907,7 @@ function MobileReservationModal({
   onClose,
   onUpdate,
   onSendReminder,
+  onReloadWhatsappMessages,
 }: {
   reservation: Reservation;
   agencyOptions: string[];
@@ -1863,8 +1918,11 @@ function MobileReservationModal({
   onClose: () => void;
   onUpdate: (reservation: Reservation) => Promise<boolean>;
   onSendReminder: (reservation: Reservation) => Promise<Reservation | false>;
+  onReloadWhatsappMessages: (reservationId: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(reservation);
+  const [messageDraft, setMessageDraft] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
   const representatives = representativesByAgency[draft.agency] || [];
   const sortedMessages = [...whatsappMessages].sort((firstMessage, secondMessage) => {
     const firstDate = firstMessage.createdAt ? new Date(firstMessage.createdAt).getTime() : 0;
@@ -1893,6 +1951,24 @@ function MobileReservationModal({
     const updated = await onSendReminder(draft);
     if (updated) {
       setDraft(updated);
+    }
+  };
+
+  const sendMessage = async () => {
+    const message = messageDraft.trim();
+
+    if (!message || isSendingMessage) return;
+
+    setIsSendingMessage(true);
+    try {
+      await postWhatsappMessageWebhook(draft, message);
+      await onReloadWhatsappMessages(draft.id);
+      setMessageDraft('');
+    } catch (error) {
+      console.error('Mobile WhatsApp send failed:', error);
+      window.alert('Message was not sent.');
+    } finally {
+      setIsSendingMessage(false);
     }
   };
 
@@ -1963,6 +2039,22 @@ function MobileReservationModal({
             ) : (
               <p className="rounded-2xl border border-white/[0.06] bg-black/20 p-3 text-sm text-zinc-500">No WhatsApp messages yet.</p>
             )}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <input
+              value={messageDraft}
+              onChange={(event) => setMessageDraft(event.target.value)}
+              placeholder="Write message..."
+              className="min-w-0 flex-1 rounded-2xl border border-white/[0.08] bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-sky-300/50"
+            />
+            <button
+              type="button"
+              onClick={sendMessage}
+              disabled={isSendingMessage || messageDraft.trim() === ''}
+              className="rounded-2xl border border-sky-300/30 bg-sky-400/14 px-4 py-2.5 text-sm font-black text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSendingMessage ? '...' : 'Send'}
+            </button>
           </div>
         </section>
       </div>
