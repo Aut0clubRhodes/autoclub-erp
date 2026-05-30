@@ -905,9 +905,9 @@ export default function BookingsManager({
 
     if (mobileFocus === 'dashboard') {
       return (
-        <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] px-4 py-5 text-white">
-          <div className="mx-auto flex w-full max-w-[420px] flex-col items-center gap-4">
-            <div className="relative flex h-[238px] w-full flex-col items-center justify-center">
+        <div className="flex h-full min-h-0 w-screen max-w-none flex-col items-center overflow-x-hidden overflow-y-auto bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] px-4 py-4 text-white">
+          <div className="flex w-full max-w-none flex-col items-center gap-4">
+            <div className="relative flex h-[238px] w-[calc(100vw-32px)] max-w-[420px] flex-col items-center justify-center">
               <div className="absolute inset-10 rounded-full bg-sky-400/[0.08] blur-3xl" />
               <div className="absolute inset-0 rounded-[28px] border border-sky-200/[0.16] bg-[linear-gradient(135deg,rgba(56,189,248,0.065),rgba(9,18,29,0.74)_35%,rgba(34,197,94,0.045))] shadow-[0_0_34px_rgba(0,160,255,0.09)]" />
               <Image src="/logo.png" alt="AUTOCLUB" fill priority className="relative object-cover object-center opacity-95" sizes="420px" />
@@ -916,7 +916,7 @@ export default function BookingsManager({
               </p>
             </div>
 
-            <div className="grid w-full gap-2">
+            <div className="grid w-[calc(100vw-32px)] max-w-[420px] gap-2">
               {[
                 { label: 'Reservations today', value: reservationsToday, tone: 'text-sky-100 border-sky-300/18 bg-sky-300/[0.06]' },
                 { label: 'Returns today', value: returnsToday, tone: 'text-amber-100 border-amber-300/18 bg-amber-300/[0.06]' },
@@ -934,8 +934,8 @@ export default function BookingsManager({
     }
 
     return (
-      <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] px-3 pb-3 pt-2 text-white">
-        <div className="flex flex-shrink-0 gap-2 pb-2">
+      <div className="flex h-full min-h-0 w-screen max-w-none flex-col overflow-x-hidden bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] px-3 pb-3 pt-2 text-white">
+        <div className="flex w-full flex-shrink-0 gap-2 pb-2">
           <input
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
@@ -955,7 +955,7 @@ export default function BookingsManager({
           </select>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+        <div className="min-h-0 w-full flex-1 overflow-x-hidden overflow-y-auto pb-2">
           {isLoadingReservations ? (
             <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-5 text-center text-sm text-zinc-400">
               Φόρτωση κρατήσεων...

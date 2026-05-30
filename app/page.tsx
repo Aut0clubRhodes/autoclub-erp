@@ -1876,8 +1876,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
   if (userRole === 'bookings' && isMobileViewport) {
     return (
-      <main className="flex min-h-screen flex-col bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] text-white">
-        <header className="flex h-[64px] flex-shrink-0 items-center justify-between border-b border-white/[0.08] bg-black/20 px-4">
+      <main className="fixed inset-0 flex w-screen max-w-none flex-col overflow-x-hidden bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] text-white">
+        <header className="flex h-[64px] w-screen flex-shrink-0 items-center justify-between border-b border-white/[0.08] bg-black/20 px-4">
           <div className="relative h-10 w-28">
             <Image src="/logo.png" alt="AUTOCLUB" fill priority className="object-cover object-center" sizes="112px" />
           </div>
@@ -1890,11 +1890,11 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           </button>
         </header>
 
-        <section className="min-h-0 flex-1 overflow-hidden">
+        <section className="min-h-0 w-screen flex-1 overflow-hidden pb-[calc(76px+env(safe-area-inset-bottom))]">
           <BookingsManager mobileMode mobileFocus={bookingsMobileTab} />
         </section>
 
-        <nav className="grid h-[68px] flex-shrink-0 grid-cols-3 border-t border-white/[0.08] bg-black/35 px-2 py-2">
+        <nav className="fixed bottom-0 left-0 right-0 z-[9000] grid w-screen grid-cols-3 gap-2 border-t border-white/[0.08] bg-black/70 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">
           {[
             { id: 'dashboard', label: 'Πίνακας' },
             { id: 'bookings', label: 'Κρατήσεις' },
@@ -1907,7 +1907,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 key={item.id}
                 type="button"
                 onClick={() => setBookingsMobileTab(item.id as 'dashboard' | 'bookings' | 'whatsapp')}
-                className={`mx-1 rounded-2xl border text-xs font-black transition ${
+                className={`h-12 rounded-2xl border text-xs font-black transition ${
                   isActive
                     ? 'border-sky-300/35 bg-sky-300/14 text-sky-50'
                     : 'border-white/[0.055] bg-white/[0.02] text-zinc-400'
