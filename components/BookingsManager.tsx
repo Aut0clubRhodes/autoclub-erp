@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import {
   createReservation,
@@ -449,6 +449,7 @@ export default function BookingsManager() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof statuses)[number]>('ALL');
   const [quickFilter, setQuickFilter] = useState<QuickReservationFilter>('latest20');
+  const [agencyQuickFilter, setAgencyQuickFilter] = useState('ALL');
   const [showNewModal, setShowNewModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showReturnsModal, setShowReturnsModal] = useState(false);
@@ -618,6 +619,19 @@ export default function BookingsManager() {
     }, {});
   }, [agencyRows, representativeRows]);
 
+  const agencyQuickFilterOptions = useMemo(() => {
+    const agencyNames = new Set<string>();
+
+    agencyOptions.forEach((agency) => {
+      if (agency) agencyNames.add(agency);
+    });
+    reservations.forEach((reservation) => {
+      if (reservation.agency) agencyNames.add(reservation.agency);
+    });
+
+    return Array.from(agencyNames).sort((firstAgency, secondAgency) => firstAgency.localeCompare(secondAgency));
+  }, [agencyOptions, reservations]);
+
   const filteredReservations = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     const today = todayDateValue();
@@ -640,6 +654,7 @@ export default function BookingsManager() {
 
     return visibleReservations.filter((reservation) => {
       const matchesStatus = statusFilter === 'ALL' || reservation.status === statusFilter;
+      const matchesAgency = agencyQuickFilter === 'ALL' || reservation.agency === agencyQuickFilter;
       const matchesSearch =
         !query ||
         reservation.phoneWhatsapp.toLowerCase().includes(query) ||
@@ -650,9 +665,9 @@ export default function BookingsManager() {
         reservation.representative.toLowerCase().includes(query) ||
         reservation.hotelRoom.toLowerCase().includes(query);
 
-      return matchesStatus && matchesSearch;
+      return matchesStatus && matchesAgency && matchesSearch;
     });
-  }, [quickFilter, reservations, searchTerm, statusFilter]);
+  }, [agencyQuickFilter, quickFilter, reservations, searchTerm, statusFilter]);
 
   const selectedReservation =
     filteredReservations.find((reservation) => reservation.id === selectedId) ||
@@ -898,6 +913,36 @@ export default function BookingsManager() {
       <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 rounded-lg border border-white/[0.045] bg-white/[0.012] px-2 py-1">
         {quickReservationFilters.map((filter) => {
           const isActive = quickFilter === filter.id;
+
+          if (filter.id === 'all') {
+            return (
+              <Fragment key={filter.id}>
+                <select
+                  value={agencyQuickFilter}
+                  onChange={(event) => setAgencyQuickFilter(event.target.value)}
+                  className="h-[26px] rounded-lg border border-white/[0.055] bg-black/30 px-2.5 text-[11px] font-bold text-zinc-200 outline-none transition hover:border-sky-300/20 focus:border-sky-300/45"
+                >
+                  <option value="ALL">All agencies</option>
+                  {agencyQuickFilterOptions.map((agency) => (
+                    <option key={agency} value={agency}>
+                      {agency}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setQuickFilter(filter.id)}
+                  className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold transition duration-200 ${
+                    isActive
+                      ? 'border-sky-300/35 bg-sky-300/12 text-sky-50 shadow-[0_0_16px_rgba(56,189,248,0.08)]'
+                      : 'border-white/[0.055] bg-black/20 text-zinc-400 hover:border-sky-300/20 hover:bg-sky-300/[0.055] hover:text-zinc-100'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              </Fragment>
+            );
+          }
 
           return (
             <button

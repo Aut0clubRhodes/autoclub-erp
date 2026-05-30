@@ -24,6 +24,13 @@ type ServiceTransaction = {
   notes?: string | null;
 };
 
+type ComboboxOption = {
+  value: string;
+  label: string;
+  searchText: string;
+  description?: string;
+};
+
 const paymentOptions = [
   { value: 'cash', label: 'Μετρητά' },
   { value: 'card', label: 'Κάρτα' },
@@ -573,16 +580,19 @@ export default function ServicesManager() {
                   <section className="space-y-4 rounded-3xl border border-white/[0.055] bg-white/[0.018] p-4">
                     <SectionTitle>Βασικά Στοιχεία</SectionTitle>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <Field label="Αυτοκίνητο">
-                        <select value={form.car_id} onChange={(event) => setForm({ ...form, car_id: event.target.value })} className="input">
-                          <option value="">Επιλογή αυτοκινήτου</option>
-                          {cars.map((car) => (
-                            <option key={car.id} value={car.id}>
-                              {car.plate}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
+                      <SearchableCombobox
+                        label="Αυτοκίνητο"
+                        value={form.car_id}
+                        placeholder="Επιλογή αυτοκινήτου"
+                        searchPlaceholder="Αναζήτηση πινακίδας / μάρκας / μοντέλου..."
+                        options={cars.map((car) => ({
+                          value: String(car.id),
+                          label: `${car.plate} — ${car.brand} ${car.model}`.trim(),
+                          description: car.km ? `${car.km} km` : undefined,
+                          searchText: `${car.plate} ${car.brand} ${car.model}`,
+                        }))}
+                        onChange={(value) => setForm({ ...form, car_id: value })}
+                      />
                       <Field label="Ημερομηνία">
                         <input type="date" value={form.service_date} onChange={(event) => setForm({ ...form, service_date: event.target.value })} className="input" />
                       </Field>
@@ -654,6 +664,113 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="text-sm font-semibold text-white">{children}</h3>;
 }
 
+function SearchableCombobox({
+  label,
+  value,
+  options,
+  onChange,
+  placeholder,
+  searchPlaceholder,
+}: {
+  label: string;
+  value: string;
+  options: ComboboxOption[];
+  onChange: (value: string) => void;
+  placeholder: string;
+  searchPlaceholder: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const selectedOption = options.find((option) => option.value === value);
+  const query = searchTerm.trim().toLowerCase();
+  const filteredOptions = query
+    ? options.filter((option) => option.searchText.toLowerCase().includes(query))
+    : options;
+
+  const selectOption = (nextValue: string) => {
+    onChange(nextValue);
+    setSearchTerm('');
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative block space-y-2 text-sm text-zinc-300">
+      <span>{label}</span>
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+            event.preventDefault();
+            setIsOpen(true);
+          }
+          if (event.key === 'Escape') {
+            setIsOpen(false);
+          }
+        }}
+        className="input flex w-full items-center justify-between gap-3 text-left"
+        aria-expanded={isOpen}
+      >
+        <span className={selectedOption ? 'truncate text-zinc-100' : 'truncate text-zinc-500'}>
+          {selectedOption?.label || placeholder}
+        </span>
+        <span className="text-xs text-zinc-500">⌄</span>
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full z-[10030] mt-2 overflow-hidden rounded-2xl border border-white/[0.09] bg-zinc-950/98 shadow-[0_22px_54px_rgba(0,0,0,0.55),0_0_24px_rgba(249,115,22,0.06)]">
+          <div className="border-b border-white/[0.06] p-2">
+            <input
+              autoFocus
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setIsOpen(false);
+                }
+              }}
+              placeholder={searchPlaceholder}
+              className="w-full rounded-xl border border-white/[0.08] bg-black/35 px-3 py-2 text-sm text-zinc-100 outline-none transition duration-200 placeholder:text-zinc-600 focus:border-orange-300/35 focus:bg-black/50"
+            />
+          </div>
+
+          {value && (
+            <button
+              type="button"
+              onClick={() => selectOption('')}
+              className="w-full border-b border-white/[0.05] px-3 py-2 text-left text-xs font-semibold text-zinc-400 transition duration-200 hover:bg-white/[0.045] hover:text-zinc-100"
+            >
+              Καθαρισμός επιλογής
+            </button>
+          )}
+
+          <div className="max-h-56 overflow-y-auto py-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-3 text-sm text-zinc-500">Δεν βρέθηκαν αποτελέσματα.</div>
+            ) : (
+              filteredOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => selectOption(option.value)}
+                  className={`w-full px-3 py-2.5 text-left transition duration-200 hover:bg-orange-300/[0.08] ${
+                    option.value === value ? 'bg-orange-300/[0.09] text-orange-100' : 'text-zinc-200'
+                  }`}
+                >
+                  <span className="block truncate text-sm font-semibold">{option.label}</span>
+                  {option.description && (
+                    <span className="mt-0.5 block truncate text-xs text-zinc-500">{option.description}</span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SupplierSelect({
   label,
   value,
@@ -666,16 +783,18 @@ function SupplierSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <Field label={label}>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="input">
-        <option value="">Επιλογή προμηθευτή</option>
-        {suppliers.map((supplier) => (
-          <option key={supplier.id} value={supplier.id}>
-            {supplier.name}
-          </option>
-        ))}
-      </select>
-    </Field>
+    <SearchableCombobox
+      label={label}
+      value={value}
+      placeholder="Επιλογή προμηθευτή"
+      searchPlaceholder="Αναζήτηση προμηθευτή..."
+      options={suppliers.map((supplier) => ({
+        value: String(supplier.id),
+        label: supplier.name,
+        searchText: supplier.name,
+      }))}
+      onChange={onChange}
+    />
   );
 }
 
