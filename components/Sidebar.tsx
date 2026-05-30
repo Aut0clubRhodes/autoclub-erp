@@ -52,6 +52,7 @@ interface SidebarProps {
   onWindowOpen?: (windowId: string) => void;
   activeWindow?: string | null;
   userEmail?: string | null;
+  userRole?: 'admin' | 'bookings' | null;
   onLogout?: () => void;
   onCollapsedChange?: (collapsed: boolean) => void;
 }
@@ -117,7 +118,7 @@ const WINDOW_ITEMS = [
   'Κατηγορίες Εξόδων',
 ];
 
-export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogout, onCollapsedChange }: SidebarProps) {
+export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRole, onLogout, onCollapsedChange }: SidebarProps) {
   const pathname = usePathname();
   const [systemOpen, setSystemOpen] = useState(true);
   const [financeOpen, setFinanceOpen] = useState(true);
@@ -126,6 +127,14 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem('autoclub-sidebar-collapsed') === 'true';
   });
+  const visibleNavSections =
+    userRole === 'bookings'
+      ? NAV_SECTIONS.map((section) => ({
+          ...section,
+          collapsible: false,
+          items: section.items.filter((item) => item.href === '/dashboard' || item.href === '/bookings'),
+        })).filter((section) => section.items.length > 0)
+      : NAV_SECTIONS;
 
   useEffect(() => {
     window.localStorage.setItem('autoclub-sidebar-collapsed', String(isCollapsed));
@@ -299,7 +308,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
       </div>
 
       <nav className={`autoclub-sidebar-scroll flex-1 overflow-y-auto ${isCollapsed ? 'space-y-1 px-2 py-2' : 'space-y-2 px-2.5 py-2.5 sm:px-3'}`}>
-        {NAV_SECTIONS.map((section) => {
+        {visibleNavSections.map((section) => {
           const isSystem = section.collapsible;
           const isOpen = !isSystem || systemOpen;
 
@@ -334,6 +343,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, onLogou
           {!isCollapsed && <div className="min-w-0">
             <p className="truncate text-[11px] font-medium text-[#f4f7fb]">AutoClub</p>
             <p className="truncate text-[10px] text-[#8e99a8]">{userEmail || 'Administrator'}</p>
+            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-sky-200/55">{userRole || 'admin'}</p>
           </div>}
         </div>
         {onLogout && !isCollapsed && (

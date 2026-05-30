@@ -75,6 +75,14 @@ type WindowType =
   | null;
 
 type WindowId = Exclude<WindowType, null>;
+type AppRole = 'admin' | 'bookings';
+
+type AuthSession = {
+  user: {
+    id: string;
+    email?: string | null;
+  };
+} | null;
 
 type OpenWindow = {
   id: WindowId;
@@ -212,6 +220,7 @@ const initialVehicles: Vehicle[] = [
 export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<AppRole | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem('autoclub-sidebar-collapsed') === 'true';
@@ -226,6 +235,7 @@ export default function Home() {
     ? visibleWindows.reduce((topWindow, windowItem) => (windowItem.zIndex > topWindow.zIndex ? windowItem : topWindow), visibleWindows[0]).id
     : null;
   const hasOpenWindow = (windowId: WindowId) => openWindows.some((windowItem) => windowItem.id === windowId);
+  const canOpenWindow = (windowId: WindowId | string) => userRole === 'admin' || windowId === 'Κρατήσεις';
 
   useEffect(() => {
     document.documentElement.style.setProperty('--autoclub-sidebar-width', `${sidebarWidth}px`);
@@ -347,18 +357,49 @@ export default function Home() {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    const loadProfileRole = async (userId: string): Promise<AppRole> => {
+      const { data, error } = await supabase.from('user_profiles').select('role').eq('id', userId).maybeSingle();
+
+      if (error) {
+        console.warn('Load user profile role warning:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+        });
+      }
+
+      return data?.role === 'admin' ? 'admin' : 'bookings';
+    };
+
+    const applySession = async (session: AuthSession) => {
       if (!mounted) return;
 
-      setUserEmail(data.session?.user.email ?? null);
+      if (!session?.user) {
+        setUserEmail(null);
+        setUserRole(null);
+        setOpenWindows([]);
+        setAuthLoading(false);
+        return;
+      }
+
+      setAuthLoading(true);
+      const role = await loadProfileRole(session.user.id);
+      if (!mounted) return;
+
+      setUserEmail(session.user.email ?? null);
+      setUserRole(role);
       setAuthLoading(false);
+    };
+
+    supabase.auth.getSession().then(({ data }) => {
+      void applySession(data.session as AuthSession);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserEmail(session?.user.email ?? null);
-      setAuthLoading(false);
+      void applySession(session as AuthSession);
     });
 
     return () => {
@@ -1051,6 +1092,10 @@ const handleSaveSupplierPayment = async () => {
   };
 
   const openWindow = (windowId: WindowId, title = getWindowTitleForId(windowId)) => {
+    if (!canOpenWindow(windowId)) {
+      return;
+    }
+
     setTopZIndex((current) => {
       const nextZIndex = current + 1;
       setOpenWindows((currentWindows) => {
@@ -1070,6 +1115,10 @@ const handleSaveSupplierPayment = async () => {
   };
 
   const handleWindowOpen = (windowId: string) => {
+    if (!canOpenWindow(windowId)) {
+      return;
+    }
+
     openWindow(windowId as WindowId);
   };
 
@@ -1103,6 +1152,12 @@ const handleSaveSupplierPayment = async () => {
       )
     );
   };
+
+  useEffect(() => {
+    if (userRole !== 'bookings') return;
+
+    setOpenWindows((currentWindows) => currentWindows.filter((windowItem) => canOpenWindow(windowItem.id)));
+  }, [userRole]);
 
   const openAddCarModal = () => {
     setEditingPlate(null);
@@ -1805,6 +1860,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         onWindowOpen={handleWindowOpen}
         activeWindow={activeWindow}
         userEmail={userEmail}
+        userRole={userRole}
         onLogout={handleLogout}
         onCollapsedChange={setIsSidebarCollapsed}
       />
@@ -1893,6 +1949,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 </p>
               </div>
 
+              {userRole === 'admin' && (
+                <>
               <div className="grid w-full max-w-[500px] gap-2.5 sm:grid-cols-2">
                 <button
                   type="button"
@@ -2005,6 +2063,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                     ))}
                   </div>
                 </div>
+              )}
+                </>
               )}
             </div>
           </div>
