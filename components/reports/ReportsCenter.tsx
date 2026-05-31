@@ -13,14 +13,14 @@ import type { ReportsData, ReportsFilters } from './types';
 
 type ReportSection = 'agencies' | 'expenses' | 'income' | 'suppliers' | 'cars' | 'kteo' | 'secretariat';
 
-const sections: { id: ReportSection; label: string }[] = [
-  { id: 'agencies', label: 'Πρακτορεία' },
-  { id: 'expenses', label: 'Έξοδα' },
-  { id: 'income', label: 'Έσοδα' },
-  { id: 'suppliers', label: 'Προμηθευτές' },
-  { id: 'cars', label: 'Αυτοκίνητα' },
-  { id: 'kteo', label: 'ΚΤΕΟ' },
-  { id: 'secretariat', label: 'Γραμματεία' },
+const sections: { id: ReportSection; label: string; group: 'income' | 'expense' | 'kteo' }[] = [
+  { id: 'income', label: 'Έσοδα', group: 'income' },
+  { id: 'agencies', label: 'Πρακτορεία', group: 'income' },
+  { id: 'cars', label: 'Αυτοκίνητα', group: 'income' },
+  { id: 'expenses', label: 'Έξοδα', group: 'expense' },
+  { id: 'suppliers', label: 'Προμηθευτές', group: 'expense' },
+  { id: 'secretariat', label: 'Γραμματεία', group: 'expense' },
+  { id: 'kteo', label: 'ΚΤΕΟ', group: 'kteo' },
 ];
 
 const initialFilters: ReportsFilters = {
@@ -42,7 +42,7 @@ export default function ReportsCenter({
   vehicles,
   onUpdateKteo,
 }: ReportsData) {
-  const [activeSection, setActiveSection] = useState<ReportSection>('agencies');
+  const [activeSection, setActiveSection] = useState<ReportSection>('income');
   const [filters, setFilters] = useState(initialFilters);
   const [debts, setDebts] = useState<DebtRecord[]>([]);
 
@@ -176,28 +176,34 @@ export default function ReportsCenter({
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="border-b border-white/[0.07] bg-white/[0.015] p-4 lg:border-b-0 lg:border-r">
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[190px_minmax(0,1fr)]">
+        <aside className="border-b border-white/[0.07] bg-white/[0.015] p-3 lg:border-b-0 lg:border-r">
           <nav className="flex gap-2 overflow-x-auto lg:flex-col">
-            {sections.map((section) => (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => setActiveSection(section.id)}
-                className={`rounded-xl px-4 py-3 text-left text-sm transition ${
-                  activeSection === section.id
-                    ? 'border border-sky-400/20 bg-sky-400/10 text-white'
-                    : 'border border-transparent text-zinc-400 hover:border-white/[0.06] hover:bg-white/[0.03] hover:text-zinc-200'
-                }`}
-              >
-                {section.label}
-              </button>
-            ))}
+            {sections.map((section, index) => {
+              const startsNewGroup = index > 0 && section.group !== sections[index - 1].group;
+
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => setActiveSection(section.id)}
+                  className={`rounded-xl px-4 py-3 text-left text-sm transition ${
+                    startsNewGroup ? 'ml-3 border-l border-white/[0.08] pl-5 lg:ml-0 lg:mt-3 lg:border-l-0 lg:border-t lg:pt-5' : ''
+                  } ${
+                    activeSection === section.id
+                      ? 'border border-sky-400/20 bg-sky-400/10 text-white'
+                      : 'border border-transparent text-zinc-400 hover:border-white/[0.06] hover:bg-white/[0.03] hover:text-zinc-200'
+                  }`}
+                >
+                  {section.label}
+                </button>
+              );
+            })}
           </nav>
         </aside>
 
-        <main className="min-h-0 overflow-auto p-6">
-          <div className="mx-auto max-w-6xl space-y-5">
+        <main className="min-h-0 overflow-auto px-4 py-5">
+          <div className="w-full max-w-none space-y-5">
             {activeSection === 'agencies' && (
               <AgenciesReport
                 transactions={filteredTransactions}
