@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { deleteCar, fetchCars } from '@/lib/carsApi';
+import { fetchExpenseCategories, type ExpenseCategory } from '@/lib/expenseCategoriesApi';
 import { addTransaction, fetchTransactions } from '@/lib/financeApi';
 import { fetchServices, addService, updateService, deleteService, type ServiceRecord } from '@/lib/servicesApi';
 import { fetchSuppliers, type SupplierRecord } from '@/lib/suppliersApi';
@@ -38,6 +39,8 @@ const paymentOptions = [
   { value: 'credit', label: 'Επί Πιστώσει' },
 ];
 
+const fallbackLaborCategories = ['Service', 'Ελαστικά', 'Φρένα', 'Μηχανικά', 'Ηλεκτρικά', 'Άλλο'];
+
 const initialForm = {
   car_id: '',
   service_date: new Date().toISOString().split('T')[0],
@@ -51,6 +54,7 @@ const initialForm = {
   parts_amount: '',
   parts_payment_method: 'cash',
   labor_supplier_id: '',
+  labor_category: 'Service',
   labor_amount: '',
   labor_payment_method: 'cash',
 };
@@ -61,6 +65,7 @@ const money = (value: number) =>
 export default function ServicesManager() {
   const [cars, setCars] = useState<ServiceCar[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierRecord[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [services, setServices] = useState<ServiceRecord[]>([]);
   const [transactions, setTransactions] = useState<ServiceTransaction[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -72,11 +77,12 @@ export default function ServicesManager() {
   const [form, setForm] = useState(initialForm);
 
   const loadData = async () => {
-    const [carRows, supplierRows, serviceRows, transactionRows] = await Promise.all([
+    const [carRows, supplierRows, serviceRows, transactionRows, categoryRows] = await Promise.all([
       fetchCars(),
       fetchSuppliers(),
       fetchServices(),
       fetchTransactions(),
+      fetchExpenseCategories(),
     ]);
 
     setCars(
@@ -89,6 +95,7 @@ export default function ServicesManager() {
       }))
     );
     setSuppliers(supplierRows);
+    setExpenseCategories(categoryRows);
     setServices(serviceRows);
     setTransactions(
       (transactionRows || []).map((transaction: any) => ({
@@ -137,6 +144,14 @@ export default function ServicesManager() {
   );
 
   const selectedCar = cars.find((car) => car.id === selectedCarId) ?? null;
+
+  const laborCategoryOptions = useMemo(() => {
+    const categoryNames = expenseCategories
+      .map((category) => category.name)
+      .filter((name): name is string => Boolean(name?.trim()));
+
+    return Array.from(new Set([...categoryNames, ...fallbackLaborCategories]));
+  }, [expenseCategories]);
 
   const carRows = useMemo(
     () =>
@@ -354,7 +369,7 @@ export default function ServicesManager() {
         payment_method: form.labor_payment_method,
         supplier_id: Number(form.labor_supplier_id),
         car_id: Number(form.car_id),
-        category: 'Service',
+        category: form.labor_category || 'Service',
         notes: form.description || null,
       });
       if (!laborTransaction) {
@@ -603,9 +618,6 @@ export default function ServicesManager() {
                         <input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} className="input" />
                       </Field>
                     </div>
-                    <Field label="Σημειώσεις">
-                      <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="input min-h-24" />
-                    </Field>
                   </section>
 
                   <section className="space-y-4 rounded-3xl border border-white/[0.055] bg-white/[0.018] p-4">
@@ -625,7 +637,14 @@ export default function ServicesManager() {
                   <section className="space-y-4 rounded-3xl border border-white/[0.055] bg-white/[0.018] p-4">
                     <SectionTitle>Εργασία Συνεργείου</SectionTitle>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <SupplierSelect label="Συνεργείο / Προμηθευτής Εργασίας" value={form.labor_supplier_id} suppliers={suppliers} onChange={(value) => setForm({ ...form, labor_supplier_id: value })} />
+                      <SupplierSelect
+                        label="Συνεργείο / Προμηθευτής Εργασίας"
+                        value={form.labor_supplier_id}
+                        suppliers={suppliers}
+                        onChange={(value) => setForm({ ...form, labor_supplier_id: value })}
+                        clearButtonLabel="Καθαρισμός συνεργείου"
+                      />
+                      <CategorySelect label="Κατηγορία Εργασίας" value={form.labor_category} options={laborCategoryOptions} onChange={(value) => setForm({ ...form, labor_category: value })} />
                       <Field label="Ποσό Εργασίας">
                         <input value={form.labor_amount} onChange={(event) => setForm({ ...form, labor_amount: event.target.value })} className="input" />
                       </Field>
@@ -671,6 +690,7 @@ function SearchableCombobox({
   onChange,
   placeholder,
   searchPlaceholder,
+  clearButtonLabel,
 }: {
   label: string;
   value: string;
@@ -678,9 +698,11 @@ function SearchableCombobox({
   onChange: (value: string) => void;
   placeholder: string;
   searchPlaceholder: string;
+  clearButtonLabel?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const selectedOption = options.find((option) => option.value === value);
   const query = searchTerm.trim().toLowerCase();
   const filteredOptions = query
@@ -693,29 +715,69 @@ function SearchableCombobox({
     setIsOpen(false);
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (!(event.target instanceof Node)) return;
+      if (!containerRef.current?.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
   return (
-    <div className="relative block space-y-2 text-sm text-zinc-300">
+    <div ref={containerRef} className="relative block space-y-2 text-sm text-zinc-300">
       <span>{label}</span>
-      <button
-        type="button"
-        onClick={() => setIsOpen((current) => !current)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
-            event.preventDefault();
-            setIsOpen(true);
-          }
-          if (event.key === 'Escape') {
-            setIsOpen(false);
-          }
-        }}
-        className="input flex w-full items-center justify-between gap-3 text-left"
-        aria-expanded={isOpen}
-      >
-        <span className={selectedOption ? 'truncate text-zinc-100' : 'truncate text-zinc-500'}>
-          {selectedOption?.label || placeholder}
-        </span>
-        <span className="text-xs text-zinc-500">⌄</span>
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setIsOpen((current) => !current)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+              event.preventDefault();
+              setIsOpen(true);
+            }
+            if (event.key === 'Escape') {
+              setIsOpen(false);
+            }
+          }}
+          className="input flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+          aria-expanded={isOpen}
+        >
+          <span className={selectedOption ? 'truncate text-zinc-100' : 'truncate text-zinc-500'}>
+            {selectedOption?.label || placeholder}
+          </span>
+          <span className="text-xs text-zinc-500">⌄</span>
+        </button>
+        {clearButtonLabel && value && (
+          <button
+            type="button"
+            onClick={() => selectOption('')}
+            className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-2xl border border-rose-400/20 bg-rose-400/10 text-lg font-semibold text-rose-200 transition duration-200 hover:-translate-y-px hover:border-rose-300/35 hover:bg-rose-400/16 hover:text-rose-100"
+            aria-label={clearButtonLabel}
+            title={clearButtonLabel}
+          >
+            ×
+          </button>
+        )}
+      </div>
 
       {isOpen && (
         <div className="absolute left-0 right-0 top-full z-[10030] mt-2 overflow-hidden rounded-2xl border border-white/[0.09] bg-zinc-950/98 shadow-[0_22px_54px_rgba(0,0,0,0.55),0_0_24px_rgba(249,115,22,0.06)]">
@@ -776,11 +838,13 @@ function SupplierSelect({
   value,
   suppliers,
   onChange,
+  clearButtonLabel,
 }: {
   label: string;
   value: string;
   suppliers: SupplierRecord[];
   onChange: (value: string) => void;
+  clearButtonLabel?: string;
 }) {
   return (
     <SearchableCombobox
@@ -792,6 +856,34 @@ function SupplierSelect({
         value: String(supplier.id),
         label: supplier.name,
         searchText: supplier.name,
+      }))}
+      onChange={onChange}
+      clearButtonLabel={clearButtonLabel}
+    />
+  );
+}
+
+function CategorySelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <SearchableCombobox
+      label={label}
+      value={value}
+      placeholder="Επιλογή κατηγορίας"
+      searchPlaceholder="Αναζήτηση κατηγορίας..."
+      options={options.map((option) => ({
+        value: option,
+        label: option,
+        searchText: option,
       }))}
       onChange={onChange}
     />
