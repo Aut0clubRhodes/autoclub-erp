@@ -32,6 +32,9 @@ type ComboboxOption = {
   description?: string;
 };
 
+type ServiceTab = 'history' | 'checklist';
+type ChecklistFilter = 'all' | 'pending' | 'done';
+
 const paymentOptions = [
   { value: 'cash', label: 'Μετρητά' },
   { value: 'card', label: 'Κάρτα' },
@@ -50,6 +53,7 @@ const initialForm = {
   next_service_date: '',
   notes: '',
   parts_supplier_id: '',
+  parts_category: 'Ανταλλακτικά',
   parts_description: '',
   parts_amount: '',
   parts_payment_method: 'cash',
@@ -74,6 +78,9 @@ export default function ServicesManager() {
   const [editingServiceId, setEditingServiceId] = useState<number | null>(null);
   const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
   const [serviceSearchTerm, setServiceSearchTerm] = useState('');
+  const [activeServiceTab, setActiveServiceTab] = useState<ServiceTab>('history');
+  const [checklistYear, setChecklistYear] = useState(String(new Date().getFullYear()));
+  const [checklistFilter, setChecklistFilter] = useState<ChecklistFilter>('all');
   const [form, setForm] = useState(initialForm);
 
   const loadData = async () => {
@@ -177,6 +184,35 @@ export default function ServicesManager() {
     );
   }, [carRows, serviceSearchTerm]);
 
+  const checklistYearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    return [currentYear - 1, currentYear, currentYear + 1].map(String);
+  }, []);
+
+  const annualChecklistRows = useMemo(() => {
+    const rows = cars.map((car) => {
+      const carServices = services.filter((service) => Number(service.car_id) === car.id);
+      const latestService = [...carServices].sort((first, second) =>
+        String(second.service_date || '').localeCompare(String(first.service_date || ''))
+      )[0];
+      const hasServiceInYear = carServices.some((service) =>
+        String(service.service_date || '').startsWith(`${checklistYear}-`)
+      );
+      const status: 'DONE' | 'PENDING' = hasServiceInYear ? 'DONE' : 'PENDING';
+
+      return {
+        car,
+        lastServiceDate: latestService?.service_date || '-',
+        status,
+      };
+    });
+
+    if (checklistFilter === 'done') return rows.filter((row) => row.status === 'DONE');
+    if (checklistFilter === 'pending') return rows.filter((row) => row.status === 'PENDING');
+
+    return rows;
+  }, [cars, checklistFilter, checklistYear, services]);
+
   const selectedCarServiceRows = useMemo(
     () =>
       serviceRows.filter(({ service }) => Number(service.car_id) === selectedCarId),
@@ -201,6 +237,15 @@ export default function ServicesManager() {
     setForm({
       ...initialForm,
       car_id: selectedCar ? String(selectedCar.id) : '',
+    });
+    setShowModal(true);
+  };
+
+  const openAddServiceModalForCar = (carId: number) => {
+    setEditingServiceId(null);
+    setForm({
+      ...initialForm,
+      car_id: String(carId),
     });
     setShowModal(true);
   };
@@ -349,8 +394,8 @@ export default function ServicesManager() {
         payment_method: form.parts_payment_method,
         supplier_id: Number(form.parts_supplier_id),
         car_id: Number(form.car_id),
-        category: 'Ανταλλακτικά',
-        notes: form.parts_description || form.description || null,
+        category: form.parts_category || 'Ανταλλακτικά',
+        notes: form.description || null,
       });
       if (!partsTransaction) {
         console.error('Service parts transaction creation failed after service row save.', { serviceId: service.id });
@@ -405,7 +450,28 @@ export default function ServicesManager() {
         </button>
       </div>
 
-      {selectedCar ? (
+      <div className="flex flex-wrap gap-2 rounded-3xl border border-white/[0.06] bg-white/[0.02] p-2">
+        {[
+          { id: 'history' as const, label: 'Service History' },
+          { id: 'checklist' as const, label: 'Annual Service Checklist' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveServiceTab(tab.id)}
+            className={`rounded-2xl px-4 py-2.5 text-sm font-semibold transition duration-200 ${
+              activeServiceTab === tab.id
+                ? 'border border-orange-300/25 bg-orange-400/12 text-orange-100 shadow-[0_0_24px_rgba(249,115,22,0.08)]'
+                : 'border border-transparent text-zinc-400 hover:border-white/[0.08] hover:bg-white/[0.04] hover:text-zinc-100'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeServiceTab === 'history' ? (
+        selectedCar ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -566,6 +632,98 @@ export default function ServicesManager() {
             </tbody>
           </table>
         </div>
+      )) : (
+        <div className="overflow-hidden rounded-3xl border border-white/[0.075] bg-white/[0.025] shadow-[0_18px_58px_rgba(0,0,0,0.24)] transition duration-200 hover:border-orange-200/12 hover:shadow-[0_22px_64px_rgba(0,0,0,0.28),0_0_30px_rgba(249,115,22,0.04)]">
+          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/[0.06] bg-white/[0.025] p-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-200/65">Annual Service Checklist</p>
+              <h2 className="mt-1 text-lg font-semibold text-white">Ετήσιος Έλεγχος Service</h2>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="space-y-1 text-xs font-semibold text-zinc-400">
+                <span className="block">Year</span>
+                <select
+                  value={checklistYear}
+                  onChange={(event) => setChecklistYear(event.target.value)}
+                  className="rounded-2xl border border-zinc-700 bg-zinc-950/80 px-3 py-2 text-sm text-white outline-none transition duration-200 focus:border-orange-400/55 focus:ring-2 focus:ring-orange-400/15"
+                >
+                  {checklistYearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex rounded-2xl border border-white/[0.07] bg-black/25 p-1">
+                {[
+                  { value: 'all' as const, label: 'All' },
+                  { value: 'pending' as const, label: 'Pending' },
+                  { value: 'done' as const, label: 'Done' },
+                ].map((filter) => (
+                  <button
+                    key={filter.value}
+                    type="button"
+                    onClick={() => setChecklistFilter(filter.value)}
+                    className={`rounded-xl px-3 py-2 text-xs font-semibold transition duration-200 ${
+                      checklistFilter === filter.value
+                        ? 'bg-orange-400/14 text-orange-100'
+                        : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left">
+              <thead className="bg-white/[0.035]">
+                <tr>
+                  {['Plate', 'Brand', 'Model', 'Last Service Date', 'Status'].map((label) => (
+                    <th key={label} className="px-4 py-3 text-xs font-medium text-zinc-400">
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {annualChecklistRows.map(({ car, lastServiceDate, status }) => (
+                  <tr
+                    key={car.id}
+                    onDoubleClick={() => openAddServiceModalForCar(car.id)}
+                    className="cursor-default border-t border-white/[0.055] transition duration-200 hover:bg-white/[0.035]"
+                    title="Double click to add service"
+                  >
+                    <td className="px-4 py-4 text-sm font-semibold text-white">{car.plate}</td>
+                    <td className="px-4 py-4 text-sm text-zinc-200">{car.brand || '-'}</td>
+                    <td className="px-4 py-4 text-sm text-zinc-200">{car.model || '-'}</td>
+                    <td className="px-4 py-4 text-sm text-zinc-200">{lastServiceDate}</td>
+                    <td className="px-4 py-4 text-sm">
+                      <span
+                        className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${
+                          status === 'DONE'
+                            ? 'border-emerald-300/30 bg-emerald-400/12 text-emerald-200'
+                            : 'border-orange-300/30 bg-orange-400/12 text-orange-200'
+                        }`}
+                      >
+                        {status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {annualChecklistRows.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-zinc-500">
+                      Δεν υπάρχουν αυτοκίνητα για το επιλεγμένο φίλτρο.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {showModal &&
@@ -630,11 +788,9 @@ export default function ServicesManager() {
                         onChange={(value) => setForm({ ...form, parts_supplier_id: value })}
                         clearButtonLabel="Καθαρισμός προμηθευτή ανταλλακτικών"
                       />
+                      <CategorySelect label="Κατηγορία Ανταλλακτικών" value={form.parts_category} options={laborCategoryOptions} onChange={(value) => setForm({ ...form, parts_category: value })} />
                       <Field label="Ποσό Ανταλλακτικών">
                         <input value={form.parts_amount} onChange={(event) => setForm({ ...form, parts_amount: event.target.value })} className="input" />
-                      </Field>
-                      <Field label="Περιγραφή Ανταλλακτικών">
-                        <input value={form.parts_description} onChange={(event) => setForm({ ...form, parts_description: event.target.value })} className="input" />
                       </Field>
                       <PaymentSelect label="Τρόπος Πληρωμής Ανταλλακτικών" value={form.parts_payment_method} onChange={(value) => setForm({ ...form, parts_payment_method: value })} />
                     </div>
@@ -786,7 +942,7 @@ function SearchableCombobox({
       </div>
 
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full z-[10030] mt-2 overflow-hidden rounded-2xl border border-white/[0.09] bg-zinc-950/98 shadow-[0_22px_54px_rgba(0,0,0,0.55),0_0_24px_rgba(249,115,22,0.06)]">
+        <div className="absolute left-0 right-0 top-full z-[10030] mt-2 overflow-hidden rounded-2xl border border-white/[0.12] bg-[#080d14] shadow-[0_22px_54px_rgba(0,0,0,0.62),0_0_24px_rgba(249,115,22,0.07)]">
           <div className="border-b border-white/[0.06] p-2">
             <input
               autoFocus
@@ -798,7 +954,7 @@ function SearchableCombobox({
                 }
               }}
               placeholder={searchPlaceholder}
-              className="w-full rounded-xl border border-white/[0.08] bg-black/35 px-3 py-2 text-sm text-zinc-100 outline-none transition duration-200 placeholder:text-zinc-600 focus:border-orange-300/35 focus:bg-black/50"
+              className="w-full rounded-xl border border-white/[0.12] bg-black/45 px-3.5 py-2.5 text-sm font-medium text-zinc-50 outline-none transition duration-200 placeholder:text-zinc-400 focus:border-orange-300/45 focus:bg-black/55"
             />
           </div>
 
@@ -806,28 +962,28 @@ function SearchableCombobox({
             <button
               type="button"
               onClick={() => selectOption('')}
-              className="w-full border-b border-white/[0.05] px-3 py-2 text-left text-xs font-semibold text-zinc-400 transition duration-200 hover:bg-white/[0.045] hover:text-zinc-100"
+              className="w-full border-b border-white/[0.06] px-3.5 py-2.5 text-left text-xs font-bold text-zinc-300 transition duration-200 hover:bg-white/[0.06] hover:text-white"
             >
               Καθαρισμός επιλογής
             </button>
           )}
 
-          <div className="max-h-56 overflow-y-auto py-1">
+          <div className="max-h-56 overflow-y-auto p-1.5">
             {filteredOptions.length === 0 ? (
-              <div className="px-3 py-3 text-sm text-zinc-500">Δεν βρέθηκαν αποτελέσματα.</div>
+              <div className="px-3 py-3 text-sm font-medium text-zinc-400">Δεν βρέθηκαν αποτελέσματα.</div>
             ) : (
               filteredOptions.map((option) => (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => selectOption(option.value)}
-                  className={`w-full px-3 py-2.5 text-left transition duration-200 hover:bg-orange-300/[0.08] ${
-                    option.value === value ? 'bg-orange-300/[0.09] text-orange-100' : 'text-zinc-200'
+                  className={`w-full rounded-xl px-3.5 py-3 text-left transition duration-200 hover:bg-orange-300/[0.11] hover:text-white ${
+                    option.value === value ? 'bg-orange-300/[0.13] text-orange-50 ring-1 ring-orange-300/18' : 'text-zinc-100'
                   }`}
                 >
-                  <span className="block truncate text-sm font-semibold">{option.label}</span>
+                  <span className="block truncate text-[13px] font-bold leading-5 tracking-normal">{option.label}</span>
                   {option.description && (
-                    <span className="mt-0.5 block truncate text-xs text-zinc-500">{option.description}</span>
+                    <span className="mt-1 block truncate text-xs font-medium text-zinc-400">{option.description}</span>
                   )}
                 </button>
               ))
