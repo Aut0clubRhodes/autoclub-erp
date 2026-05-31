@@ -623,7 +623,13 @@ export default function ServicesManager() {
                   <section className="space-y-4 rounded-3xl border border-white/[0.055] bg-white/[0.018] p-4">
                     <SectionTitle>Ανταλλακτικά</SectionTitle>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <SupplierSelect label="Προμηθευτής Ανταλλακτικών" value={form.parts_supplier_id} suppliers={suppliers} onChange={(value) => setForm({ ...form, parts_supplier_id: value })} />
+                      <SupplierSelect
+                        label="Προμηθευτής Ανταλλακτικών"
+                        value={form.parts_supplier_id}
+                        suppliers={suppliers}
+                        onChange={(value) => setForm({ ...form, parts_supplier_id: value })}
+                        clearButtonLabel="Καθαρισμός προμηθευτή ανταλλακτικών"
+                      />
                       <Field label="Ποσό Ανταλλακτικών">
                         <input value={form.parts_amount} onChange={(event) => setForm({ ...form, parts_amount: event.target.value })} className="input" />
                       </Field>
