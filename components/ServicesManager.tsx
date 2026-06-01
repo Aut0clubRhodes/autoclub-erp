@@ -43,12 +43,16 @@ const paymentOptions = [
 ];
 
 const fallbackLaborCategories = ['Service', 'Ελαστικά', 'Φρένα', 'Μηχανικά', 'Ηλεκτρικά', 'Άλλο'];
+const serviceTypeOptions = ['Service / Λάδια', 'Ελαστικά', 'Μπαταρία'];
 
 const initialForm = {
   car_id: '',
   service_date: new Date().toISOString().split('T')[0],
   km: '',
   description: '',
+  service_type: 'Service / Λάδια',
+  tire_count: '4',
+  battery_source: '',
   next_service_km: '',
   next_service_date: '',
   notes: '',
@@ -325,7 +329,7 @@ export default function ServicesManager() {
       return;
     }
 
-    const partsAmount = Number(form.parts_amount || 0);
+    const partsAmount = 0;
     const laborAmount = Number(form.labor_amount || 0);
     if (Number.isNaN(partsAmount) || Number.isNaN(laborAmount)) {
       alert('Τα ποσά πρέπει να είναι αριθμητικά.');
@@ -370,7 +374,7 @@ export default function ServicesManager() {
       supplier_id: form.labor_supplier_id ? Number(form.labor_supplier_id) : form.parts_supplier_id ? Number(form.parts_supplier_id) : null,
       service_date: form.service_date,
       km: form.km ? Number(form.km) : null,
-      service_type: 'service',
+      service_type: form.service_type,
       description: form.description,
       cost: partsAmount + laborAmount,
       payment_method: laborAmount > 0 ? form.labor_payment_method : form.parts_payment_method || null,
@@ -775,24 +779,33 @@ export default function ServicesManager() {
                       <Field label="Περιγραφή εργασίας">
                         <input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} className="input" />
                       </Field>
-                    </div>
-                  </section>
-
-                  <section className="space-y-4 rounded-3xl border border-white/[0.055] bg-white/[0.018] p-4">
-                    <SectionTitle>Ανταλλακτικά</SectionTitle>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <SupplierSelect
-                        label="Προμηθευτής Ανταλλακτικών"
-                        value={form.parts_supplier_id}
-                        suppliers={suppliers}
-                        onChange={(value) => setForm({ ...form, parts_supplier_id: value })}
-                        clearButtonLabel="Καθαρισμός προμηθευτή ανταλλακτικών"
-                      />
-                      <CategorySelect label="Κατηγορία Ανταλλακτικών" value={form.parts_category} options={laborCategoryOptions} onChange={(value) => setForm({ ...form, parts_category: value })} />
-                      <Field label="Ποσό Ανταλλακτικών">
-                        <input value={form.parts_amount} onChange={(event) => setForm({ ...form, parts_amount: event.target.value })} className="input" />
+                      <Field label="Τύπος Service">
+                        <select value={form.service_type} onChange={(event) => setForm({ ...form, service_type: event.target.value })} className="input">
+                          {serviceTypeOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
                       </Field>
-                      <PaymentSelect label="Τρόπος Πληρωμής Ανταλλακτικών" value={form.parts_payment_method} onChange={(value) => setForm({ ...form, parts_payment_method: value })} />
+                      {form.service_type === 'Ελαστικά' && (
+                        <Field label="Αριθμός Ελαστικών">
+                          <select value={form.tire_count} onChange={(event) => setForm({ ...form, tire_count: event.target.value })} className="input">
+                            {['1', '2', '4'].map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                      )}
+                      {form.service_type === 'Μπαταρία' && (
+                        <Field label="Μπαταρία από αποθήκη">
+                          <select value={form.battery_source} onChange={(event) => setForm({ ...form, battery_source: event.target.value })} className="input">
+                            <option value="">Placeholder επιλογής</option>
+                          </select>
+                        </Field>
+                      )}
                     </div>
                   </section>
 
