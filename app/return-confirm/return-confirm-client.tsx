@@ -14,6 +14,8 @@ type ReturnConfirmClientProps = {
 type PageState = 'loading' | 'ready' | 'confirming' | 'confirmed' | 'error';
 
 const GOOGLE_REVIEW_URL = 'https://g.page/r/CYOr9zt3_-KVEBM/review';
+const OWNER_RETURN_NOTIFICATION_WEBHOOK_URL =
+  'https://hook.eu1.make.com/yxgr8rhw8xtihtd6p6416btez93jj917';
 
 const logReturnConfirmError = (label: string, error: unknown) => {
   const supabaseError = error as { message?: string; details?: string; hint?: string; code?: string } | null;
@@ -40,6 +42,34 @@ const formatReturnDate = (value?: string | null) => {
     month: '2-digit',
     year: 'numeric',
   });
+};
+
+const notifyOwnerReturnConfirmed = async (hotelRoom?: string | null) => {
+  if (!OWNER_RETURN_NOTIFICATION_WEBHOOK_URL || OWNER_RETURN_NOTIFICATION_WEBHOOK_URL.includes('PASTE_')) {
+    console.warn('Owner return notification webhook URL is not configured.');
+    return;
+  }
+
+  try {
+    const response = await fetch(OWNER_RETURN_NOTIFICATION_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        hotel_room: hotelRoom || '',
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('Owner return notification webhook failed.', {
+        status: response.status,
+        statusText: response.statusText,
+      });
+    }
+  } catch (error) {
+    console.error('Owner return notification webhook error:', error);
+  }
 };
 
 export default function ReturnConfirmClient({ reservationId }: ReturnConfirmClientProps) {
@@ -124,6 +154,8 @@ export default function ReturnConfirmClient({ reservationId }: ReturnConfirmClie
     if (!notification) {
       console.error('Return confirmation notification insert failed.');
     }
+
+    await notifyOwnerReturnConfirmed(data?.hotel_room || reservation.hotel_room);
 
     setReservation(data as ReservationRequestRecord);
     setPageState('confirmed');
