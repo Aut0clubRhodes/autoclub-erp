@@ -3,8 +3,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { deleteCar, fetchCars } from '@/lib/carsApi';
+import { addDebt, deleteDebt, fetchDebts, type DebtRecord } from '@/lib/debtsApi';
 import { fetchExpenseCategories, type ExpenseCategory } from '@/lib/expenseCategoriesApi';
-import { addTransaction, fetchTransactions } from '@/lib/financeApi';
+import { addTransaction, deleteTransaction, fetchTransactions } from '@/lib/financeApi';
+import {
+  addServiceInventoryPurchase,
+  addServiceInventoryUsage,
+  adjustServiceInventoryStock,
+  createServiceInventoryItem,
+  deleteServiceInventoryItem,
+  deleteServiceInventoryMovement,
+  fetchServiceInventoryItems,
+  fetchServiceInventoryMovements,
+  reconcileServiceInventoryStock,
+  type ServiceInventoryItem,
+  type ServiceInventoryMovement,
+  type ServiceInventoryType,
+  updateServiceInventoryItem,
+} from '@/lib/serviceInventoryApi';
 import { fetchServices, addService, updateService, deleteService, type ServiceRecord } from '@/lib/servicesApi';
 import { fetchSuppliers, type SupplierRecord } from '@/lib/suppliersApi';
 
@@ -21,7 +37,11 @@ type ServiceTransaction = {
   date: string;
   amount: number;
   source?: string | null;
+  payment_method?: string | null;
   car_id?: number | null;
+  supplier_id?: number | null;
+  category?: string | null;
+  service_id?: number | null;
   notes?: string | null;
 };
 
@@ -32,7 +52,7 @@ type ComboboxOption = {
   description?: string;
 };
 
-type ServiceTab = 'history' | 'checklist';
+type ServiceTab = 'history' | 'checklist' | 'inventory';
 type ChecklistFilter = 'all' | 'pending' | 'done';
 
 const paymentOptions = [
@@ -44,6 +64,35 @@ const paymentOptions = [
 
 const fallbackLaborCategories = ['Service', 'Ελαστικά', 'Φρένα', 'Μηχανικά', 'Ηλεκτρικά', 'Άλλο'];
 const serviceTypeOptions = ['Service / Λάδια', 'Ελαστικά', 'Μπαταρία'];
+const inventoryTypeOptions: { value: ServiceInventoryType; label: string }[] = [
+  { value: 'oil', label: 'Λάδι' },
+  { value: 'oil_filter', label: 'Φίλτρο λαδιού' },
+  { value: 'cabin_filter', label: 'Φίλτρο καμπίνας' },
+  { value: 'air_filter', label: 'Φίλτρο αέρα' },
+  { value: 'brakes', label: 'Φρένα' },
+  { value: 'belts', label: 'Ιμάντες' },
+  { value: 'tire', label: 'Ελαστικά' },
+  { value: 'battery', label: 'Μπαταρία' },
+  { value: 'other', label: 'Άλλο' },
+];
+
+const serviceTypeToInventoryTypes: Record<string, ServiceInventoryType[]> = {
+  Ελαστικά: ['tire'],
+  Μπαταρία: ['battery'],
+  'Service / Λάδια': ['oil', 'oil_filter', 'cabin_filter', 'air_filter', 'brakes', 'belts', 'other'],
+};
+
+const inventoryExpenseCategoryByType: Record<ServiceInventoryType, string> = {
+  oil: 'Service / Λάδια',
+  oil_filter: 'Φίλτρο λαδιού',
+  cabin_filter: 'Φίλτρο καμπίνας',
+  air_filter: 'Φίλτρο αέρα',
+  brakes: 'Φρένα',
+  belts: 'Ιμάντες',
+  tire: 'Ελαστικά',
+  battery: 'Μπαταρία',
+  other: 'Αποθήκη Service',
+};
 
 const initialForm = {
   car_id: '',
@@ -51,8 +100,11 @@ const initialForm = {
   km: '',
   description: '',
   service_type: 'Service / Λάδια',
+  inventory_item: '',
+  inventory_quantity: '1',
   tire_count: '4',
   battery_source: '',
+  battery_quantity: '1',
   next_service_km: '',
   next_service_date: '',
   notes: '',
@@ -67,14 +119,35 @@ const initialForm = {
   labor_payment_method: 'cash',
 };
 
+const initialInventoryForm = {
+  name: '',
+  type: 'tire' as ServiceInventoryType,
+  brand: '',
+  size_or_spec: '',
+  supplier_id: '',
+  unit_cost: '',
+  quantity: '',
+  payment_method: 'cash',
+  notes: '',
+};
+
 const money = (value: number) =>
   `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const debtMarker = (key: string, id: number) => `[${key}:${id}]`;
+const readDebtMarker = (notes: string | null | undefined, key: string) => {
+  const match = String(notes || '').match(new RegExp(`\\[${key}:(\\d+)\\]`));
+  return match ? Number(match[1]) : null;
+};
 
 export default function ServicesManager() {
   const [cars, setCars] = useState<ServiceCar[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierRecord[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [services, setServices] = useState<ServiceRecord[]>([]);
+  const [debts, setDebts] = useState<DebtRecord[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<ServiceInventoryItem[]>([]);
+  const [inventoryMovements, setInventoryMovements] = useState<ServiceInventoryMovement[]>([]);
   const [transactions, setTransactions] = useState<ServiceTransaction[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [modalRootReady, setModalRootReady] = useState(false);
@@ -86,14 +159,20 @@ export default function ServicesManager() {
   const [checklistYear, setChecklistYear] = useState(String(new Date().getFullYear()));
   const [checklistFilter, setChecklistFilter] = useState<ChecklistFilter>('all');
   const [form, setForm] = useState(initialForm);
+  const [inventoryForm, setInventoryForm] = useState(initialInventoryForm);
+  const [isSavingInventory, setIsSavingInventory] = useState(false);
+  const [editingInventoryItemId, setEditingInventoryItemId] = useState<number | null>(null);
 
   const loadData = async () => {
-    const [carRows, supplierRows, serviceRows, transactionRows, categoryRows] = await Promise.all([
+    const [carRows, supplierRows, serviceRows, transactionRows, categoryRows, inventoryRows, movementRows, debtRows] = await Promise.all([
       fetchCars(),
       fetchSuppliers(),
       fetchServices(),
       fetchTransactions(),
       fetchExpenseCategories(),
+      fetchServiceInventoryItems(),
+      fetchServiceInventoryMovements(),
+      fetchDebts(),
     ]);
 
     setCars(
@@ -108,13 +187,20 @@ export default function ServicesManager() {
     setSuppliers(supplierRows);
     setExpenseCategories(categoryRows);
     setServices(serviceRows);
+    setDebts(debtRows);
+    setInventoryItems(inventoryRows);
+    setInventoryMovements(movementRows);
     setTransactions(
       (transactionRows || []).map((transaction: any) => ({
         id: Number(transaction.id),
         date: String(transaction.date ?? ''),
         amount: Number(transaction.amount) || 0,
         source: transaction.source ?? null,
+        payment_method: transaction.payment_method ?? null,
         car_id: transaction.car_id ? Number(transaction.car_id) : null,
+        supplier_id: transaction.supplier_id ? Number(transaction.supplier_id) : null,
+        category: transaction.category ?? null,
+        service_id: transaction.service_id ? Number(transaction.service_id) : null,
         notes: transaction.notes ?? null,
       }))
     );
@@ -133,14 +219,27 @@ export default function ServicesManager() {
       services.map((service) => {
         const sameServiceTransactions = transactions.filter(
           (transaction) =>
-            Number(transaction.car_id) === Number(service.car_id) && transaction.date === service.service_date
+            Number(transaction.service_id) === Number(service.id) ||
+            (!transaction.service_id &&
+              Number(transaction.car_id) === Number(service.car_id) &&
+              transaction.date === service.service_date)
+        );
+        const sameServiceInventoryUsages = inventoryMovements.filter(
+          (movement) => movement.movement_type === 'usage' && Number(movement.service_id) === Number(service.id)
         );
         const partsCost = sameServiceTransactions
           .filter((transaction) => transaction.source === 'service_parts')
-          .reduce((sum, transaction) => sum + transaction.amount, 0);
+          .reduce((sum, transaction) => sum + transaction.amount, 0) +
+          sameServiceInventoryUsages.reduce((sum, movement) => sum + movement.total_cost, 0);
         const laborCost = sameServiceTransactions
           .filter((transaction) => transaction.source === 'service_labor')
           .reduce((sum, transaction) => sum + transaction.amount, 0);
+        const inventoryDescription = sameServiceInventoryUsages
+          .map((movement) => {
+            const item = inventoryItems.find((inventoryItem) => inventoryItem.id === movement.item_id);
+            return item ? `${item.name} x${movement.quantity}` : `Inventory #${movement.item_id} x${movement.quantity}`;
+          })
+          .join(', ');
 
         return {
           service,
@@ -148,10 +247,12 @@ export default function ServicesManager() {
           partsCost,
           laborCost,
           partsDescription:
-            sameServiceTransactions.find((transaction) => transaction.source === 'service_parts')?.notes || '-',
+            inventoryDescription ||
+            sameServiceTransactions.find((transaction) => transaction.source === 'service_parts')?.notes ||
+            '-',
         };
       }),
-    [cars, services, transactions]
+    [cars, inventoryItems, inventoryMovements, services, transactions]
   );
 
   const selectedCar = cars.find((car) => car.id === selectedCarId) ?? null;
@@ -195,27 +296,53 @@ export default function ServicesManager() {
 
   const annualChecklistRows = useMemo(() => {
     const rows = cars.map((car) => {
-      const carServices = services.filter((service) => Number(service.car_id) === car.id);
-      const latestService = [...carServices].sort((first, second) =>
+      const yearServices = services.filter(
+        (service) => Number(service.car_id) === car.id && String(service.service_date || '').startsWith(`${checklistYear}-`)
+      );
+      const latestService = [...yearServices].sort((first, second) =>
         String(second.service_date || '').localeCompare(String(first.service_date || ''))
       )[0];
-      const hasServiceInYear = carServices.some((service) =>
-        String(service.service_date || '').startsWith(`${checklistYear}-`)
+      const normalServiceDone = yearServices.some(
+        (service) => service.service_type === serviceTypeOptions[0] || service.service_type === 'service' || !service.service_type
       );
-      const status: 'DONE' | 'PENDING' = hasServiceInYear ? 'DONE' : 'PENDING';
+      const tiresDone = yearServices.some((service) => service.service_type === serviceTypeOptions[1]);
+      const batteryDone = yearServices.some((service) => service.service_type === serviceTypeOptions[2]);
+      const overallStatus: 'DONE' | 'ATTENTION' | 'PENDING' = normalServiceDone
+        ? 'DONE'
+        : tiresDone || batteryDone
+          ? 'ATTENTION'
+          : 'PENDING';
 
       return {
         car,
-        lastServiceDate: latestService?.service_date || '-',
-        status,
+        normalServiceDone,
+        tiresDone,
+        batteryDone,
+        lastAction: latestService ? `${latestService.service_date} · ${latestService.service_type || 'Service'}` : '-',
+        latestService,
+        overallStatus,
       };
     });
 
-    if (checklistFilter === 'done') return rows.filter((row) => row.status === 'DONE');
-    if (checklistFilter === 'pending') return rows.filter((row) => row.status === 'PENDING');
+    if (checklistFilter === 'done') return rows.filter((row) => row.overallStatus === 'DONE');
+    if (checklistFilter === 'pending') return rows.filter((row) => row.overallStatus !== 'DONE');
 
     return rows;
   }, [cars, checklistFilter, checklistYear, services]);
+
+  const modalInventoryTypes = serviceTypeToInventoryTypes[form.service_type] || ['other'];
+  const modalInventoryItems = inventoryItems.filter((item) => modalInventoryTypes.includes(item.type));
+  const selectedInventoryItem = inventoryItems.find((item) => String(item.id) === form.inventory_item) || null;
+  const inventoryUsageQuantity =
+    form.service_type === 'Ελαστικά'
+      ? Number(form.tire_count || 0)
+      : form.service_type === 'Μπαταρία'
+        ? Number(form.battery_quantity || 0)
+        : Number(form.inventory_quantity || 0);
+  const inventoryUsageCost =
+    selectedInventoryItem && inventoryUsageQuantity > 0
+      ? selectedInventoryItem.unit_cost * inventoryUsageQuantity
+      : 0;
 
   const selectedCarServiceRows = useMemo(
     () =>
@@ -283,21 +410,54 @@ export default function ServicesManager() {
   const handleDeleteService = async (service: ServiceRecord) => {
     if (!window.confirm('Να διαγραφεί αυτή η καταχώρηση service;')) return;
 
-    const hasLinkedTransactions = transactions.some(
-      (transaction) =>
-        Number(transaction.car_id) === Number(service.car_id) &&
-        transaction.date === service.service_date &&
-        (transaction.source === 'service_parts' || transaction.source === 'service_labor')
+    const linkedUsageMovements = inventoryMovements.filter(
+      (movement) => movement.movement_type === 'usage' && Number(movement.service_id) === Number(service.id)
     );
+    const linkedTransactions = transactions.filter(
+      (transaction) =>
+        Number(transaction.service_id) === Number(service.id) ||
+        (!transaction.service_id &&
+          Number(transaction.car_id) === Number(service.car_id) &&
+          transaction.date === service.service_date &&
+          (transaction.source === 'service_parts' || transaction.source === 'service_labor'))
+    );
+    const linkedServiceDebts = debts.filter((debt) => String(debt.notes || '').includes(debtMarker('service_labor', Number(service.id))));
 
-    if (hasLinkedTransactions) {
-      alert('Δεν μπορεί να διαγραφεί γιατί έχει οικονομικές κινήσεις συνδεδεμένες.');
-      return;
+    for (const movement of linkedUsageMovements) {
+      const stockAdjusted = await adjustServiceInventoryStock(Number(movement.item_id), Number(movement.quantity) || 0);
+      if (!stockAdjusted) {
+        alert('Δεν έγινε επιστροφή stock. Η διαγραφή σταμάτησε.');
+        return;
+      }
+      const movementDeleted = await deleteServiceInventoryMovement(Number(movement.id));
+      if (!movementDeleted) {
+        await adjustServiceInventoryStock(Number(movement.item_id), -(Number(movement.quantity) || 0));
+        alert('Δεν διαγράφηκε η κίνηση αποθήκης. Η διαγραφή σταμάτησε.');
+        return;
+      }
+    }
+
+    for (const transaction of linkedTransactions) {
+      const deleted = await deleteTransaction(Number(transaction.id));
+      if (!deleted) {
+        alert('Δεν διαγράφηκε συνδεδεμένη οικονομική κίνηση service. Η διαγραφή σταμάτησε.');
+        await loadData();
+        return;
+      }
+    }
+
+    for (const debt of linkedServiceDebts) {
+      const deleted = await deleteDebt(Number(debt.id));
+      if (!deleted) {
+        alert('Δεν διαγράφηκε συνδεδεμένη πίστωση προμηθευτή service. Η διαγραφή σταμάτησε.');
+        await loadData();
+        return;
+      }
     }
 
     const result = await deleteService(service.id);
     if (!result.success) {
-      alert('Δεν μπορεί να διαγραφεί γιατί έχει οικονομικές κινήσεις συνδεδεμένες.');
+      alert('Δεν μπορεί να διαγραφεί το service. Ελέγξτε τις συνδεδεμένες κινήσεις.');
       return;
     }
 
@@ -327,6 +487,16 @@ export default function ServicesManager() {
     if (form.km && Number.isNaN(Number(form.km))) {
       alert('Τα χιλιόμετρα πρέπει να είναι αριθμός.');
       return;
+    }
+    if (selectedInventoryItem) {
+      if (!inventoryUsageQuantity || Number.isNaN(inventoryUsageQuantity) || inventoryUsageQuantity <= 0) {
+        alert('Συμπληρώστε σωστή ποσότητα αποθήκης.');
+        return;
+      }
+      if (selectedInventoryItem.current_stock < inventoryUsageQuantity) {
+        alert('Δεν υπάρχει αρκετό stock για το επιλεγμένο είδος αποθήκης.');
+        return;
+      }
     }
 
     const partsAmount = 0;
@@ -376,7 +546,7 @@ export default function ServicesManager() {
       km: form.km ? Number(form.km) : null,
       service_type: form.service_type,
       description: form.description,
-      cost: partsAmount + laborAmount,
+      cost: partsAmount + laborAmount + inventoryUsageCost,
       payment_method: laborAmount > 0 ? form.labor_payment_method : form.parts_payment_method || null,
       next_service_km: form.next_service_km ? Number(form.next_service_km) : null,
       notes: [
@@ -389,6 +559,23 @@ export default function ServicesManager() {
 
     if (!service) return;
 
+    if (selectedInventoryItem && inventoryUsageQuantity > 0) {
+      const usageMovement = await addServiceInventoryUsage({
+        item_id: selectedInventoryItem.id,
+        car_id: Number(form.car_id),
+        service_id: Number(service.id),
+        quantity: inventoryUsageQuantity,
+        unit_cost: selectedInventoryItem.unit_cost,
+        notes: form.description || null,
+      });
+
+      if (!usageMovement) {
+        alert('Το service αποθηκεύτηκε, αλλά απέτυχε η κίνηση χρήσης αποθήκης.');
+        await loadData();
+        return;
+      }
+    }
+
     if (partsAmount > 0) {
       const partsTransaction = await addTransaction({
         type: 'expense',
@@ -398,6 +585,7 @@ export default function ServicesManager() {
         payment_method: form.parts_payment_method,
         supplier_id: Number(form.parts_supplier_id),
         car_id: Number(form.car_id),
+        service_id: Number(service.id),
         category: form.parts_category || 'Ανταλλακτικά',
         notes: form.description || null,
       });
@@ -409,7 +597,26 @@ export default function ServicesManager() {
       }
     }
 
-    if (laborAmount > 0) {
+    if (laborAmount > 0 && form.labor_payment_method === 'credit') {
+      const debt = await addDebt({
+        title: `Service εργασίας: ${form.description || `Service #${service.id}`}`,
+        supplier_id: Number(form.labor_supplier_id),
+        car_id: Number(form.car_id),
+        category: form.labor_category || 'Service',
+        original_amount: laborAmount,
+        paid_amount: 0,
+        remaining_amount: laborAmount,
+        status: 'open',
+        notes: [form.description, debtMarker('service_labor', Number(service.id))].filter(Boolean).join(' | '),
+      });
+
+      if (!debt) {
+        console.error('Service labor supplier credit creation failed after service row save.', { serviceId: service.id });
+        alert('Το service αποθηκεύτηκε, αλλά απέτυχε η πίστωση προμηθευτή εργασίας.');
+        await loadData();
+        return;
+      }
+    } else if (laborAmount > 0) {
       const laborTransaction = await addTransaction({
         type: 'expense',
         source: 'service_labor',
@@ -418,6 +625,7 @@ export default function ServicesManager() {
         payment_method: form.labor_payment_method,
         supplier_id: Number(form.labor_supplier_id),
         car_id: Number(form.car_id),
+        service_id: Number(service.id),
         category: form.labor_category || 'Service',
         notes: form.description || null,
       });
@@ -435,6 +643,291 @@ export default function ServicesManager() {
       car_id: selectedCar ? String(selectedCar.id) : '',
     });
     setShowModal(false);
+  };
+
+  const handleInventoryPurchase = async () => {
+    const quantity = Number(inventoryForm.quantity || 0);
+    const unitCost = Number(inventoryForm.unit_cost || 0);
+
+    if (!inventoryForm.name.trim()) {
+      alert('Συμπληρώστε όνομα είδους.');
+      return;
+    }
+    if (!quantity || Number.isNaN(quantity) || quantity <= 0) {
+      alert('Συμπληρώστε σωστή ποσότητα.');
+      return;
+    }
+    if (Number.isNaN(unitCost) || unitCost < 0) {
+      alert('Συμπληρώστε σωστό κόστος μονάδας.');
+      return;
+    }
+    if (inventoryForm.payment_method === 'credit' && !inventoryForm.supplier_id) {
+      alert('Επιλέξτε προμηθευτή για αγορά αποθήκης επί πιστώσει.');
+      return;
+    }
+
+    setIsSavingInventory(true);
+    const totalCost = quantity * unitCost;
+
+    const item = await createServiceInventoryItem({
+      name: inventoryForm.name.trim(),
+      type: inventoryForm.type,
+      brand: inventoryForm.brand.trim() || null,
+      size_or_spec: inventoryForm.size_or_spec.trim() || null,
+      supplier_id: inventoryForm.supplier_id ? Number(inventoryForm.supplier_id) : null,
+      unit_cost: unitCost,
+    });
+
+    if (!item) {
+      setIsSavingInventory(false);
+      return;
+    }
+
+    let transactionId: number | null = null;
+    let supplierDebtId: number | null = null;
+
+    if (totalCost > 0 && inventoryForm.payment_method === 'credit') {
+      const debt = await addDebt({
+        title: `Αγορά αποθήκης: ${inventoryForm.name.trim()}`,
+        supplier_id: Number(inventoryForm.supplier_id),
+        category: inventoryExpenseCategoryByType[inventoryForm.type] || 'Αποθήκη Service',
+        original_amount: totalCost,
+        paid_amount: 0,
+        remaining_amount: totalCost,
+        status: 'open',
+        notes: [inventoryForm.notes.trim(), debtMarker('service_inventory_item', Number(item.id))].filter(Boolean).join(' | '),
+      });
+
+      if (!debt) {
+        alert('Απέτυχε η πίστωση προμηθευτή. Η αγορά αποθήκης δεν θα αυξήσει stock.');
+        setIsSavingInventory(false);
+        return;
+      }
+      supplierDebtId = Number(debt.id);
+    } else if (totalCost > 0) {
+      const transaction = await addTransaction({
+        type: 'expense',
+        source: 'service_inventory_purchase',
+        amount: totalCost,
+        date: new Date().toISOString().split('T')[0],
+        payment_method: inventoryForm.payment_method,
+        supplier_id: inventoryForm.supplier_id ? Number(inventoryForm.supplier_id) : null,
+        category: inventoryExpenseCategoryByType[inventoryForm.type] || 'Αποθήκη Service',
+        notes: inventoryForm.notes.trim() || inventoryForm.name.trim(),
+      });
+
+      if (!transaction) {
+        alert('Απέτυχε η οικονομική κίνηση. Η αγορά αποθήκης δεν θα αυξήσει stock.');
+        setIsSavingInventory(false);
+        return;
+      }
+      transactionId = Number(transaction.id);
+    }
+
+    const movementNotes = [
+      inventoryForm.notes.trim(),
+      supplierDebtId ? debtMarker('supplier_debt', supplierDebtId) : '',
+    ]
+      .filter(Boolean)
+      .join(' | ') || null;
+
+    const movement = await addServiceInventoryPurchase({
+      item_id: Number(item.id),
+      quantity,
+      unit_cost: unitCost,
+      supplier_id: inventoryForm.supplier_id ? Number(inventoryForm.supplier_id) : null,
+      payment_method: inventoryForm.payment_method,
+      transaction_id: transactionId,
+      notes: movementNotes,
+    });
+
+    if (!movement) {
+      if (transactionId) {
+        await deleteTransaction(transactionId);
+      }
+      if (supplierDebtId) {
+        await deleteDebt(supplierDebtId);
+      }
+      setIsSavingInventory(false);
+      return;
+    }
+
+    setInventoryForm(initialInventoryForm);
+    await loadData();
+    setIsSavingInventory(false);
+  };
+
+  const reversePurchaseMovement = async (movement: ServiceInventoryMovement) => {
+    if (movement.movement_type !== 'purchase') return false;
+
+    const item = inventoryItems.find((inventoryItem) => inventoryItem.id === Number(movement.item_id));
+    const hasUsageHistory = inventoryMovements.some(
+      (candidate) => Number(candidate.item_id) === Number(movement.item_id) && candidate.movement_type === 'usage'
+    );
+
+    if (hasUsageHistory) {
+      alert('This item has service usage history. Delete is blocked or must be reversed carefully.');
+      return false;
+    }
+
+    const reconciledStock = await reconcileServiceInventoryStock(Number(movement.item_id));
+    const stockAdjusted =
+      reconciledStock !== null && reconciledStock >= Number(movement.quantity || 0)
+        ? await adjustServiceInventoryStock(Number(movement.item_id), -(Number(movement.quantity) || 0))
+        : false;
+    if (!stockAdjusted) {
+      alert('Δεν υπάρχει αρκετό stock για ασφαλή αναστροφή αυτής της αγοράς.');
+      return false;
+    }
+
+    const legacyCreditExpenseTransactions =
+      movement.payment_method === 'credit'
+        ? transactions.filter((transaction) => {
+            const sameSource = transaction.source === 'service_inventory_purchase';
+            const samePayment = transaction.payment_method === 'credit';
+            const sameAmount = Math.abs(Number(transaction.amount || 0) - Number(movement.total_cost || 0)) < 0.01;
+            const sameSupplier =
+              !movement.supplier_id || !transaction.supplier_id || Number(transaction.supplier_id) === Number(movement.supplier_id);
+            const sameDate = !movement.created_at || transaction.date === movement.created_at.slice(0, 10);
+            const movementNote = String(movement.notes || '').split('|')[0].trim();
+            const transactionNote = String(transaction.notes || '').trim();
+            const noteMatches =
+              !movementNote ||
+              !transactionNote ||
+              transactionNote === movementNote ||
+              transactionNote === item?.name ||
+              transactionNote.includes(movementNote);
+
+            return sameSource && samePayment && sameAmount && sameSupplier && sameDate && noteMatches;
+          })
+        : [];
+
+    if (movement.transaction_id) {
+      const transactionDeleted = await deleteTransaction(Number(movement.transaction_id));
+      if (!transactionDeleted) {
+        await adjustServiceInventoryStock(Number(movement.item_id), Number(movement.quantity) || 0);
+        alert('Δεν διαγράφηκε η συνδεδεμένη οικονομική κίνηση. Η αναστροφή ακυρώθηκε.');
+        return false;
+      }
+    }
+
+    if (movement.payment_method === 'credit') {
+      for (const transaction of legacyCreditExpenseTransactions) {
+        if (movement.transaction_id && Number(transaction.id) === Number(movement.transaction_id)) continue;
+        const transactionDeleted = await deleteTransaction(Number(transaction.id));
+        if (!transactionDeleted) {
+          await adjustServiceInventoryStock(Number(movement.item_id), Number(movement.quantity) || 0);
+          alert('Δεν διαγράφηκε παλιά λανθασμένη κίνηση εξόδου για πιστωτική αγορά αποθήκης.');
+          return false;
+        }
+      }
+
+      const supplierDebtId = readDebtMarker(movement.notes, 'supplier_debt');
+      if (supplierDebtId) {
+        const debtDeleted = await deleteDebt(supplierDebtId);
+        if (!debtDeleted) {
+          await adjustServiceInventoryStock(Number(movement.item_id), Number(movement.quantity) || 0);
+          alert('Δεν διαγράφηκε η πίστωση προμηθευτή. Η αναστροφή ακυρώθηκε.');
+          return false;
+        }
+      } else {
+        console.warn('Credit inventory purchase movement has no supplier debt marker. Supplier credit may need manual cleanup.', {
+          movementId: movement.id,
+        });
+      }
+    } else if (!movement.transaction_id) {
+      console.warn('Paid inventory purchase movement has no transaction_id. Only stock and movement will be reversed.', {
+        movementId: movement.id,
+      });
+    }
+
+    const movementDeleted = await deleteServiceInventoryMovement(Number(movement.id));
+    if (!movementDeleted) {
+      await adjustServiceInventoryStock(Number(movement.item_id), Number(movement.quantity) || 0);
+      alert('Δεν διαγράφηκε η κίνηση αγοράς αποθήκης.');
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleDeletePurchaseMovement = async (movement: ServiceInventoryMovement) => {
+    if (!window.confirm('Να διαγραφεί / αναστραφεί αυτή η αγορά αποθήκης;')) return;
+
+    const reversed = await reversePurchaseMovement(movement);
+    if (reversed) {
+      await loadData();
+    }
+  };
+
+  const handleEditInventoryItem = (item: ServiceInventoryItem) => {
+    setEditingInventoryItemId(Number(item.id));
+    setInventoryForm({
+      name: item.name || '',
+      type: item.type,
+      brand: item.brand || '',
+      size_or_spec: item.size_or_spec || '',
+      supplier_id: item.supplier_id ? String(item.supplier_id) : '',
+      unit_cost: String(item.unit_cost || ''),
+      quantity: String(item.current_stock || ''),
+      payment_method: 'cash',
+      notes: '',
+    });
+  };
+
+  const handleUpdateInventoryItem = async () => {
+    if (!editingInventoryItemId) return;
+
+    const currentStock = Number(inventoryForm.quantity || 0);
+    const unitCost = Number(inventoryForm.unit_cost || 0);
+    if (!inventoryForm.name.trim()) {
+      alert('Συμπληρώστε όνομα υλικού.');
+      return;
+    }
+    if (Number.isNaN(currentStock) || currentStock < 0 || Number.isNaN(unitCost) || unitCost < 0) {
+      alert('Ελέγξτε stock και τιμή μονάδας.');
+      return;
+    }
+
+    const updated = await updateServiceInventoryItem(editingInventoryItemId, {
+      name: inventoryForm.name.trim(),
+      type: inventoryForm.type,
+      brand: inventoryForm.brand.trim() || null,
+      size_or_spec: inventoryForm.size_or_spec.trim() || null,
+      supplier_id: inventoryForm.supplier_id ? Number(inventoryForm.supplier_id) : null,
+      unit_cost: unitCost,
+      current_stock: currentStock,
+    });
+
+    if (!updated) return;
+
+    setEditingInventoryItemId(null);
+    setInventoryForm(initialInventoryForm);
+    await loadData();
+  };
+
+  const handleDeleteInventoryItem = async (item: ServiceInventoryItem) => {
+    if (!window.confirm('Να διαγραφεί αυτό το είδος αποθήκης και οι αγορές του;')) return;
+
+    const itemMovements = inventoryMovements.filter((movement) => Number(movement.item_id) === Number(item.id));
+    const hasUsageHistory = itemMovements.some((movement) => movement.movement_type === 'usage');
+    if (hasUsageHistory) {
+      alert('This item has service usage history. Delete is blocked or must be reversed carefully.');
+      return;
+    }
+
+    for (const movement of itemMovements.filter((candidate) => candidate.movement_type === 'purchase')) {
+      const reversed = await reversePurchaseMovement(movement);
+      if (!reversed) {
+        await loadData();
+        return;
+      }
+    }
+
+    const deleted = await deleteServiceInventoryItem(Number(item.id));
+    if (!deleted) return;
+
+    await loadData();
   };
 
   return (
@@ -458,6 +951,7 @@ export default function ServicesManager() {
         {[
           { id: 'history' as const, label: 'Service History' },
           { id: 'checklist' as const, label: 'Annual Service Checklist' },
+          { id: 'inventory' as const, label: 'Αποθήκη' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -636,7 +1130,7 @@ export default function ServicesManager() {
             </tbody>
           </table>
         </div>
-      )) : (
+      )) : activeServiceTab === 'checklist' ? (
         <div className="overflow-hidden rounded-3xl border border-white/[0.075] bg-white/[0.025] shadow-[0_18px_58px_rgba(0,0,0,0.24)] transition duration-200 hover:border-orange-200/12 hover:shadow-[0_22px_64px_rgba(0,0,0,0.28),0_0_30px_rgba(249,115,22,0.04)]">
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/[0.06] bg-white/[0.025] p-4">
             <div>
@@ -682,10 +1176,10 @@ export default function ServicesManager() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left">
+            <table className="w-full min-w-[1080px] text-left">
               <thead className="bg-white/[0.035]">
                 <tr>
-                  {['Plate', 'Brand', 'Model', 'Last Service Date', 'Status'].map((label) => (
+                  {['Plate', 'Brand', 'Model', 'Service / Λάδια', 'Ελαστικά', 'Μπαταρία', 'Last Action', 'Overall Status', 'Actions'].map((label) => (
                     <th key={label} className="px-4 py-3 text-xs font-medium text-zinc-400">
                       {label}
                     </th>
@@ -693,7 +1187,7 @@ export default function ServicesManager() {
                 </tr>
               </thead>
               <tbody>
-                {annualChecklistRows.map(({ car, lastServiceDate, status }) => (
+                {annualChecklistRows.map(({ car, normalServiceDone, tiresDone, batteryDone, lastAction, latestService, overallStatus }) => (
                   <tr
                     key={car.id}
                     onDoubleClick={() => openAddServiceModalForCar(car.id)}
@@ -703,23 +1197,42 @@ export default function ServicesManager() {
                     <td className="px-4 py-4 text-sm font-semibold text-white">{car.plate}</td>
                     <td className="px-4 py-4 text-sm text-zinc-200">{car.brand || '-'}</td>
                     <td className="px-4 py-4 text-sm text-zinc-200">{car.model || '-'}</td>
-                    <td className="px-4 py-4 text-sm text-zinc-200">{lastServiceDate}</td>
+                    <td className="px-4 py-4 text-sm"><ChecklistBadge done={normalServiceDone} /></td>
+                    <td className="px-4 py-4 text-sm"><ChecklistBadge done={tiresDone} /></td>
+                    <td className="px-4 py-4 text-sm"><ChecklistBadge done={batteryDone} /></td>
+                    <td className="px-4 py-4 text-sm text-zinc-200">{lastAction}</td>
                     <td className="px-4 py-4 text-sm">
-                      <span
-                        className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${
-                          status === 'DONE'
-                            ? 'border-emerald-300/30 bg-emerald-400/12 text-emerald-200'
-                            : 'border-orange-300/30 bg-orange-400/12 text-orange-200'
-                        }`}
-                      >
-                        {status}
-                      </span>
+                      <OverallChecklistBadge status={overallStatus} />
+                    </td>
+                    <td className="px-4 py-4 text-sm">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCarId(car.id);
+                            setActiveServiceTab('history');
+                            setExpandedYears((current) => ({ ...current, [checklistYear]: true }));
+                          }}
+                          className="rounded-xl border border-sky-400/24 bg-sky-400/10 px-3 py-2 text-xs font-semibold text-sky-200 transition duration-200 hover:-translate-y-px hover:border-sky-300/38 hover:bg-sky-400/18"
+                        >
+                          Προβολή
+                        </button>
+                        {latestService && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteService(latestService)}
+                            className="rounded-xl border border-rose-400/24 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-200 transition duration-200 hover:-translate-y-px hover:border-rose-300/38 hover:bg-rose-400/18"
+                          >
+                            Διαγραφή τελευταίου
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
                 {annualChecklistRows.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-zinc-500">
+                    <td colSpan={9} className="px-4 py-8 text-center text-sm text-zinc-500">
                       Δεν υπάρχουν αυτοκίνητα για το επιλεγμένο φίλτρο.
                     </td>
                   </tr>
@@ -727,6 +1240,194 @@ export default function ServicesManager() {
               </tbody>
             </table>
           </div>
+        </div>
+      ) : (
+        <div className="grid gap-5 xl:grid-cols-[390px_minmax(0,1fr)]">
+          <section className="rounded-3xl border border-white/[0.075] bg-white/[0.025] p-4 shadow-[0_18px_58px_rgba(0,0,0,0.24)]">
+            <div className="mb-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-200/65">Service inventory</p>
+              <h2 className="mt-1 text-lg font-semibold text-white">Νέο είδος / αγορά</h2>
+              <p className="mt-1 text-xs text-zinc-500">Η αγορά αυξάνει το stock και δημιουργεί μία οικονομική κίνηση.</p>
+            </div>
+            <div className="grid gap-3">
+              <Field label="Όνομα Υλικού">
+                <input value={inventoryForm.name} onChange={(event) => setInventoryForm({ ...inventoryForm, name: event.target.value })} className="input" />
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Τύπος Υλικού">
+                  <select value={inventoryForm.type} onChange={(event) => setInventoryForm({ ...inventoryForm, type: event.target.value as ServiceInventoryType })} className="input">
+                    {inventoryTypeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Brand">
+                  <input value={inventoryForm.brand} onChange={(event) => setInventoryForm({ ...inventoryForm, brand: event.target.value })} className="input" />
+                </Field>
+              </div>
+              <Field label="Spec / Διάσταση">
+                <input value={inventoryForm.size_or_spec} onChange={(event) => setInventoryForm({ ...inventoryForm, size_or_spec: event.target.value })} className="input" />
+              </Field>
+              <SupplierSelect
+                label="Προμηθευτής"
+                value={inventoryForm.supplier_id}
+                suppliers={suppliers}
+                onChange={(value) => setInventoryForm({ ...inventoryForm, supplier_id: value })}
+                clearButtonLabel="Καθαρισμός προμηθευτή"
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Ποσότητα">
+                  <input value={inventoryForm.quantity} onChange={(event) => setInventoryForm({ ...inventoryForm, quantity: event.target.value })} className="input" />
+                </Field>
+                <Field label="Τιμή Μονάδας">
+                  <input value={inventoryForm.unit_cost} onChange={(event) => setInventoryForm({ ...inventoryForm, unit_cost: event.target.value })} className="input" />
+                </Field>
+              </div>
+              <Field label="Συνολικό Ποσό">
+                <div className="input flex items-center text-sm font-bold text-orange-100">
+                  {money((Number(inventoryForm.quantity || 0) || 0) * (Number(inventoryForm.unit_cost || 0) || 0))}
+                </div>
+              </Field>
+              <PaymentSelect label="Τρόπος Πληρωμής" value={inventoryForm.payment_method} onChange={(value) => setInventoryForm({ ...inventoryForm, payment_method: value })} />
+              <Field label="Σημειώσεις">
+                <textarea value={inventoryForm.notes} onChange={(event) => setInventoryForm({ ...inventoryForm, notes: event.target.value })} className="input min-h-20" />
+              </Field>
+              <button
+                type="button"
+                onClick={editingInventoryItemId ? handleUpdateInventoryItem : handleInventoryPurchase}
+                disabled={isSavingInventory}
+                className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-black transition duration-200 hover:-translate-y-px hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingInventory ? 'Αποθήκευση...' : editingInventoryItemId ? 'Αποθήκευση αλλαγών' : 'Καταχώρηση αγοράς'}
+              </button>
+              {editingInventoryItemId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingInventoryItemId(null);
+                    setInventoryForm(initialInventoryForm);
+                  }}
+                  className="rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-zinc-300 transition duration-200 hover:-translate-y-px hover:bg-white/[0.04]"
+                >
+                  Ακύρωση επεξεργασίας
+                </button>
+              )}
+            </div>
+          </section>
+
+          <section className="overflow-hidden rounded-3xl border border-white/[0.075] bg-white/[0.025] shadow-[0_18px_58px_rgba(0,0,0,0.24)]">
+            <div className="border-b border-white/[0.06] bg-white/[0.025] p-4">
+              <h2 className="text-lg font-semibold text-white">Αποθήκη Service</h2>
+              <p className="mt-1 text-xs text-zinc-500">Τρέχον stock ανά είδος. Η χρήση σε service μειώνει stock και καταγράφει κόστος στο συγκεκριμένο service.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left">
+                <thead className="bg-white/[0.035]">
+                  <tr>
+                    {['Τύπος', 'Είδος', 'Spec', 'Stock', 'Unit Cost', 'Προμηθευτής', 'Ενέργειες'].map((label) => (
+                      <th key={label} className="px-4 py-3 text-xs font-medium text-zinc-400">{label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {inventoryItems.map((item) => (
+                    <tr key={item.id} className="border-t border-white/[0.055] transition duration-200 hover:bg-white/[0.035]">
+                      <td className="px-4 py-4 text-sm text-zinc-200">{inventoryTypeOptions.find((option) => option.value === item.type)?.label || item.type}</td>
+                      <td className="px-4 py-4 text-sm font-semibold text-white">{item.name}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{[item.brand, item.size_or_spec].filter(Boolean).join(' / ') || '-'}</td>
+                      <td className="px-4 py-4 text-sm font-bold text-orange-100">{item.current_stock}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{money(item.unit_cost)}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{suppliers.find((supplier) => supplier.id === item.supplier_id)?.name || '-'}</td>
+                      <td className="px-4 py-4 text-sm">
+                        <div className="flex items-center gap-2 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handleEditInventoryItem(item)}
+                            className="rounded-xl border border-sky-400/24 bg-sky-400/10 px-3 py-2 text-xs font-semibold text-sky-200 transition duration-200 hover:-translate-y-px hover:border-sky-300/38 hover:bg-sky-400/18"
+                          >
+                            Επεξεργασία
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteInventoryItem(item)}
+                            className="rounded-xl border border-rose-400/24 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-200 transition duration-200 hover:-translate-y-px hover:border-rose-300/38 hover:bg-rose-400/18"
+                          >
+                            Διαγραφή
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {inventoryItems.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-sm text-zinc-500">Δεν υπάρχουν είδη αποθήκης.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="overflow-hidden rounded-3xl border border-white/[0.075] bg-white/[0.025] shadow-[0_18px_58px_rgba(0,0,0,0.24)] xl:col-span-2">
+            <div className="border-b border-white/[0.06] bg-white/[0.025] p-4">
+              <h2 className="text-lg font-semibold text-white">Κινήσεις Αποθήκης</h2>
+              <p className="mt-1 text-xs text-zinc-500">Αγορές αυξάνουν stock. Χρήσεις από service μειώνουν stock χωρίς δεύτερο έξοδο.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[860px] text-left">
+                <thead className="bg-white/[0.035]">
+                  <tr>
+                    {['Ημερομηνία', 'Κίνηση', 'Είδος', 'Ποσότητα', 'Κόστος', 'Σημειώσεις', 'Ενέργειες'].map((label) => (
+                      <th key={label} className="px-4 py-3 text-xs font-medium text-zinc-400">{label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {inventoryMovements.slice(0, 12).map((movement) => {
+                    const item = inventoryItems.find((inventoryItem) => inventoryItem.id === movement.item_id);
+                    return (
+                      <tr key={movement.id} className="border-t border-white/[0.055] transition duration-200 hover:bg-white/[0.035]">
+                        <td className="px-4 py-4 text-sm text-zinc-200">{movement.created_at?.slice(0, 10) || '-'}</td>
+                        <td className="px-4 py-4 text-sm">
+                          <span className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                            movement.movement_type === 'purchase'
+                              ? 'border-emerald-300/25 bg-emerald-400/10 text-emerald-200'
+                              : movement.movement_type === 'usage'
+                                ? 'border-orange-300/25 bg-orange-400/10 text-orange-200'
+                                : 'border-sky-300/25 bg-sky-400/10 text-sky-200'
+                          }`}>
+                            {movement.movement_type}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-sm font-semibold text-white">{item?.name || `#${movement.item_id}`}</td>
+                        <td className="px-4 py-4 text-sm text-zinc-200">{movement.quantity}</td>
+                        <td className="px-4 py-4 text-sm text-zinc-200">{money(movement.total_cost)}</td>
+                        <td className="px-4 py-4 text-sm text-zinc-400">{movement.notes || '-'}</td>
+                        <td className="px-4 py-4 text-sm">
+                          {movement.movement_type === 'purchase' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePurchaseMovement(movement)}
+                              className="rounded-xl border border-rose-400/24 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-200 transition duration-200 hover:-translate-y-px hover:border-rose-300/38 hover:bg-rose-400/18"
+                            >
+                              Διαγραφή
+                            </button>
+                          ) : (
+                            <span className="text-xs text-zinc-600">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {inventoryMovements.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-8 text-center text-sm text-zinc-500">Δεν υπάρχουν κινήσεις αποθήκης.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
       )}
 
@@ -780,7 +1481,11 @@ export default function ServicesManager() {
                         <input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} className="input" />
                       </Field>
                       <Field label="Τύπος Service">
-                        <select value={form.service_type} onChange={(event) => setForm({ ...form, service_type: event.target.value })} className="input">
+                        <select
+                          value={form.service_type}
+                          onChange={(event) => setForm({ ...form, service_type: event.target.value, inventory_item: '' })}
+                          className="input"
+                        >
                           {serviceTypeOptions.map((option) => (
                             <option key={option} value={option}>
                               {option}
@@ -788,21 +1493,61 @@ export default function ServicesManager() {
                           ))}
                         </select>
                       </Field>
+                    </div>
+                  </section>
+
+                  <section className="space-y-4 rounded-3xl border border-white/[0.055] bg-white/[0.018] p-4">
+                    <SectionTitle>Αποθήκη</SectionTitle>
+                    <div className="grid gap-4 md:grid-cols-2">
                       {form.service_type === 'Ελαστικά' && (
-                        <Field label="Αριθμός Ελαστικών">
-                          <select value={form.tire_count} onChange={(event) => setForm({ ...form, tire_count: event.target.value })} className="input">
-                            {['1', '2', '4'].map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        </Field>
+                        <>
+                          <Field label="Επιλογή ελαστικού από αποθήκη">
+                            <select value={form.inventory_item} onChange={(event) => setForm({ ...form, inventory_item: event.target.value })} className="input">
+                              <option value="">Χωρίς επιλογή αποθήκης</option>
+                              {modalInventoryItems.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.name} — {item.size_or_spec || item.brand || 'Stock'} ({item.current_stock})
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Αριθμός ελαστικών">
+                            <select value={form.tire_count} onChange={(event) => setForm({ ...form, tire_count: event.target.value })} className="input">
+                              {['1', '2', '4'].map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                        </>
                       )}
                       {form.service_type === 'Μπαταρία' && (
-                        <Field label="Μπαταρία από αποθήκη">
-                          <select value={form.battery_source} onChange={(event) => setForm({ ...form, battery_source: event.target.value })} className="input">
-                            <option value="">Placeholder επιλογής</option>
+                        <>
+                          <Field label="Επιλογή μπαταρίας από αποθήκη">
+                            <select value={form.inventory_item} onChange={(event) => setForm({ ...form, inventory_item: event.target.value })} className="input">
+                              <option value="">Χωρίς επιλογή αποθήκης</option>
+                              {modalInventoryItems.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.name} — {item.size_or_spec || item.brand || 'Stock'} ({item.current_stock})
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Ποσότητα">
+                            <input type="number" min="1" value={form.battery_quantity} onChange={(event) => setForm({ ...form, battery_quantity: event.target.value })} className="input" />
+                          </Field>
+                        </>
+                      )}
+                      {form.service_type === 'Service / Λάδια' && (
+                        <Field label="Επιλογή υλικού από αποθήκη">
+                          <select value={form.inventory_item} onChange={(event) => setForm({ ...form, inventory_item: event.target.value })} className="input">
+                            <option value="">Χωρίς επιλογή αποθήκης</option>
+                            {modalInventoryItems.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name} — {item.size_or_spec || item.brand || 'Stock'} ({item.current_stock})
+                              </option>
+                            ))}
                           </select>
                         </Field>
                       )}
@@ -856,6 +1601,31 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="text-sm font-semibold text-white">{children}</h3>;
+}
+
+function ChecklistBadge({ done }: { done: boolean }) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${
+        done
+          ? 'border-emerald-300/30 bg-emerald-400/12 text-emerald-200'
+          : 'border-orange-300/30 bg-orange-400/12 text-orange-200'
+      }`}
+    >
+      {done ? 'DONE' : 'PENDING'}
+    </span>
+  );
+}
+
+function OverallChecklistBadge({ status }: { status: 'DONE' | 'ATTENTION' | 'PENDING' }) {
+  const classes =
+    status === 'DONE'
+      ? 'border-emerald-300/30 bg-emerald-400/12 text-emerald-200'
+      : status === 'ATTENTION'
+        ? 'border-yellow-300/30 bg-yellow-400/12 text-yellow-100'
+        : 'border-orange-300/30 bg-orange-400/12 text-orange-200';
+
+  return <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${classes}`}>{status}</span>;
 }
 
 function SearchableCombobox({

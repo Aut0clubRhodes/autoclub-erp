@@ -15,7 +15,9 @@ const money = (value: number) =>
 export default function ExpensesReport({ transactions }: ExpensesReportProps) {
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const expenses = transactions.filter(
-    (transaction) => transaction.type === 'expense' || transaction.type === 'supplier_payment'
+    (transaction) =>
+      (transaction.type === 'expense' && ['cash', 'card', 'bank'].includes(transaction.payment_method)) ||
+      transaction.type === 'supplier_payment'
   );
   const rows = Array.from(
     expenses.reduce((items, transaction) => {

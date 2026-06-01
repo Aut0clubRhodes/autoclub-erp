@@ -4,7 +4,7 @@ export async function fetchTransactions() {
   const { data, error } = await supabase
     .from('transactions')
     .select(
-      'id, date, amount, payment_method, type, source, car_id, agency_id, representative_id, supplier, supplier_id, category, notes, contract_number, income_entry_id, booking_id'
+      'id, date, amount, payment_method, type, source, car_id, agency_id, representative_id, supplier, supplier_id, category, notes, contract_number, income_entry_id, booking_id, service_id'
     )
     .order('date', { ascending: false });
 
@@ -14,7 +14,30 @@ export async function fetchTransactions() {
     return [];
   }
 
-  return data || [];
+  const legacyCreditInventoryPurchases = (data || []).filter(
+    (transaction: any) =>
+      transaction.source === 'service_inventory_purchase' &&
+      String(transaction.payment_method || '').toLowerCase() === 'credit'
+  );
+
+  if (legacyCreditInventoryPurchases.length > 0) {
+    console.warn('Removing legacy credit inventory expense transactions. Credit inventory purchases are supplier debts, not expenses.', {
+      ids: legacyCreditInventoryPurchases.map((transaction: any) => transaction.id),
+    });
+    await Promise.all(
+      legacyCreditInventoryPurchases.map((transaction: any) =>
+        supabase.from('transactions').delete().eq('id', transaction.id)
+      )
+    );
+  }
+
+  return (data || []).filter(
+    (transaction: any) =>
+      !(
+        transaction.source === 'service_inventory_purchase' &&
+        String(transaction.payment_method || '').toLowerCase() === 'credit'
+      )
+  );
 }
 
 export async function addTransaction(transaction: {
@@ -26,6 +49,7 @@ export async function addTransaction(transaction: {
   category?: string;
   car_id?: number | null;
   booking_id?: number | null;
+  service_id?: number | null;
   agency_id?: number | null;
   representative_id?: number | null;
   supplier?: string | null;
@@ -91,6 +115,7 @@ export async function updateTransaction(
     category?: string | null;
     contract_number?: string | null;
     notes?: string | null;
+    service_id?: number | null;
   }
 ) {
   const { data, error } = await supabase

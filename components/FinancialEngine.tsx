@@ -15,6 +15,7 @@ type FinancialEngineTransaction = {
   date: string;
   amount: number;
   type: string;
+  payment_method?: string | null;
 };
 
 type FinancialEngineDebt = {
@@ -715,7 +716,13 @@ function buildYearSummary(transactions: FinancialEngineTransaction[], year: stri
     const date = parseDate(transaction.date);
     if (!date || date.getFullYear() !== targetYear) return;
     if (kind === 'income' && transaction.type !== 'income') return;
-    if (kind === 'expenses' && transaction.type !== 'expense' && transaction.type !== 'supplier_payment') return;
+    if (
+      kind === 'expenses' &&
+      !(
+        (transaction.type === 'expense' && ['cash', 'card', 'bank'].includes(String(transaction.payment_method || ''))) ||
+        transaction.type === 'supplier_payment'
+      )
+    ) return;
     monthly[date.getMonth()] += toNumber(transaction.amount);
   });
 

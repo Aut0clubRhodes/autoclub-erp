@@ -215,7 +215,16 @@ export default function ReportsCenter({
             {activeSection === 'expenses' && <ExpensesReport transactions={filteredTransactions} />}
             {activeSection === 'income' && <IncomeReport transactions={filteredTransactions} />}
             {activeSection === 'suppliers' && (
-              <SuppliersReport transactions={filteredTransactions} supplierLedger={supplierLedger} />
+              <SuppliersReport
+                transactions={filteredTransactions}
+                supplierLedger={supplierLedger}
+                debts={debts.filter((debt) => {
+                  if (filters.supplierId && String(debt.supplier_id || '') !== filters.supplierId) return false;
+                  if (filters.fromDate && debt.due_date && debt.due_date < filters.fromDate) return false;
+                  if (filters.toDate && debt.due_date && debt.due_date > filters.toDate) return false;
+                  return true;
+                })}
+              />
             )}
             {activeSection === 'cars' && (
               <CarsReport

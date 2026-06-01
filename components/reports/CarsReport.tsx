@@ -27,7 +27,12 @@ export default function CarsReport({ transactions, vehicles, debts, fromDate, to
   }, [vehicles.length]);
 
   const totalGeneralBusinessExpenses = transactions
-    .filter((transaction) => transaction.type === 'expense' && !transaction.car_id)
+    .filter(
+      (transaction) =>
+        transaction.type === 'expense' &&
+        !transaction.car_id &&
+        ['cash', 'card', 'bank'].includes(transaction.payment_method)
+    )
     .reduce((sum, transaction) => sum + transaction.amount, 0);
   const generalExpensesPerCar =
     allocationCarCount > 0 ? totalGeneralBusinessExpenses / allocationCarCount : 0;
@@ -47,7 +52,7 @@ export default function CarsReport({ transactions, vehicles, debts, fromDate, to
         .filter((transaction) => transaction.type === 'income')
         .reduce((sum, transaction) => sum + transaction.amount, 0);
       const directExpenses = carTransactions
-        .filter((transaction) => transaction.type === 'expense')
+        .filter((transaction) => transaction.type === 'expense' && ['cash', 'card', 'bank'].includes(transaction.payment_method))
         .reduce((sum, transaction) => sum + transaction.amount, 0);
       const yearlyDebts = debts
         .filter(

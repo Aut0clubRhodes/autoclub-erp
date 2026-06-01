@@ -1516,9 +1516,13 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
   const incomeTransactions = financeTransactions.filter((transaction) => transaction.type === 'income');
   // Expenses UI is sourced only from transactions rows.
-  const expenseTransactions = financeTransactions.filter(
-    (transaction) => transaction.type === 'expense' || transaction.type === 'supplier_payment'
-  );
+  const expenseTransactions = financeTransactions.filter((transaction) => {
+    const paymentMethod = String(transaction.payment_method).toLowerCase();
+    return (
+      (transaction.type === 'expense' && ['cash', 'card', 'bank'].includes(paymentMethod)) ||
+      transaction.type === 'supplier_payment'
+    );
+  });
   const latestIncomeTransactions = [...incomeTransactions]
     .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
     .slice(0, 4);
@@ -1554,9 +1558,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const totalExpensesCash = sumMethod(expenseTransactions, 'cash');
   const totalExpensesCard = sumMethod(expenseTransactions, 'card');
   const totalExpensesBank = sumMethod(expenseTransactions, 'bank');
-  const totalExpensesCredit = sumMethod(expenseTransactions, 'credit');
+  const totalExpensesCredit = 0;
   const totalIncome = sumAmount(incomeTransactions);
-  const totalExpenses = sumAmount(financeTransactions.filter((transaction) => transaction.type === 'expense'));
+  const totalExpenses = sumAmount(expenseTransactions);
   const totalPaidOperationalExpenses = sumAmount(
     financeTransactions.filter(
       (transaction) =>
@@ -1567,7 +1571,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const totalSupplierPayments = sumAmount(supplierPaymentTransactions);
   const totalPaidExpenses = sumAmount(paidExpenseTransactions);
   const totalSupplierCredits =
-    sumAmount(supplierCreditTransactions) - sumAmount(supplierPaymentTransactions);
+    sumAmount(supplierCreditTransactions) + openDebtsTotal - sumAmount(supplierPaymentTransactions);
   const netTotal = totalIncome - totalPaidExpenses;
   const availableRepresentatives = representatives.filter(
     (representative) => String(representative.agency_id) === incomeForm.agency_id

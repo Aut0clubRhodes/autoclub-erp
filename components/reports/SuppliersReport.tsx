@@ -1,12 +1,14 @@
 'use client';
 
 import { Fragment, useState } from 'react';
+import type { DebtRecord } from '@/lib/debtsApi';
 import type { SupplierLedgerRow } from '@/lib/reportsApi';
 import type { ReportTransaction } from './types';
 
 type SuppliersReportProps = {
   transactions: ReportTransaction[];
   supplierLedger: SupplierLedgerRow[];
+  debts: DebtRecord[];
 };
 
 const paidMethods = ['cash', 'card', 'bank'];
@@ -14,7 +16,7 @@ const paidMethods = ['cash', 'card', 'bank'];
 const money = (value: number) =>
   `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function SuppliersReport({ transactions, supplierLedger }: SuppliersReportProps) {
+export default function SuppliersReport({ transactions, supplierLedger, debts }: SuppliersReportProps) {
   const [expandedSupplierId, setExpandedSupplierId] = useState<number | null>(null);
   const suppliersFromTransactions = Array.from(
     transactions.reduce((rows, transaction) => {
@@ -49,6 +51,7 @@ export default function SuppliersReport({ transactions, supplierLedger }: Suppli
       const supplierTransactions = transactions.filter(
         (transaction) => transaction.supplier_id === supplier.supplier_id
       );
+      const supplierDebts = debts.filter((debt) => Number(debt.supplier_id) === Number(supplier.supplier_id));
       const totalPayments = supplierTransactions
         .filter(
           (transaction) =>
@@ -58,16 +61,21 @@ export default function SuppliersReport({ transactions, supplierLedger }: Suppli
         .reduce((sum, transaction) => sum + transaction.amount, 0);
       const creditCharges = supplierTransactions
         .filter((transaction) => transaction.type === 'expense' && transaction.payment_method === 'credit')
-        .reduce((sum, transaction) => sum + transaction.amount, 0);
+        .reduce((sum, transaction) => sum + transaction.amount, 0) +
+        supplierDebts.reduce((sum, debt) => sum + Number(debt.original_amount || 0), 0);
       const supplierPayments = supplierTransactions
         .filter((transaction) => transaction.type === 'supplier_payment')
+        .reduce((sum, transaction) => sum + transaction.amount, 0);
+      const debtRemaining = supplierDebts.reduce((sum, debt) => sum + Number(debt.remaining_amount || 0), 0);
+      const openCreditTransactions = supplierTransactions
+        .filter((transaction) => transaction.type === 'expense' && transaction.payment_method === 'credit')
         .reduce((sum, transaction) => sum + transaction.amount, 0);
 
       return {
         ...supplier,
         total_credit_charges: creditCharges,
         total_payments: totalPayments,
-        outstanding_balance: creditCharges - supplierPayments,
+        outstanding_balance: openCreditTransactions - supplierPayments + debtRemaining,
       };
     })
     .filter(
@@ -99,6 +107,15 @@ export default function SuppliersReport({ transactions, supplierLedger }: Suppli
                     (transaction.type === 'expense' && paidMethods.includes(transaction.payment_method)))
               )
               .sort((left, right) => right.date.localeCompare(left.date));
+            const debtHistory = debts
+              .filter((debt) => Number(debt.supplier_id) === Number(supplier.supplier_id))
+              .map((debt) => ({
+                id: `debt-${debt.id}`,
+                date: debt.due_date || debt.created_at?.slice(0, 10) || '',
+                typeLabel: 'Χρέωση Πίστωσης',
+                amount: Number(debt.remaining_amount || debt.original_amount || 0),
+                notes: debt.notes || debt.title,
+              }));
 
             return (
               <Fragment key={supplier.supplier_id}>
@@ -130,20 +147,30 @@ export default function SuppliersReport({ transactions, supplierLedger }: Suppli
                             </tr>
                           </thead>
                           <tbody>
-                            {history.map((transaction) => (
-                              <tr key={transaction.id} className="border-t border-zinc-800">
-                                <td className="px-4 py-3 text-sm text-zinc-200">{transaction.date}</td>
-                                <td className="px-4 py-3 text-sm text-zinc-200">
-                                  {transaction.type === 'supplier_payment'
+                            {[
+                              ...history.map((transaction) => ({
+                                id: String(transaction.id),
+                                date: transaction.date,
+                                typeLabel:
+                                  transaction.type === 'supplier_payment'
                                     ? 'Πληρωμή Προμηθευτή'
                                     : transaction.payment_method === 'credit'
                                       ? 'Χρέωση Πίστωσης'
-                                      : 'Πληρωμένο Έξοδο'}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-zinc-200">{money(transaction.amount)}</td>
-                                <td className="px-4 py-3 text-sm text-zinc-200">{transaction.notes || '-'}</td>
-                              </tr>
-                            ))}
+                                      : 'Πληρωμένο Έξοδο',
+                                amount: transaction.amount,
+                                notes: transaction.notes || '-',
+                              })),
+                              ...debtHistory,
+                            ]
+                              .sort((left, right) => right.date.localeCompare(left.date))
+                              .map((row) => (
+                                <tr key={row.id} className="border-t border-zinc-800">
+                                  <td className="px-4 py-3 text-sm text-zinc-200">{row.date || '-'}</td>
+                                  <td className="px-4 py-3 text-sm text-zinc-200">{row.typeLabel}</td>
+                                  <td className="px-4 py-3 text-sm text-zinc-200">{money(row.amount)}</td>
+                                  <td className="px-4 py-3 text-sm text-zinc-200">{row.notes || '-'}</td>
+                                </tr>
+                              ))}
                           </tbody>
                         </table>
                       </div>
