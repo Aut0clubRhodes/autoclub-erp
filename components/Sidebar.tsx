@@ -35,6 +35,7 @@ import {
 
 interface NavItem {
   label: string;
+  displayLabel?: string;
   href: string;
   icon: LucideIcon;
   tone: string;
@@ -73,13 +74,14 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       {
         label: 'Ταμείο',
+        displayLabel: 'Σύνολα Ταμείου',
         href: '/finance',
         icon: Wallet,
         tone: 'text-cyan-300',
         chip: 'border-cyan-400/25 bg-cyan-400/10',
         children: [
-          { label: 'Έσοδα', href: '/finance/income', icon: TrendingUp, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
-          { label: 'Έξοδα', href: '/finance/expenses', icon: TrendingDown, tone: 'text-rose-300', chip: 'border-rose-400/25 bg-rose-400/10' },
+          { label: 'Έσοδα', displayLabel: 'Καταχώρηση Εσόδων', href: '/finance/income', icon: TrendingUp, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
+          { label: 'Έξοδα', displayLabel: 'Καταχώρηση Εξόδων', href: '/finance/expenses', icon: TrendingDown, tone: 'text-rose-300', chip: 'border-rose-400/25 bg-rose-400/10' },
           { label: 'Γραμμάτια', href: '/finance/debts', icon: ReceiptText, tone: 'text-fuchsia-300', chip: 'border-fuchsia-400/25 bg-fuchsia-400/10' },
         ],
       },
@@ -162,6 +164,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
   };
 
   const renderItem = (item: NavItem, nested = false) => {
+    const visibleLabel = item.displayLabel || item.label;
     const isWindowItem = WINDOW_ITEMS.includes(item.label);
     const hasChildren = Boolean(item.children?.length);
     const childIsActive = item.children?.some(
@@ -194,7 +197,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
         >
           <Icon className={`h-[15px] w-[15px] ${item.tone}`} strokeWidth={1.9} />
         </span>
-        {!isCollapsed && <span className="text-[11px] font-medium leading-none tracking-[0.005em]">{item.label}</span>}
+        {!isCollapsed && <span className="text-[11px] font-medium leading-none tracking-[0.005em]">{visibleLabel}</span>}
       </>
     );
     const childContent = (
@@ -206,7 +209,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
         >
           <Icon className={`h-[11px] w-[11px] ${item.tone}`} strokeWidth={1.9} />
         </span>
-        {!isCollapsed && <span className="text-[10.5px] font-medium leading-none tracking-[0.005em]">{item.label}</span>}
+        {!isCollapsed && <span className="text-[10.5px] font-medium leading-none tracking-[0.005em]">{visibleLabel}</span>}
       </>
     );
 
@@ -218,7 +221,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
               type="button"
               onClick={() => handleItemClick(item)}
               className={`${className} ${isCollapsed ? '' : 'pr-11'}`}
-              title={isCollapsed ? item.label : undefined}
+              title={isCollapsed ? visibleLabel : undefined}
             >
               {content}
             </button>
@@ -256,7 +259,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
           type="button"
           onClick={() => handleItemClick(item)}
           className={nested ? childClassName : className}
-          title={isCollapsed ? item.label : undefined}
+          title={isCollapsed ? visibleLabel : undefined}
         >
           {nested ? childContent : content}
         </button>
@@ -270,7 +273,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
           type="button"
           onClick={() => handleItemClick(item)}
           className={nested ? childClassName : className}
-          title={isCollapsed ? item.label : undefined}
+          title={isCollapsed ? visibleLabel : undefined}
         >
           {nested ? childContent : content}
         </button>
@@ -278,7 +281,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
     }
 
     return (
-      <Link key={item.href} href={item.href} className={nested ? childClassName : className} title={isCollapsed ? item.label : undefined}>
+      <Link key={item.href} href={item.href} className={nested ? childClassName : className} title={isCollapsed ? visibleLabel : undefined}>
         {nested ? childContent : content}
       </Link>
     );

@@ -68,13 +68,31 @@ export default function AgenciesManager() {
   };
 
   const deleteAgency = async (id: number) => {
-    await supabase
+    if (!window.confirm('Να διαγραφεί το πρακτορείο και οι αντιπρόσωποί του;')) return;
+
+    const { error: representativesError } = await supabase
+      .from('representatives')
+      .delete()
+      .eq('agency_id', id);
+
+    if (representativesError) {
+      console.error('Delete agency representatives error:', representativesError);
+      alert('Δεν διαγράφηκαν οι αντιπρόσωποι του πρακτορείου.');
+      return;
+    }
+
+    const { error: agencyError } = await supabase
       .from('agencies')
       .delete()
       .eq('id', id);
 
-    loadAgencies();
-    loadRepresentatives();
+    if (agencyError) {
+      console.error('Delete agency error:', agencyError);
+      alert('Δεν διαγράφηκε το πρακτορείο.');
+      return;
+    }
+
+    await Promise.all([loadAgencies(), loadRepresentatives()]);
   };
 
   const startEditAgency = (agency: Agency) => {
@@ -117,12 +135,20 @@ export default function AgenciesManager() {
   };
 
   const deleteRepresentative = async (id: number) => {
-    await supabase
+    if (!window.confirm('Να διαγραφεί ο αντιπρόσωπος;')) return;
+
+    const { error } = await supabase
       .from('representatives')
       .delete()
       .eq('id', id);
 
-    loadRepresentatives();
+    if (error) {
+      console.error('Delete representative error:', error);
+      alert('Δεν διαγράφηκε ο αντιπρόσωπος.');
+      return;
+    }
+
+    await loadRepresentatives();
   };
 
   const startEditRepresentative = (representative: Representative) => {

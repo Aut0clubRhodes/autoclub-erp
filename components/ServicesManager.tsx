@@ -55,6 +55,8 @@ type ComboboxOption = {
 
 type ServiceTab = 'history' | 'checklist' | 'inventory';
 type ChecklistFilter = 'all' | 'pending' | 'done';
+type ChecklistSortKey = 'plate' | 'brand' | 'model' | 'normalServiceDone' | 'tiresDone' | 'batteryDone' | 'lastAction' | 'overallStatus';
+type ChecklistStatusKey = 'normalServiceDone' | 'tiresDone' | 'batteryDone';
 
 const paymentOptions = [
   { value: 'cash', label: 'Μετρητά' },
@@ -165,6 +167,12 @@ export default function ServicesManager() {
   const [activeServiceTab, setActiveServiceTab] = useState<ServiceTab>('history');
   const [checklistYear, setChecklistYear] = useState(String(new Date().getFullYear()));
   const [checklistFilter, setChecklistFilter] = useState<ChecklistFilter>('all');
+  const [checklistSort, setChecklistSort] = useState<{ key: ChecklistSortKey; direction: 'asc' | 'desc' }>({
+    key: 'plate',
+    direction: 'asc',
+  });
+  const [checklistOverrides, setChecklistOverrides] = useState<Record<string, Partial<Record<ChecklistStatusKey, boolean>>>>({});
+  const [editingChecklistKey, setEditingChecklistKey] = useState<string | null>(null);
   const [form, setForm] = useState(initialForm);
   const [inventoryForm, setInventoryForm] = useState(initialInventoryForm);
   const [isSavingInventory, setIsSavingInventory] = useState(false);
@@ -221,6 +229,10 @@ export default function ServicesManager() {
   useEffect(() => {
     setModalRootReady(true);
   }, []);
+
+  useEffect(() => {
+    setEditingChecklistKey(null);
+  }, [checklistYear]);
 
   const serviceRows = useMemo(
     () =>
@@ -307,14 +319,18 @@ export default function ServicesManager() {
       const yearServices = services.filter(
         (service) => Number(service.car_id) === car.id && String(service.service_date || '').startsWith(`${checklistYear}-`)
       );
+      const override = checklistOverrides[`${checklistYear}:${car.id}`] || {};
       const latestService = [...yearServices].sort((first, second) =>
         String(second.service_date || '').localeCompare(String(first.service_date || ''))
       )[0];
-      const normalServiceDone = yearServices.some(
+      const baseNormalServiceDone = yearServices.some(
         (service) => service.service_type === serviceTypeOptions[0] || service.service_type === 'service' || !service.service_type
       );
-      const tiresDone = yearServices.some((service) => service.service_type === serviceTypeOptions[1]);
-      const batteryDone = yearServices.some((service) => service.service_type === serviceTypeOptions[2]);
+      const baseTiresDone = yearServices.some((service) => service.service_type === serviceTypeOptions[1]);
+      const baseBatteryDone = yearServices.some((service) => service.service_type === serviceTypeOptions[2]);
+      const normalServiceDone = override.normalServiceDone ?? baseNormalServiceDone;
+      const tiresDone = override.tiresDone ?? baseTiresDone;
+      const batteryDone = override.batteryDone ?? baseBatteryDone;
       const overallStatus: 'DONE' | 'ATTENTION' | 'PENDING' = normalServiceDone
         ? 'DONE'
         : tiresDone || batteryDone
@@ -332,11 +348,81 @@ export default function ServicesManager() {
       };
     });
 
-    if (checklistFilter === 'done') return rows.filter((row) => row.overallStatus === 'DONE');
-    if (checklistFilter === 'pending') return rows.filter((row) => row.overallStatus !== 'DONE');
+    const filteredRows =
+      checklistFilter === 'done'
+        ? rows.filter((row) => row.overallStatus === 'DONE')
+        : checklistFilter === 'pending'
+          ? rows.filter((row) => row.overallStatus !== 'DONE')
+          : rows;
 
-    return rows;
-  }, [cars, checklistFilter, checklistYear, services]);
+    const statusRank = { PENDING: 0, ATTENTION: 1, DONE: 2 };
+    const sortedRows = [...filteredRows].sort((left, right) => {
+      const getValue = (row: (typeof rows)[number]) => {
+        switch (checklistSort.key) {
+          case 'plate':
+            return row.car.plate || '';
+          case 'brand':
+            return row.car.brand || '';
+          case 'model':
+            return row.car.model || '';
+          case 'normalServiceDone':
+            return row.normalServiceDone ? 1 : 0;
+          case 'tiresDone':
+            return row.tiresDone ? 1 : 0;
+          case 'batteryDone':
+            return row.batteryDone ? 1 : 0;
+          case 'lastAction':
+            return row.lastAction || '';
+          case 'overallStatus':
+            return statusRank[row.overallStatus];
+          default:
+            return '';
+        }
+      };
+
+      const leftValue = getValue(left);
+      const rightValue = getValue(right);
+      const comparison =
+        typeof leftValue === 'number' && typeof rightValue === 'number'
+          ? leftValue - rightValue
+          : String(leftValue).localeCompare(String(rightValue), 'el', { numeric: true });
+
+      return checklistSort.direction === 'asc' ? comparison : -comparison;
+    });
+
+    return sortedRows;
+  }, [cars, checklistFilter, checklistOverrides, checklistSort, checklistYear, services]);
+
+  const handleChecklistSort = (key: ChecklistSortKey) => {
+    setChecklistSort((current) => ({
+      key,
+      direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
+
+  const startEditChecklistRow = (carId: number, statuses: Record<ChecklistStatusKey, boolean>) => {
+    const rowKey = `${checklistYear}:${carId}`;
+    setChecklistOverrides((current) => ({
+      ...current,
+      [rowKey]: {
+        normalServiceDone: current[rowKey]?.normalServiceDone ?? statuses.normalServiceDone,
+        tiresDone: current[rowKey]?.tiresDone ?? statuses.tiresDone,
+        batteryDone: current[rowKey]?.batteryDone ?? statuses.batteryDone,
+      },
+    }));
+    setEditingChecklistKey(rowKey);
+  };
+
+  const toggleChecklistOverride = (carId: number, statusKey: ChecklistStatusKey, value: boolean) => {
+    const rowKey = `${checklistYear}:${carId}`;
+    setChecklistOverrides((current) => ({
+      ...current,
+      [rowKey]: {
+        ...current[rowKey],
+        [statusKey]: value,
+      },
+    }));
+  };
 
   const modalInventoryTypes = serviceTypeToInventoryTypes[form.service_type] || ['other'];
   const modalInventoryItems = inventoryItems.filter((item) => modalInventoryTypes.includes(item.type));
@@ -1333,15 +1419,38 @@ export default function ServicesManager() {
             <table className="w-full min-w-[1080px] text-left">
               <thead className="bg-white/[0.035]">
                 <tr>
-                  {['Plate', 'Brand', 'Model', 'Service / Λάδια', 'Ελαστικά', 'Μπαταρία', 'Last Action', 'Overall Status', 'Actions'].map((label) => (
-                    <th key={label} className="px-4 py-3 text-xs font-medium text-zinc-400">
-                      {label}
+                  {[
+                    { label: 'Plate', key: 'plate' as const },
+                    { label: 'Brand', key: 'brand' as const },
+                    { label: 'Model', key: 'model' as const },
+                    { label: 'Service / Λάδια', key: 'normalServiceDone' as const },
+                    { label: 'Ελαστικά', key: 'tiresDone' as const },
+                    { label: 'Μπαταρία', key: 'batteryDone' as const },
+                    { label: 'Last Action', key: 'lastAction' as const },
+                    { label: 'Overall Status', key: 'overallStatus' as const },
+                  ].map((column) => (
+                    <th key={column.key} className="px-4 py-3 text-xs font-medium text-zinc-400">
+                      <button
+                        type="button"
+                        onClick={() => handleChecklistSort(column.key)}
+                        className="inline-flex items-center gap-1 rounded-lg px-1 py-1 text-left transition hover:bg-white/[0.04] hover:text-zinc-100"
+                      >
+                        <span>{column.label}</span>
+                        {checklistSort.key === column.key && (
+                          <span className="text-orange-200">{checklistSort.direction === 'asc' ? '↑' : '↓'}</span>
+                        )}
+                      </button>
                     </th>
                   ))}
+                  <th className="px-4 py-3 text-xs font-medium text-zinc-400">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {annualChecklistRows.map(({ car, normalServiceDone, tiresDone, batteryDone, lastAction, latestService, overallStatus }) => (
+                {annualChecklistRows.map(({ car, normalServiceDone, tiresDone, batteryDone, lastAction, latestService, overallStatus }) => {
+                  const rowKey = `${checklistYear}:${car.id}`;
+                  const isEditingChecklist = editingChecklistKey === rowKey;
+
+                  return (
                   <tr
                     key={car.id}
                     onDoubleClick={() => openAddServiceModalForCar(car.id)}
@@ -1351,9 +1460,27 @@ export default function ServicesManager() {
                     <td className="px-4 py-4 text-sm font-semibold text-white">{car.plate}</td>
                     <td className="px-4 py-4 text-sm text-zinc-200">{car.brand || '-'}</td>
                     <td className="px-4 py-4 text-sm text-zinc-200">{car.model || '-'}</td>
-                    <td className="px-4 py-4 text-sm"><ChecklistBadge done={normalServiceDone} /></td>
-                    <td className="px-4 py-4 text-sm"><ChecklistBadge done={tiresDone} /></td>
-                    <td className="px-4 py-4 text-sm"><ChecklistBadge done={batteryDone} /></td>
+                    <td className="px-4 py-4 text-sm">
+                      {isEditingChecklist ? (
+                        <ChecklistStatusToggle done={normalServiceDone} onChange={(value) => toggleChecklistOverride(car.id, 'normalServiceDone', value)} />
+                      ) : (
+                        <ChecklistBadge done={normalServiceDone} />
+                      )}
+                    </td>
+                    <td className="px-4 py-4 text-sm">
+                      {isEditingChecklist ? (
+                        <ChecklistStatusToggle done={tiresDone} onChange={(value) => toggleChecklistOverride(car.id, 'tiresDone', value)} />
+                      ) : (
+                        <ChecklistBadge done={tiresDone} />
+                      )}
+                    </td>
+                    <td className="px-4 py-4 text-sm">
+                      {isEditingChecklist ? (
+                        <ChecklistStatusToggle done={batteryDone} onChange={(value) => toggleChecklistOverride(car.id, 'batteryDone', value)} />
+                      ) : (
+                        <ChecklistBadge done={batteryDone} />
+                      )}
+                    </td>
                     <td className="px-4 py-4 text-sm text-zinc-200">{lastAction}</td>
                     <td className="px-4 py-4 text-sm">
                       <OverallChecklistBadge status={overallStatus} />
@@ -1371,6 +1498,20 @@ export default function ServicesManager() {
                         >
                           Προβολή
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isEditingChecklist) {
+                              setEditingChecklistKey(null);
+                              return;
+                            }
+
+                            startEditChecklistRow(car.id, { normalServiceDone, tiresDone, batteryDone });
+                          }}
+                          className="rounded-xl border border-orange-400/24 bg-orange-400/10 px-3 py-2 text-xs font-semibold text-orange-200 transition duration-200 hover:-translate-y-px hover:border-orange-300/38 hover:bg-orange-400/18"
+                        >
+                          {isEditingChecklist ? 'Τέλος' : 'Επεξεργασία'}
+                        </button>
                         {latestService && (
                           <button
                             type="button"
@@ -1383,7 +1524,8 @@ export default function ServicesManager() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {annualChecklistRows.length === 0 && (
                   <tr>
                     <td colSpan={9} className="px-4 py-8 text-center text-sm text-zinc-500">
@@ -1771,6 +1913,31 @@ function ChecklistBadge({ done }: { done: boolean }) {
   );
 }
 
+function ChecklistStatusToggle({ done, onChange }: { done: boolean; onChange: (done: boolean) => void }) {
+  return (
+    <div className="inline-flex rounded-full border border-white/[0.08] bg-black/30 p-0.5">
+      <button
+        type="button"
+        onClick={() => onChange(true)}
+        className={`rounded-full px-2.5 py-1 text-[10px] font-bold transition ${
+          done ? 'bg-emerald-400/18 text-emerald-100' : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
+        }`}
+      >
+        DONE
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange(false)}
+        className={`rounded-full px-2.5 py-1 text-[10px] font-bold transition ${
+          !done ? 'bg-orange-400/18 text-orange-100' : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
+        }`}
+      >
+        PENDING
+      </button>
+    </div>
+  );
+}
+
 function OverallChecklistBadge({ status }: { status: 'DONE' | 'ATTENTION' | 'PENDING' }) {
   const classes =
     status === 'DONE'
@@ -2010,3 +2177,4 @@ function PaymentSelect({
     </Field>
   );
 }
+
