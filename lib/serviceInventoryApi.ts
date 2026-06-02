@@ -1,15 +1,6 @@
 import { supabase } from './supabaseClient';
 
-export type ServiceInventoryType =
-  | 'oil'
-  | 'oil_filter'
-  | 'cabin_filter'
-  | 'air_filter'
-  | 'brakes'
-  | 'belts'
-  | 'tire'
-  | 'battery'
-  | 'other';
+export type ServiceInventoryType = string;
 
 export type ServiceInventoryItem = {
   id: number;

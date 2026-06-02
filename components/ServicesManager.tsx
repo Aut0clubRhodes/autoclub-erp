@@ -22,6 +22,17 @@ import {
   updateServiceInventoryItem,
   updateServiceInventoryMovement,
 } from '@/lib/serviceInventoryApi';
+import {
+  createServiceInventoryMaterialType,
+  createServiceInventoryServiceType,
+  deleteServiceInventoryServiceType,
+  fetchServiceInventoryCatalog,
+  linkServiceInventoryMaterialTypeToServiceType,
+  type ServiceInventoryMaterialTypeRecord,
+  type ServiceInventoryServiceTypeRecord,
+  unlinkServiceInventoryMaterialTypeFromServiceType,
+  updateServiceInventoryServiceType,
+} from '@/lib/serviceInventoryMaterialTypesApi';
 import { fetchServices, addService, updateService, deleteService, type ServiceRecord } from '@/lib/servicesApi';
 import { fetchSuppliers, type SupplierRecord } from '@/lib/suppliersApi';
 
@@ -66,31 +77,56 @@ const paymentOptions = [
 ];
 
 const fallbackLaborCategories = ['Service', 'Ελαστικά', 'Φρένα', 'Μηχανικά', 'Ηλεκτρικά', 'Άλλο'];
-const serviceTypeOptions = ['Service / Λάδια', 'Ελαστικά', 'Μπαταρία'];
-const inventoryTypeOptions: { value: ServiceInventoryType; label: string }[] = [
-  { value: 'oil', label: 'Λάδι' },
-  { value: 'oil_filter', label: 'Φίλτρο λαδιού' },
-  { value: 'cabin_filter', label: 'Φίλτρο καμπίνας' },
-  { value: 'air_filter', label: 'Φίλτρο αέρα' },
-  { value: 'brakes', label: 'Φρένα' },
-  { value: 'belts', label: 'Ιμάντες' },
-  { value: 'tire', label: 'Ελαστικά' },
-  { value: 'battery', label: 'Μπαταρία' },
-  { value: 'other', label: 'Άλλο' },
+const normalServiceType = 'Service / Λάδια';
+const tireServiceType = 'Ελαστικά';
+const batteryServiceType = 'Μπαταρία';
+const baseServiceTypeCatalog: { name: string; materialTypes: { value: ServiceInventoryType; label: string }[] }[] = [
+  {
+    name: normalServiceType,
+    materialTypes: [
+      { value: 'oil', label: 'Λάδι' },
+      { value: 'oil_filter', label: 'Φίλτρο λαδιού' },
+      { value: 'air_filter', label: 'Φίλτρο αέρα' },
+      { value: 'cabin_filter', label: 'Φίλτρο καμπίνας' },
+    ],
+  },
+  {
+    name: 'Φρένα',
+    materialTypes: [
+      { value: 'brakes', label: 'Τακάκια' },
+      { value: 'discs', label: 'Δισκόπλακες' },
+      { value: 'brake_fluid', label: 'Υγρά φρένων' },
+    ],
+  },
+  {
+    name: tireServiceType,
+    materialTypes: [{ value: 'tire', label: 'Ελαστικά' }],
+  },
+  {
+    name: batteryServiceType,
+    materialTypes: [{ value: 'battery', label: 'Μπαταρία' }],
+  },
+  {
+    name: 'Άλλο',
+    materialTypes: [{ value: 'other', label: 'Άλλο' }],
+  },
 ];
+const baseInventoryTypeOptions: { value: ServiceInventoryType; label: string }[] = baseServiceTypeCatalog.flatMap(
+  (serviceType) => serviceType.materialTypes
+);
 
-const serviceTypeToInventoryTypes: Record<string, ServiceInventoryType[]> = {
-  Ελαστικά: ['tire'],
-  Μπαταρία: ['battery'],
-  'Service / Λάδια': ['oil', 'oil_filter', 'cabin_filter', 'air_filter', 'brakes', 'belts', 'other'],
-};
+const serviceTypeToInventoryTypes: Record<string, ServiceInventoryType[]> = Object.fromEntries(
+  baseServiceTypeCatalog.map((serviceType) => [serviceType.name, serviceType.materialTypes.map((materialType) => materialType.value)])
+);
 
 const inventoryExpenseCategoryByType: Record<ServiceInventoryType, string> = {
   oil: 'Service / Λάδια',
   oil_filter: 'Φίλτρο λαδιού',
   cabin_filter: 'Φίλτρο καμπίνας',
   air_filter: 'Φίλτρο αέρα',
-  brakes: 'Φρένα',
+  brakes: 'Τακάκια',
+  discs: 'Δισκόπλακες',
+  brake_fluid: 'Υγρά φρένων',
   belts: 'Ιμάντες',
   tire: 'Ελαστικά',
   battery: 'Μπαταρία',
@@ -111,6 +147,7 @@ const initialForm = {
   next_service_km: '',
   next_service_date: '',
   notes: '',
+  inventory_usages: [{ item_id: '', quantity: '1' }],
   parts_supplier_id: '',
   parts_category: 'Ανταλλακτικά',
   parts_description: '',
@@ -124,6 +161,7 @@ const initialForm = {
 
 const initialInventoryForm = {
   name: '',
+  service_type: 'Service / Λάδια',
   type: 'tire' as ServiceInventoryType,
   brand: '',
   size_or_spec: '',
@@ -157,6 +195,10 @@ export default function ServicesManager() {
   const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [inventoryItems, setInventoryItems] = useState<ServiceInventoryItem[]>([]);
   const [inventoryMovements, setInventoryMovements] = useState<ServiceInventoryMovement[]>([]);
+  const [customServiceTypes, setCustomServiceTypes] = useState<ServiceInventoryServiceTypeRecord[]>([]);
+  const [customMaterialTypes, setCustomMaterialTypes] = useState<ServiceInventoryMaterialTypeRecord[]>([]);
+  const [materialTypeLinks, setMaterialTypeLinks] = useState<{ id: number; service_type_id: number; material_type_id: number }[]>([]);
+  const [materialCatalogMissing, setMaterialCatalogMissing] = useState(false);
   const [transactions, setTransactions] = useState<ServiceTransaction[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [modalRootReady, setModalRootReady] = useState(false);
@@ -178,9 +220,16 @@ export default function ServicesManager() {
   const [isSavingInventory, setIsSavingInventory] = useState(false);
   const [editingInventoryItemId, setEditingInventoryItemId] = useState<number | null>(null);
   const [editingInventoryMovementId, setEditingInventoryMovementId] = useState<number | null>(null);
+  const [showMaterialTypeModal, setShowMaterialTypeModal] = useState(false);
+  const [newMaterialTypeName, setNewMaterialTypeName] = useState('');
+  const [newServiceTypeName, setNewServiceTypeName] = useState('');
+  const [editingServiceTypeId, setEditingServiceTypeId] = useState<number | null>(null);
+  const [editingServiceTypeName, setEditingServiceTypeName] = useState('');
+  const [selectedCatalogServiceTypeId, setSelectedCatalogServiceTypeId] = useState<number | null>(null);
+  const [materialTypeMessage, setMaterialTypeMessage] = useState('');
 
   const loadData = async () => {
-    const [carRows, supplierRows, serviceRows, transactionRows, categoryRows, inventoryRows, movementRows, debtRows] = await Promise.all([
+    const [carRows, supplierRows, serviceRows, transactionRows, categoryRows, inventoryRows, movementRows, debtRows, materialCatalog] = await Promise.all([
       fetchCars(),
       fetchSuppliers(),
       fetchServices(),
@@ -189,6 +238,7 @@ export default function ServicesManager() {
       fetchServiceInventoryItems(),
       fetchServiceInventoryMovements(),
       fetchDebts(),
+      fetchServiceInventoryCatalog(),
     ]);
 
     setCars(
@@ -206,6 +256,10 @@ export default function ServicesManager() {
     setDebts(debtRows);
     setInventoryItems(inventoryRows);
     setInventoryMovements(movementRows);
+    setCustomServiceTypes(materialCatalog.serviceTypes);
+    setCustomMaterialTypes(materialCatalog.materialTypes);
+    setMaterialTypeLinks(materialCatalog.links);
+    setMaterialCatalogMissing(materialCatalog.missingTables);
     setTransactions(
       (transactionRows || []).map((transaction: any) => ({
         id: Number(transaction.id),
@@ -285,6 +339,135 @@ export default function ServicesManager() {
     return Array.from(new Set([...categoryNames, ...fallbackLaborCategories]));
   }, [expenseCategories]);
 
+  const inventoryTypeOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options: { value: ServiceInventoryType; label: string; id?: number }[] = [];
+
+    const addOption = (option: { value: ServiceInventoryType; label: string; id?: number }) => {
+      const normalizedValue = String(option.value).trim().toLowerCase();
+      const normalizedLabel = option.label.trim().toLowerCase();
+      if (!normalizedValue || !normalizedLabel || seen.has(normalizedValue) || seen.has(normalizedLabel)) return;
+      seen.add(normalizedValue);
+      seen.add(normalizedLabel);
+      options.push(option);
+    };
+
+    baseInventoryTypeOptions.forEach(addOption);
+
+    for (const customType of customMaterialTypes) {
+      const label = customType.name.trim();
+      if (!label) continue;
+
+      const normalized = label.toLowerCase();
+      if (seen.has(normalized)) continue;
+
+      addOption({ value: label, label, id: customType.id });
+    }
+
+    return options;
+  }, [customMaterialTypes]);
+
+  const serviceTypeCatalogOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const rows: { id?: number; name: string; isBase: boolean; materialTypes: { value: ServiceInventoryType; label: string; id?: number }[] }[] = [];
+
+    if (customServiceTypes.length === 0) {
+      for (const baseServiceType of baseServiceTypeCatalog) {
+        const normalized = baseServiceType.name.toLowerCase();
+        seen.add(normalized);
+        rows.push({
+          name: baseServiceType.name,
+          isBase: true,
+          materialTypes: baseServiceType.materialTypes,
+        });
+      }
+    }
+
+    for (const serviceType of customServiceTypes) {
+      const name = serviceType.name.trim();
+      if (!name) continue;
+
+      const normalized = name.toLowerCase();
+      const linkedMaterialIds = materialTypeLinks
+        .filter((link) => Number(link.service_type_id) === Number(serviceType.id))
+        .map((link) => Number(link.material_type_id));
+      const linkedMaterials = linkedMaterialIds
+        .map((materialTypeId) => {
+          const materialType = customMaterialTypes.find((row) => Number(row.id) === materialTypeId);
+          if (!materialType) return null;
+          return { value: materialType.name, label: materialType.name, id: materialType.id };
+        })
+        .filter((row): row is { value: string; label: string; id: number } => Boolean(row));
+
+      if (seen.has(normalized)) {
+        const baseRow = rows.find((row) => row.name.toLowerCase() === normalized);
+        if (baseRow) {
+          const materialSeen = new Set(baseRow.materialTypes.flatMap((material) => [material.value.toLowerCase(), material.label.toLowerCase()]));
+          for (const material of linkedMaterials) {
+            const materialNormalized = material.label.toLowerCase();
+            if (materialSeen.has(materialNormalized) || materialSeen.has(material.value.toLowerCase())) continue;
+            materialSeen.add(materialNormalized);
+            materialSeen.add(material.value.toLowerCase());
+            baseRow.materialTypes.push(material);
+          }
+          if (!baseRow.id) baseRow.id = serviceType.id;
+        }
+        continue;
+      }
+
+      seen.add(normalized);
+      rows.push({
+        id: serviceType.id,
+        name,
+        isBase: Boolean(serviceType.is_base),
+        materialTypes: linkedMaterials,
+      });
+    }
+
+    return rows;
+  }, [customMaterialTypes, customServiceTypes, materialTypeLinks]);
+
+  const serviceTypeSelectOptions = useMemo(() => serviceTypeCatalogOptions.map((row) => row.name), [serviceTypeCatalogOptions]);
+
+  useEffect(() => {
+    if (selectedCatalogServiceTypeId || serviceTypeCatalogOptions.length === 0) return;
+    setSelectedCatalogServiceTypeId(serviceTypeCatalogOptions[0].id ?? null);
+  }, [selectedCatalogServiceTypeId, serviceTypeCatalogOptions]);
+
+  const selectedCatalogServiceType =
+    serviceTypeCatalogOptions.find((serviceType) => serviceType.id === selectedCatalogServiceTypeId) ||
+    serviceTypeCatalogOptions[0] ||
+    null;
+
+  const selectedInventoryFormServiceType =
+    serviceTypeCatalogOptions.find((serviceType) => serviceType.name === inventoryForm.service_type) ||
+    serviceTypeCatalogOptions[0] ||
+    null;
+  const filteredInventoryTypeOptions = selectedInventoryFormServiceType?.materialTypes.length
+    ? selectedInventoryFormServiceType.materialTypes
+    : inventoryTypeOptions;
+
+  useEffect(() => {
+    if (filteredInventoryTypeOptions.length === 0) return;
+    const hasSelectedType = filteredInventoryTypeOptions.some((option) => option.value === inventoryForm.type);
+    if (!hasSelectedType) {
+      setInventoryForm((current) => ({ ...current, type: filteredInventoryTypeOptions[0].value }));
+    }
+  }, [filteredInventoryTypeOptions, inventoryForm.type]);
+
+  const selectedInventoryTypeLabel =
+    inventoryTypeOptions.find((option) => option.value === inventoryForm.type)?.label || String(inventoryForm.type || '');
+  const isTireInventoryType = selectedInventoryTypeLabel === 'Ελαστικά' || inventoryForm.type === 'tire';
+  const isBatteryInventoryType = selectedInventoryTypeLabel === 'Μπαταρία' || inventoryForm.type === 'battery';
+  const isOilInventoryType = selectedInventoryTypeLabel === 'Λάδι' || inventoryForm.type === 'oil';
+  const inventorySpecLabel = isTireInventoryType
+    ? 'Spec / Διάσταση'
+    : isOilInventoryType
+      ? 'Spec / Ιξώδες'
+      : isBatteryInventoryType
+        ? 'Spec / Διάσταση (προαιρετικό)'
+        : 'Spec / Διάσταση (προαιρετικό)';
+
   const carRows = useMemo(
     () =>
       cars.map((car) => {
@@ -324,10 +507,10 @@ export default function ServicesManager() {
         String(second.service_date || '').localeCompare(String(first.service_date || ''))
       )[0];
       const baseNormalServiceDone = yearServices.some(
-        (service) => service.service_type === serviceTypeOptions[0] || service.service_type === 'service' || !service.service_type
+        (service) => service.service_type === normalServiceType || service.service_type === 'service' || !service.service_type
       );
-      const baseTiresDone = yearServices.some((service) => service.service_type === serviceTypeOptions[1]);
-      const baseBatteryDone = yearServices.some((service) => service.service_type === serviceTypeOptions[2]);
+      const baseTiresDone = yearServices.some((service) => service.service_type === tireServiceType);
+      const baseBatteryDone = yearServices.some((service) => service.service_type === batteryServiceType);
       const normalServiceDone = override.normalServiceDone ?? baseNormalServiceDone;
       const tiresDone = override.tiresDone ?? baseTiresDone;
       const batteryDone = override.batteryDone ?? baseBatteryDone;
@@ -424,19 +607,58 @@ export default function ServicesManager() {
     }));
   };
 
-  const modalInventoryTypes = serviceTypeToInventoryTypes[form.service_type] || ['other'];
+  const selectedServiceTypeCatalog = serviceTypeCatalogOptions.find((serviceType) => serviceType.name === form.service_type);
+  const modalInventoryTypes = (selectedServiceTypeCatalog?.materialTypes.map((materialType) => materialType.value) ||
+    serviceTypeToInventoryTypes[form.service_type] ||
+    ['other']) as ServiceInventoryType[];
   const modalInventoryItems = inventoryItems.filter((item) => modalInventoryTypes.includes(item.type));
-  const selectedInventoryItem = inventoryItems.find((item) => String(item.id) === form.inventory_item) || null;
-  const inventoryUsageQuantity =
-    form.service_type === 'Ελαστικά'
-      ? Number(form.tire_count || 0)
-      : form.service_type === 'Μπαταρία'
-        ? Number(form.battery_quantity || 0)
-        : Number(form.inventory_quantity || 0);
-  const inventoryUsageCost =
-    selectedInventoryItem && inventoryUsageQuantity > 0
-      ? selectedInventoryItem.unit_cost * inventoryUsageQuantity
-      : 0;
+  const isTireService = form.service_type === tireServiceType;
+  const isBatteryService = form.service_type === batteryServiceType;
+  const isMultiMaterialService = !isTireService && !isBatteryService;
+  const updateInventoryUsageRow = (index: number, updates: Partial<{ item_id: string; quantity: string }>) => {
+    setForm((current) => ({
+      ...current,
+      inventory_usages: current.inventory_usages.map((row, rowIndex) => (rowIndex === index ? { ...row, ...updates } : row)),
+    }));
+  };
+
+  const addInventoryUsageRow = () => {
+    setForm((current) => ({
+      ...current,
+      inventory_usages: [...current.inventory_usages, { item_id: '', quantity: '1' }],
+    }));
+  };
+
+  const removeInventoryUsageRow = (index: number) => {
+    setForm((current) => ({
+      ...current,
+      inventory_usages:
+        current.inventory_usages.length > 1
+          ? current.inventory_usages.filter((_, rowIndex) => rowIndex !== index)
+          : [{ item_id: '', quantity: '1' }],
+    }));
+  };
+
+  const inventoryUsageRows =
+    isMultiMaterialService
+      ? form.inventory_usages
+          .map((row) => ({
+            item: inventoryItems.find((item) => String(item.id) === row.item_id) || null,
+            quantity: Number(row.quantity || 0),
+          }))
+          .filter((row) => row.item)
+      : form.inventory_item
+        ? [
+            {
+              item: inventoryItems.find((item) => String(item.id) === form.inventory_item) || null,
+              quantity: Number(isTireService ? form.tire_count || 0 : form.battery_quantity || 0),
+            },
+          ].filter((row) => row.item)
+        : [];
+  const inventoryUsageCost = inventoryUsageRows.reduce(
+    (sum, row) => sum + (row.item ? row.item.unit_cost * row.quantity : 0),
+    0
+  );
 
   const selectedCarServiceRows = useMemo(
     () =>
@@ -582,12 +804,18 @@ export default function ServicesManager() {
       alert('Τα χιλιόμετρα πρέπει να είναι αριθμός.');
       return;
     }
-    if (selectedInventoryItem) {
-      if (!inventoryUsageQuantity || Number.isNaN(inventoryUsageQuantity) || inventoryUsageQuantity <= 0) {
+    const selectedUsageItemIds = inventoryUsageRows.map((row) => Number(row.item?.id || 0)).filter(Boolean);
+    if (new Set(selectedUsageItemIds).size !== selectedUsageItemIds.length) {
+      alert('Δεν επιτρέπεται διπλή επιλογή του ίδιου υλικού στο ίδιο service.');
+      return;
+    }
+    for (const usageRow of inventoryUsageRows) {
+      if (!usageRow.item) continue;
+      if (!usageRow.quantity || Number.isNaN(usageRow.quantity) || usageRow.quantity <= 0) {
         alert('Συμπληρώστε σωστή ποσότητα αποθήκης.');
         return;
       }
-      if (selectedInventoryItem.current_stock < inventoryUsageQuantity) {
+      if (usageRow.item.current_stock < usageRow.quantity) {
         alert('Δεν υπάρχει αρκετό stock για το επιλεγμένο είδος αποθήκης.');
         return;
       }
@@ -653,13 +881,15 @@ export default function ServicesManager() {
 
     if (!service) return;
 
-    if (selectedInventoryItem && inventoryUsageQuantity > 0) {
+    for (const usageRow of inventoryUsageRows) {
+      if (!usageRow.item || usageRow.quantity <= 0) continue;
+
       const usageMovement = await addServiceInventoryUsage({
-        item_id: selectedInventoryItem.id,
+        item_id: usageRow.item.id,
         car_id: Number(form.car_id),
         service_id: Number(service.id),
-        quantity: inventoryUsageQuantity,
-        unit_cost: selectedInventoryItem.unit_cost,
+        quantity: usageRow.quantity,
+        unit_cost: usageRow.item.unit_cost,
         notes: form.description || null,
       });
 
@@ -975,6 +1205,149 @@ export default function ServicesManager() {
     }
   };
 
+  const handleCreateMaterialType = async () => {
+    if (!selectedCatalogServiceType?.id) {
+      setMaterialTypeMessage(
+        materialCatalogMissing
+          ? 'Τρέξτε πρώτα τη migration για service_inventory_service_types και service_inventory_material_types.'
+          : 'Επιλέξτε τύπο service.'
+      );
+      return;
+    }
+
+    const cleanName = newMaterialTypeName.trim();
+    if (!cleanName) {
+      setMaterialTypeMessage('Συμπληρώστε όνομα τύπου υλικού.');
+      return;
+    }
+
+    const normalized = cleanName.toLowerCase();
+    const duplicateInSelectedService = selectedCatalogServiceType.materialTypes.some(
+      (option) => option.value.toLowerCase() === normalized || option.label.toLowerCase() === normalized
+    );
+    if (duplicateInSelectedService) {
+      setMaterialTypeMessage('Αυτός ο τύπος υλικού υπάρχει ήδη στον επιλεγμένο τύπο service.');
+      return;
+    }
+
+    const existingMaterial = customMaterialTypes.find((type) => type.name.trim().toLowerCase() === normalized);
+    if (existingMaterial) {
+      if (!selectedCatalogServiceType.id) {
+        setMaterialTypeMessage('Δεν υπάρχει id για τον επιλεγμένο τύπο service.');
+        return;
+      }
+
+      const linked = await linkServiceInventoryMaterialTypeToServiceType(selectedCatalogServiceType.id, existingMaterial.id);
+      if (!linked) {
+        setMaterialTypeMessage('Δεν συνδέθηκε ο τύπος υλικού με τον τύπο service.');
+        return;
+      }
+    } else {
+      const created = await createServiceInventoryMaterialType(cleanName, selectedCatalogServiceType.id);
+      if (!created.success) {
+        setMaterialTypeMessage(
+          created.reason === 'missing_table'
+            ? 'Οι πίνακες service inventory catalog δεν υπάρχουν ακόμα στο Supabase. Τρέξτε τη migration και ξαναδοκιμάστε.'
+            : created.reason === 'duplicate'
+              ? 'Υπάρχει ήδη τύπος υλικού με αυτό το όνομα.'
+              : 'Ο τύπος υλικού δεν αποθηκεύτηκε.'
+        );
+        return;
+      }
+    }
+
+    setNewMaterialTypeName('');
+    setMaterialTypeMessage('');
+    await loadData();
+  };
+
+  const handleCreateServiceType = async () => {
+    const cleanName = newServiceTypeName.trim();
+    if (!cleanName) {
+      setMaterialTypeMessage('Συμπληρώστε όνομα τύπου service.');
+      return;
+    }
+
+    const duplicate = serviceTypeCatalogOptions.some((serviceType) => serviceType.name.toLowerCase() === cleanName.toLowerCase());
+    if (duplicate) {
+      setMaterialTypeMessage('Υπάρχει ήδη τύπος service με αυτό το όνομα.');
+      return;
+    }
+
+    const created = await createServiceInventoryServiceType(cleanName);
+    if (!created.success) {
+      setMaterialTypeMessage(
+        created.reason === 'missing_table'
+          ? 'Ο πίνακας service_inventory_service_types δεν υπάρχει ακόμα στο Supabase. Τρέξτε τη migration.'
+          : created.reason === 'duplicate'
+            ? 'Υπάρχει ήδη τύπος service με αυτό το όνομα.'
+            : 'Ο τύπος service δεν αποθηκεύτηκε.'
+      );
+      return;
+    }
+
+    setNewServiceTypeName('');
+    setSelectedCatalogServiceTypeId(created.record.id);
+    setMaterialTypeMessage('');
+    await loadData();
+  };
+
+  const handleUpdateServiceType = async () => {
+    if (!editingServiceTypeId) return;
+    const cleanName = editingServiceTypeName.trim();
+    if (!cleanName) {
+      setMaterialTypeMessage('Συμπληρώστε όνομα τύπου service.');
+      return;
+    }
+
+    const saved = await updateServiceInventoryServiceType(editingServiceTypeId, cleanName);
+    if (!saved) {
+      setMaterialTypeMessage('Ο τύπος service δεν ενημερώθηκε.');
+      return;
+    }
+
+    setEditingServiceTypeId(null);
+    setEditingServiceTypeName('');
+    setMaterialTypeMessage('');
+    await loadData();
+  };
+
+  const handleDeleteServiceType = async () => {
+    if (!selectedCatalogServiceType?.id) {
+      setMaterialTypeMessage('Δεν υπάρχει id για αυτόν τον τύπο service.');
+      return;
+    }
+
+    if (!window.confirm('Θέλετε σίγουρα να διαγράψετε αυτόν τον τύπο service;')) return;
+
+    const deleted = await deleteServiceInventoryServiceType(selectedCatalogServiceType.id);
+    if (!deleted) {
+      setMaterialTypeMessage('Ο τύπος service δεν διαγράφηκε.');
+      return;
+    }
+
+    setSelectedCatalogServiceTypeId(null);
+    setEditingServiceTypeId(null);
+    setEditingServiceTypeName('');
+    setMaterialTypeMessage('');
+    await loadData();
+  };
+
+  const handleRemoveMaterialFromServiceType = async (materialTypeId?: number) => {
+    if (!selectedCatalogServiceType?.id || !materialTypeId) {
+      setMaterialTypeMessage('Δεν υπάρχει id για τον τύπο service ή το υλικό.');
+      return;
+    }
+
+    const removed = await unlinkServiceInventoryMaterialTypeFromServiceType(selectedCatalogServiceType.id, materialTypeId);
+    if (!removed) {
+      setMaterialTypeMessage('Δεν αφαιρέθηκε ο τύπος υλικού από τον τύπο service.');
+      return;
+    }
+
+    setMaterialTypeMessage('');
+    await loadData();
+  };
   const handleEditInventoryItem = (item: ServiceInventoryItem) => {
     const latestPurchase = inventoryMovements
       .filter((movement) => Number(movement.item_id) === Number(item.id) && movement.movement_type === 'purchase')
@@ -982,8 +1355,12 @@ export default function ServicesManager() {
 
     setEditingInventoryItemId(Number(item.id));
     setEditingInventoryMovementId(latestPurchase ? Number(latestPurchase.id) : null);
+    const itemServiceType =
+      serviceTypeCatalogOptions.find((serviceType) => serviceType.materialTypes.some((materialType) => materialType.value === item.type))
+        ?.name || initialInventoryForm.service_type;
     setInventoryForm({
       name: item.name || '',
+      service_type: itemServiceType,
       type: item.type,
       brand: item.brand || '',
       size_or_spec: item.size_or_spec || '',
@@ -1550,18 +1927,39 @@ export default function ServicesManager() {
                 <input value={inventoryForm.name} onChange={(event) => setInventoryForm({ ...inventoryForm, name: event.target.value })} className="input" />
               </Field>
               <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Τύπος Service">
+                  <select
+                    value={inventoryForm.service_type}
+                    onChange={(event) =>
+                      setInventoryForm({
+                        ...inventoryForm,
+                        service_type: event.target.value,
+                        type:
+                          serviceTypeCatalogOptions.find((serviceType) => serviceType.name === event.target.value)?.materialTypes[0]?.value ||
+                          inventoryForm.type,
+                      })
+                    }
+                    className="input"
+                  >
+                    {serviceTypeSelectOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </Field>
                 <Field label="Τύπος Υλικού">
                   <select value={inventoryForm.type} onChange={(event) => setInventoryForm({ ...inventoryForm, type: event.target.value as ServiceInventoryType })} className="input">
-                    {inventoryTypeOptions.map((option) => (
+                    {filteredInventoryTypeOptions.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
                 </Field>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Brand">
                   <input value={inventoryForm.brand} onChange={(event) => setInventoryForm({ ...inventoryForm, brand: event.target.value })} className="input" />
                 </Field>
               </div>
-              <Field label="Spec / Διάσταση">
+              <Field label={inventorySpecLabel}>
                 <input value={inventoryForm.size_or_spec} onChange={(event) => setInventoryForm({ ...inventoryForm, size_or_spec: event.target.value })} className="input" />
               </Field>
               <SupplierSelect
@@ -1612,9 +2010,26 @@ export default function ServicesManager() {
           </section>
 
           <section className="overflow-hidden rounded-3xl border border-white/[0.075] bg-white/[0.025] shadow-[0_18px_58px_rgba(0,0,0,0.24)]">
-            <div className="border-b border-white/[0.06] bg-white/[0.025] p-4">
-              <h2 className="text-lg font-semibold text-white">Αποθήκη Service</h2>
-              <p className="mt-1 text-xs text-zinc-500">Τρέχον stock ανά είδος. Η χρήση σε service μειώνει stock και καταγράφει κόστος στο συγκεκριμένο service.</p>
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] bg-white/[0.025] p-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Αποθήκη Service</h2>
+                <p className="mt-1 text-xs text-zinc-500">Τρέχον stock ανά είδος. Η χρήση σε service μειώνει stock και καταγράφει κόστος στο συγκεκριμένο service.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setMaterialTypeMessage('');
+                  setNewMaterialTypeName('');
+                  setNewServiceTypeName('');
+                  setEditingServiceTypeId(null);
+                  setEditingServiceTypeName('');
+                  setSelectedCatalogServiceTypeId(serviceTypeCatalogOptions[0]?.id ?? null);
+                  setShowMaterialTypeModal(true);
+                }}
+                className="rounded-xl border border-orange-400/24 bg-orange-400/10 px-3 py-2 text-xs font-semibold text-orange-200 transition duration-200 hover:-translate-y-px hover:border-orange-300/38 hover:bg-orange-400/18"
+              >
+                + Διαχείριση Τύπων Service
+              </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-left">
@@ -1727,6 +2142,196 @@ export default function ServicesManager() {
         </div>
       )}
 
+      {showMaterialTypeModal &&
+        modalRootReady &&
+        createPortal(
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
+            <div className="w-[min(900px,94vw)] overflow-hidden rounded-[28px] border border-orange-300/14 bg-[linear-gradient(180deg,rgba(18,24,33,0.98),rgba(8,12,18,0.98))] shadow-[0_28px_90px_rgba(0,0,0,0.62),0_0_44px_rgba(249,115,22,0.06)]">
+              <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] px-5 py-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-200/70">Service catalog</p>
+                  <h2 className="mt-1 text-lg font-semibold text-white">Διαχείριση Τύπων Service</h2>
+                  <p className="mt-1 text-xs text-zinc-500">Οργάνωσε κάθε τύπο service με τα δικά του υλικά αποθήκης.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowMaterialTypeModal(false)}
+                  className="rounded-xl px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="grid gap-4 p-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+                <section className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-white">Τύποι Service</h3>
+                    {materialCatalogMissing && (
+                      <span className="rounded-full border border-orange-300/24 bg-orange-400/10 px-2 py-1 text-[10px] font-bold text-orange-200">Fallback</span>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {serviceTypeCatalogOptions.map((serviceType) => {
+                      const active = selectedCatalogServiceType?.name === serviceType.name;
+                      return (
+                        <button
+                          key={serviceType.name}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCatalogServiceTypeId(serviceType.id ?? null);
+                            setEditingServiceTypeId(null);
+                            setEditingServiceTypeName('');
+                            setMaterialTypeMessage('');
+                          }}
+                          className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition ${
+                            active
+                              ? 'border-orange-300/35 bg-orange-400/12 text-orange-100'
+                              : 'border-white/[0.07] bg-black/20 text-zinc-300 hover:bg-white/[0.045] hover:text-white'
+                          }`}
+                        >
+                          <span className="truncate">{serviceType.name}</span>
+                          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-400">{serviceType.materialTypes.length}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 border-t border-white/[0.07] pt-3">
+                    <p className="mb-2 text-xs font-semibold text-zinc-400">Νέος τύπος service</p>
+                    <div className="flex gap-2">
+                      <input
+                        value={newServiceTypeName}
+                        onChange={(event) => {
+                          setNewServiceTypeName(event.target.value);
+                          setMaterialTypeMessage('');
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') handleCreateServiceType();
+                        }}
+                        className="input h-10 flex-1 rounded-xl text-sm"
+                        placeholder="π.χ. Φρένα"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCreateServiceType}
+                        className="rounded-xl bg-orange-500 px-3 text-xs font-bold text-black transition hover:bg-orange-400"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-500">Επιλεγμένος τύπος service</p>
+                      <h3 className="mt-1 text-base font-bold text-white">{selectedCatalogServiceType?.name || 'Τύπος service'}</h3>
+                    </div>
+                    {selectedCatalogServiceType?.id && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingServiceTypeId(selectedCatalogServiceType.id || null);
+                            setEditingServiceTypeName(selectedCatalogServiceType.name);
+                          }}
+                          className="rounded-xl border border-sky-400/24 bg-sky-400/10 px-3 py-2 text-xs font-bold text-sky-200 transition hover:bg-sky-400/18"
+                        >
+                          Επεξεργασία
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDeleteServiceType}
+                          className="rounded-xl border border-rose-400/24 bg-rose-400/10 px-3 py-2 text-xs font-bold text-rose-200 transition hover:bg-rose-400/18"
+                        >
+                          Διαγραφή
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {editingServiceTypeId && (
+                    <div className="mt-3 flex gap-2 rounded-2xl border border-sky-400/16 bg-sky-400/8 p-2">
+                      <input
+                        value={editingServiceTypeName}
+                        onChange={(event) => setEditingServiceTypeName(event.target.value)}
+                        className="input h-10 flex-1 rounded-xl text-sm"
+                      />
+                      <button type="button" onClick={handleUpdateServiceType} className="rounded-xl bg-sky-500 px-3 text-xs font-bold text-white">
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingServiceTypeId(null);
+                          setEditingServiceTypeName('');
+                        }}
+                        className="rounded-xl border border-white/[0.08] px-3 text-xs font-bold text-zinc-300"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="mt-4 grid gap-2">
+                    <p className="text-xs font-semibold text-zinc-400">Υλικά μέσα σε αυτόν τον τύπο service</p>
+                    <div className="grid max-h-52 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+                      {(selectedCatalogServiceType?.materialTypes || []).map((materialType) => (
+                        <div
+                          key={`${selectedCatalogServiceType?.name}-${materialType.value}`}
+                          className="flex items-center justify-between gap-2 rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2"
+                        >
+                          <span className="truncate text-sm font-bold text-zinc-100">{materialType.label}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMaterialFromServiceType(materialType.id)}
+                            className="rounded-lg border border-rose-400/20 bg-rose-400/10 px-2 py-1 text-[10px] font-bold text-rose-200 transition hover:bg-rose-400/18"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                      {(selectedCatalogServiceType?.materialTypes || []).length === 0 && (
+                        <div className="rounded-xl border border-dashed border-white/[0.08] bg-black/16 px-3 py-4 text-sm font-semibold text-zinc-400">
+                          Δεν υπάρχουν υλικά σε αυτόν τον τύπο service.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 border-t border-white/[0.07] pt-3">
+                    <p className="mb-2 text-xs font-semibold text-zinc-400">Προσθήκη material type στον επιλεγμένο τύπο service</p>
+                    <div className="flex gap-2">
+                      <input
+                        value={newMaterialTypeName}
+                        onChange={(event) => {
+                          setNewMaterialTypeName(event.target.value);
+                          setMaterialTypeMessage('');
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') handleCreateMaterialType();
+                          if (event.key === 'Escape') setShowMaterialTypeModal(false);
+                        }}
+                        className="input h-10 flex-1 rounded-xl text-sm"
+                        placeholder="π.χ. Τακάκια"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCreateMaterialType}
+                        className="rounded-xl bg-orange-500 px-4 text-xs font-bold text-black transition hover:bg-orange-400"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {materialTypeMessage && <p className="mt-2 text-xs font-semibold text-orange-200">{materialTypeMessage}</p>}
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
       {showModal &&
         modalRootReady &&
         createPortal(
@@ -1779,10 +2384,17 @@ export default function ServicesManager() {
                       <Field label="Τύπος Service">
                         <select
                           value={form.service_type}
-                          onChange={(event) => setForm({ ...form, service_type: event.target.value, inventory_item: '' })}
+                          onChange={(event) =>
+                            setForm({
+                              ...form,
+                              service_type: event.target.value,
+                              inventory_item: '',
+                              inventory_usages: [{ item_id: '', quantity: '1' }],
+                            })
+                          }
                           className="input"
                         >
-                          {serviceTypeOptions.map((option) => (
+                          {serviceTypeSelectOptions.map((option) => (
                             <option key={option} value={option}>
                               {option}
                             </option>
@@ -1793,50 +2405,62 @@ export default function ServicesManager() {
                   </section>
 
                   <section className="space-y-4 rounded-3xl border border-white/[0.055] bg-white/[0.018] p-4">
-                    <SectionTitle>Αποθήκη</SectionTitle>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {form.service_type === 'Ελαστικά' && (
-                        <>
-                          <Field label="Επιλογή ελαστικού από αποθήκη">
-                            <select value={form.inventory_item} onChange={(event) => setForm({ ...form, inventory_item: event.target.value })} className="input">
-                              <option value="">Χωρίς επιλογή αποθήκης</option>
-                              {modalInventoryItems.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                  {item.name} — {item.size_or_spec || item.brand || 'Stock'} ({item.current_stock})
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-                          <Field label="Αριθμός ελαστικών">
-                            <select value={form.tire_count} onChange={(event) => setForm({ ...form, tire_count: event.target.value })} className="input">
-                              {['1', '2', '4'].map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-                        </>
+                    <div className="flex items-center justify-between gap-3">
+                      <SectionTitle>Υλικά από αποθήκη</SectionTitle>
+                      {isMultiMaterialService && (
+                        <button
+                          type="button"
+                          onClick={addInventoryUsageRow}
+                          className="rounded-xl border border-orange-400/24 bg-orange-400/10 px-3 py-2 text-xs font-semibold text-orange-200 transition hover:bg-orange-400/18"
+                        >
+                          + Προσθήκη υλικού
+                        </button>
                       )}
-                      {form.service_type === 'Μπαταρία' && (
-                        <>
-                          <Field label="Επιλογή μπαταρίας από αποθήκη">
-                            <select value={form.inventory_item} onChange={(event) => setForm({ ...form, inventory_item: event.target.value })} className="input">
-                              <option value="">Χωρίς επιλογή αποθήκης</option>
-                              {modalInventoryItems.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                  {item.name} — {item.size_or_spec || item.brand || 'Stock'} ({item.current_stock})
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-                          <Field label="Ποσότητα">
-                            <input type="number" min="1" value={form.battery_quantity} onChange={(event) => setForm({ ...form, battery_quantity: event.target.value })} className="input" />
-                          </Field>
-                        </>
-                      )}
-                      {form.service_type === 'Service / Λάδια' && (
-                        <Field label="Επιλογή υλικού από αποθήκη">
+                    </div>
+
+                    {isMultiMaterialService ? (
+                      <div className="space-y-3">
+                        {form.inventory_usages.map((usageRow, index) => {
+                          const selectedIds = form.inventory_usages
+                            .map((row, rowIndex) => (rowIndex === index ? '' : row.item_id))
+                            .filter(Boolean);
+                          const availableItems = modalInventoryItems.filter((item) => !selectedIds.includes(String(item.id)) || String(item.id) === usageRow.item_id);
+
+                          return (
+                            <div key={index} className="grid gap-3 rounded-2xl border border-white/[0.06] bg-black/20 p-3 md:grid-cols-[minmax(0,1fr)_120px_auto] md:items-end">
+                              <Field label="Υλικό">
+                                <select value={usageRow.item_id} onChange={(event) => updateInventoryUsageRow(index, { item_id: event.target.value })} className="input">
+                                  <option value="">Χωρίς επιλογή αποθήκης</option>
+                                  {availableItems.map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                      {item.name} — {item.size_or_spec || item.brand || 'Stock'} ({item.current_stock})
+                                    </option>
+                                  ))}
+                                </select>
+                              </Field>
+                              <Field label="Ποσότητα">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={usageRow.quantity}
+                                  onChange={(event) => updateInventoryUsageRow(index, { quantity: event.target.value })}
+                                  className="input"
+                                />
+                              </Field>
+                              <button
+                                type="button"
+                                onClick={() => removeInventoryUsageRow(index)}
+                                className="rounded-xl border border-rose-400/24 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-400/18"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : isTireService ? (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Field label="Επιλογή ελαστικού από αποθήκη">
                           <select value={form.inventory_item} onChange={(event) => setForm({ ...form, inventory_item: event.target.value })} className="input">
                             <option value="">Χωρίς επιλογή αποθήκης</option>
                             {modalInventoryItems.map((item) => (
@@ -1846,8 +2470,31 @@ export default function ServicesManager() {
                             ))}
                           </select>
                         </Field>
-                      )}
-                    </div>
+                        <Field label="Αριθμός ελαστικών">
+                          <select value={form.tire_count} onChange={(event) => setForm({ ...form, tire_count: event.target.value })} className="input">
+                            {['1', '2', '3', '4'].map((option) => (
+                              <option key={option} value={option}>{option}</option>
+                            ))}
+                          </select>
+                        </Field>
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Field label="Επιλογή μπαταρίας από αποθήκη">
+                          <select value={form.inventory_item} onChange={(event) => setForm({ ...form, inventory_item: event.target.value })} className="input">
+                            <option value="">Χωρίς επιλογή αποθήκης</option>
+                            {modalInventoryItems.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name} — {item.size_or_spec || item.brand || 'Stock'} ({item.current_stock})
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="Ποσότητα">
+                          <input type="number" min="1" value={form.battery_quantity} onChange={(event) => setForm({ ...form, battery_quantity: event.target.value })} className="input" />
+                        </Field>
+                      </div>
+                    )}
                   </section>
 
                   <section className="space-y-4 rounded-3xl border border-white/[0.055] bg-white/[0.018] p-4">
@@ -2177,4 +2824,3 @@ function PaymentSelect({
     </Field>
   );
 }
-
