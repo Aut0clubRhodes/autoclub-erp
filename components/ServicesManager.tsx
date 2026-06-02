@@ -20,6 +20,7 @@ import {
   type ServiceInventoryMovement,
   type ServiceInventoryType,
   updateServiceInventoryItem,
+  updateServiceInventoryMovement,
 } from '@/lib/serviceInventoryApi';
 import { fetchServices, addService, updateService, deleteService, type ServiceRecord } from '@/lib/servicesApi';
 import { fetchSuppliers, type SupplierRecord } from '@/lib/suppliersApi';
@@ -139,6 +140,12 @@ const readDebtMarker = (notes: string | null | undefined, key: string) => {
   const match = String(notes || '').match(new RegExp(`\\[${key}:(\\d+)\\]`));
   return match ? Number(match[1]) : null;
 };
+const stripDebtMarkers = (notes: string | null | undefined) =>
+  String(notes || '')
+    .split('|')
+    .map((part) => part.trim())
+    .filter((part) => part && !/^\[[a-z_]+:\d+\]$/i.test(part))
+    .join(' | ');
 
 export default function ServicesManager() {
   const [cars, setCars] = useState<ServiceCar[]>([]);
@@ -162,6 +169,7 @@ export default function ServicesManager() {
   const [inventoryForm, setInventoryForm] = useState(initialInventoryForm);
   const [isSavingInventory, setIsSavingInventory] = useState(false);
   const [editingInventoryItemId, setEditingInventoryItemId] = useState<number | null>(null);
+  const [editingInventoryMovementId, setEditingInventoryMovementId] = useState<number | null>(null);
 
   const loadData = async () => {
     const [carRows, supplierRows, serviceRows, transactionRows, categoryRows, inventoryRows, movementRows, debtRows] = await Promise.all([
@@ -605,8 +613,6 @@ export default function ServicesManager() {
         category: form.labor_category || 'Service',
         original_amount: laborAmount,
         paid_amount: 0,
-        remaining_amount: laborAmount,
-        status: 'open',
         notes: [form.description, debtMarker('service_labor', Number(service.id))].filter(Boolean).join(' | '),
       });
 
@@ -669,14 +675,30 @@ export default function ServicesManager() {
     setIsSavingInventory(true);
     const totalCost = quantity * unitCost;
 
-    const item = await createServiceInventoryItem({
-      name: inventoryForm.name.trim(),
-      type: inventoryForm.type,
-      brand: inventoryForm.brand.trim() || null,
-      size_or_spec: inventoryForm.size_or_spec.trim() || null,
-      supplier_id: inventoryForm.supplier_id ? Number(inventoryForm.supplier_id) : null,
-      unit_cost: unitCost,
-    });
+    const normalizedName = inventoryForm.name.trim().toLowerCase();
+    const normalizedBrand = inventoryForm.brand.trim().toLowerCase();
+    const normalizedSpec = inventoryForm.size_or_spec.trim().toLowerCase();
+    const supplierId = inventoryForm.supplier_id ? Number(inventoryForm.supplier_id) : null;
+    const existingItem = inventoryItems.find(
+      (item) =>
+        item.name.trim().toLowerCase() === normalizedName &&
+        item.type === inventoryForm.type &&
+        String(item.brand || '').trim().toLowerCase() === normalizedBrand &&
+        String(item.size_or_spec || '').trim().toLowerCase() === normalizedSpec &&
+        Number(item.supplier_id || 0) === Number(supplierId || 0)
+    );
+
+    const createdNewItem = !existingItem;
+    const item =
+      existingItem ||
+      (await createServiceInventoryItem({
+        name: inventoryForm.name.trim(),
+        type: inventoryForm.type,
+        brand: inventoryForm.brand.trim() || null,
+        size_or_spec: inventoryForm.size_or_spec.trim() || null,
+        supplier_id: supplierId,
+        unit_cost: unitCost,
+      }));
 
     if (!item) {
       setIsSavingInventory(false);
@@ -693,12 +715,13 @@ export default function ServicesManager() {
         category: inventoryExpenseCategoryByType[inventoryForm.type] || 'Αποθήκη Service',
         original_amount: totalCost,
         paid_amount: 0,
-        remaining_amount: totalCost,
-        status: 'open',
         notes: [inventoryForm.notes.trim(), debtMarker('service_inventory_item', Number(item.id))].filter(Boolean).join(' | '),
       });
 
       if (!debt) {
+        if (createdNewItem) {
+          await deleteServiceInventoryItem(Number(item.id));
+        }
         alert('Απέτυχε η πίστωση προμηθευτή. Η αγορά αποθήκης δεν θα αυξήσει stock.');
         setIsSavingInventory(false);
         return;
@@ -717,6 +740,9 @@ export default function ServicesManager() {
       });
 
       if (!transaction) {
+        if (createdNewItem) {
+          await deleteServiceInventoryItem(Number(item.id));
+        }
         alert('Απέτυχε η οικονομική κίνηση. Η αγορά αποθήκης δεν θα αυξήσει stock.');
         setIsSavingInventory(false);
         return;
@@ -747,6 +773,9 @@ export default function ServicesManager() {
       }
       if (supplierDebtId) {
         await deleteDebt(supplierDebtId);
+      }
+      if (createdNewItem) {
+        await deleteServiceInventoryItem(Number(item.id));
       }
       setIsSavingInventory(false);
       return;
@@ -861,47 +890,172 @@ export default function ServicesManager() {
   };
 
   const handleEditInventoryItem = (item: ServiceInventoryItem) => {
+    const latestPurchase = inventoryMovements
+      .filter((movement) => Number(movement.item_id) === Number(item.id) && movement.movement_type === 'purchase')
+      .sort((left, right) => String(right.created_at || '').localeCompare(String(left.created_at || '')))[0];
+
     setEditingInventoryItemId(Number(item.id));
+    setEditingInventoryMovementId(latestPurchase ? Number(latestPurchase.id) : null);
     setInventoryForm({
       name: item.name || '',
       type: item.type,
       brand: item.brand || '',
       size_or_spec: item.size_or_spec || '',
-      supplier_id: item.supplier_id ? String(item.supplier_id) : '',
-      unit_cost: String(item.unit_cost || ''),
-      quantity: String(item.current_stock || ''),
-      payment_method: 'cash',
-      notes: '',
+      supplier_id: latestPurchase?.supplier_id ? String(latestPurchase.supplier_id) : item.supplier_id ? String(item.supplier_id) : '',
+      unit_cost: String(latestPurchase?.unit_cost || item.unit_cost || ''),
+      quantity: String(latestPurchase?.quantity || item.current_stock || ''),
+      payment_method: latestPurchase?.payment_method || 'cash',
+      notes: stripDebtMarkers(latestPurchase?.notes) || '',
     });
   };
 
   const handleUpdateInventoryItem = async () => {
     if (!editingInventoryItemId) return;
 
-    const currentStock = Number(inventoryForm.quantity || 0);
+    const quantity = Number(inventoryForm.quantity || 0);
     const unitCost = Number(inventoryForm.unit_cost || 0);
     if (!inventoryForm.name.trim()) {
       alert('Συμπληρώστε όνομα υλικού.');
       return;
     }
-    if (Number.isNaN(currentStock) || currentStock < 0 || Number.isNaN(unitCost) || unitCost < 0) {
-      alert('Ελέγξτε stock και τιμή μονάδας.');
+    if (Number.isNaN(quantity) || quantity <= 0 || Number.isNaN(unitCost) || unitCost < 0) {
+      alert('Ελέγξτε ποσότητα και τιμή μονάδας.');
       return;
     }
+    if (inventoryForm.payment_method === 'credit' && !inventoryForm.supplier_id) {
+      alert('Επιλέξτε προμηθευτή για αγορά αποθήκης επί πιστώσει.');
+      return;
+    }
+
+    const purchaseMovement = editingInventoryMovementId
+      ? inventoryMovements.find((movement) => Number(movement.id) === Number(editingInventoryMovementId))
+      : null;
+    const supplierId = inventoryForm.supplier_id ? Number(inventoryForm.supplier_id) : null;
+    const totalCost = quantity * unitCost;
 
     const updated = await updateServiceInventoryItem(editingInventoryItemId, {
       name: inventoryForm.name.trim(),
       type: inventoryForm.type,
       brand: inventoryForm.brand.trim() || null,
       size_or_spec: inventoryForm.size_or_spec.trim() || null,
-      supplier_id: inventoryForm.supplier_id ? Number(inventoryForm.supplier_id) : null,
+      supplier_id: supplierId,
       unit_cost: unitCost,
-      current_stock: currentStock,
     });
 
     if (!updated) return;
 
+    if (purchaseMovement) {
+      const reconciledStock = await reconcileServiceInventoryStock(editingInventoryItemId);
+      if (reconciledStock === null) return;
+
+      const oldQuantity = Number(purchaseMovement.quantity || 0);
+      const quantityDelta = quantity - oldQuantity;
+      if (quantityDelta !== 0) {
+        const stockAdjusted = await adjustServiceInventoryStock(editingInventoryItemId, quantityDelta);
+        if (!stockAdjusted) {
+          alert('Δεν υπάρχει αρκετό stock για τη μείωση αυτής της αγοράς.');
+          await loadData();
+          return;
+        }
+      }
+
+      if (purchaseMovement.transaction_id) {
+        const deleted = await deleteTransaction(Number(purchaseMovement.transaction_id));
+        if (!deleted) {
+          alert('Δεν διαγράφηκε η παλιά οικονομική κίνηση αγοράς.');
+          await loadData();
+          return;
+        }
+      }
+
+      const oldDebtId = readDebtMarker(purchaseMovement.notes, 'supplier_debt');
+      if (oldDebtId) {
+        const deleted = await deleteDebt(oldDebtId);
+        if (!deleted) {
+          alert('Δεν διαγράφηκε η παλιά πίστωση προμηθευτή.');
+          await loadData();
+          return;
+        }
+      }
+
+      const legacyCreditExpenseTransactions = transactions.filter((transaction) => {
+        const sameSource = transaction.source === 'service_inventory_purchase';
+        const samePayment = transaction.payment_method === 'credit';
+        const sameAmount = Math.abs(Number(transaction.amount || 0) - Number(purchaseMovement.total_cost || 0)) < 0.01;
+        const sameSupplier =
+          !purchaseMovement.supplier_id || !transaction.supplier_id || Number(transaction.supplier_id) === Number(purchaseMovement.supplier_id);
+        return sameSource && samePayment && sameAmount && sameSupplier;
+      });
+
+      for (const transaction of legacyCreditExpenseTransactions) {
+        await deleteTransaction(Number(transaction.id));
+      }
+
+      let nextTransactionId: number | null = null;
+      let nextDebtId: number | null = null;
+
+      if (totalCost > 0 && inventoryForm.payment_method === 'credit') {
+        const debt = await addDebt({
+          title: `Αγορά αποθήκης: ${inventoryForm.name.trim()}`,
+          supplier_id: Number(supplierId),
+          category: inventoryExpenseCategoryByType[inventoryForm.type] || 'Αποθήκη Service',
+          original_amount: totalCost,
+          paid_amount: 0,
+          notes: [inventoryForm.notes.trim(), debtMarker('service_inventory_item', editingInventoryItemId)].filter(Boolean).join(' | '),
+        });
+
+        if (!debt) {
+          alert('Δεν δημιουργήθηκε νέα πίστωση προμηθευτή.');
+          await loadData();
+          return;
+        }
+        nextDebtId = Number(debt.id);
+      } else if (totalCost > 0) {
+        const transaction = await addTransaction({
+          type: 'expense',
+          source: 'service_inventory_purchase',
+          amount: totalCost,
+          date: purchaseMovement.created_at?.slice(0, 10) || new Date().toISOString().split('T')[0],
+          payment_method: inventoryForm.payment_method,
+          supplier_id: supplierId,
+          category: inventoryExpenseCategoryByType[inventoryForm.type] || 'Αποθήκη Service',
+          notes: inventoryForm.notes.trim() || inventoryForm.name.trim(),
+        });
+
+        if (!transaction) {
+          alert('Δεν δημιουργήθηκε νέα οικονομική κίνηση αγοράς.');
+          await loadData();
+          return;
+        }
+        nextTransactionId = Number(transaction.id);
+      }
+
+      const movementNotes = [
+        inventoryForm.notes.trim(),
+        nextDebtId ? debtMarker('supplier_debt', nextDebtId) : '',
+      ]
+        .filter(Boolean)
+        .join(' | ') || null;
+
+      const movementUpdated = await updateServiceInventoryMovement(Number(purchaseMovement.id), {
+        quantity,
+        unit_cost: unitCost,
+        total_cost: totalCost,
+        supplier_id: supplierId,
+        payment_method: inventoryForm.payment_method,
+        transaction_id: nextTransactionId,
+        notes: movementNotes,
+      });
+
+      if (!movementUpdated) {
+        alert('Δεν ενημερώθηκε η κίνηση αγοράς αποθήκης.');
+        await loadData();
+        return;
+      }
+    }
+
     setEditingInventoryItemId(null);
+    setEditingInventoryMovementId(null);
     setInventoryForm(initialInventoryForm);
     await loadData();
   };

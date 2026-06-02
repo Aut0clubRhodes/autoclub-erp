@@ -334,6 +334,35 @@ export async function updateServiceInventoryItem(
   return data as ServiceInventoryItem;
 }
 
+export async function updateServiceInventoryMovement(
+  id: number,
+  updates: Partial<
+    Pick<
+      ServiceInventoryMovement,
+      'quantity' | 'unit_cost' | 'total_cost' | 'supplier_id' | 'payment_method' | 'transaction_id' | 'notes'
+    >
+  >
+) {
+  const { data, error } = await supabase
+    .from('service_inventory_movements')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Update service inventory movement error:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    });
+    return null;
+  }
+
+  return data as ServiceInventoryMovement;
+}
+
 export async function deleteServiceInventoryItem(id: number) {
   const { error } = await supabase.from('service_inventory_items').delete().eq('id', id);
 

@@ -24,8 +24,6 @@ export type DebtPayload = {
   due_date?: string | null;
   original_amount: number;
   paid_amount?: number;
-  remaining_amount?: number;
-  status?: string;
   notes?: string | null;
 };
 
@@ -57,7 +55,18 @@ export async function fetchDebts(): Promise<DebtRecord[]> {
 }
 
 export async function addDebt(payload: DebtPayload) {
-  const { data, error } = await supabase.from('debts').insert(payload).select().single();
+  const writablePayload = {
+    car_id: payload.car_id ?? null,
+    supplier_id: payload.supplier_id ?? null,
+    category: payload.category ?? null,
+    title: payload.title,
+    due_date: payload.due_date ?? null,
+    original_amount: payload.original_amount,
+    paid_amount: payload.paid_amount ?? 0,
+    notes: payload.notes ?? null,
+  };
+
+  const { data, error } = await supabase.from('debts').insert(writablePayload).select().single();
 
   if (error) {
     console.log('Add debt error:', {
@@ -73,7 +82,18 @@ export async function addDebt(payload: DebtPayload) {
 }
 
 export async function updateDebt(id: number, payload: Partial<DebtPayload>) {
-  const { data, error } = await supabase.from('debts').update(payload).eq('id', id).select().single();
+  const writablePayload = {
+    ...(payload.car_id !== undefined ? { car_id: payload.car_id } : {}),
+    ...(payload.supplier_id !== undefined ? { supplier_id: payload.supplier_id } : {}),
+    ...(payload.category !== undefined ? { category: payload.category } : {}),
+    ...(payload.title !== undefined ? { title: payload.title } : {}),
+    ...(payload.due_date !== undefined ? { due_date: payload.due_date } : {}),
+    ...(payload.original_amount !== undefined ? { original_amount: payload.original_amount } : {}),
+    ...(payload.paid_amount !== undefined ? { paid_amount: payload.paid_amount } : {}),
+    ...(payload.notes !== undefined ? { notes: payload.notes } : {}),
+  };
+
+  const { data, error } = await supabase.from('debts').update(writablePayload).eq('id', id).select().single();
 
   if (error) {
     console.error('Update debt error:', {
