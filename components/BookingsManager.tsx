@@ -60,7 +60,6 @@ type ReservationSortKey =
   | 'confirmationSent'
   | 'extras'
   | 'licenceFront'
-  | 'licenceBack'
   | 'modified';
 type ReservationSortState = {
   key: ReservationSortKey;
@@ -83,6 +82,11 @@ type WhatsappMessageRow = {
   direction?: string | null;
   is_read?: boolean | null;
   created_at?: string | null;
+};
+
+type UnreadWhatsappReservationRow = {
+  reservation_id?: string | number | null;
+  message?: string | null;
 };
 
 type WorkflowEvent = {
@@ -217,8 +221,7 @@ const bookingTableColumns: Array<{ key: ReservationSortKey; label: string; align
   { key: 'sendReturn', label: 'Send Return' },
   { key: 'confirmationSent', label: 'Confirmation Sent' },
   { key: 'extras', label: 'Extras' },
-  { key: 'licenceFront', label: 'Licence Front' },
-  { key: 'licenceBack', label: 'Licence Back' },
+  { key: 'licenceFront', label: 'Driving Licence' },
   { key: 'modified', label: 'Modified', className: 'w-[82px]' },
 ];
 const statusActiveClasses: Record<ReservationStatus, string> = {
@@ -335,8 +338,7 @@ const reservationTableSortValue = (reservation: Reservation, key: ReservationSor
   if (key === 'extras') {
     return reservation.extras.baby_seat_qty + reservation.extras.booster_qty + reservation.extras.infant_qty;
   }
-  if (key === 'licenceFront') return reservation.licenceFront === 'uploaded' ? 1 : 0;
-  if (key === 'licenceBack') return reservation.licenceBack === 'uploaded' ? 1 : 0;
+  if (key === 'licenceFront') return reservation.licenceFrontUrl || reservation.licenceBackUrl ? 1 : 0;
   return reservationSortValue(reservation);
 };
 
@@ -470,6 +472,12 @@ const reservationToPayload = (reservation: Reservation): ReservationRequestPaylo
 const getReservationNotificationName = (reservation: Pick<Reservation, 'hotelRoom' | 'name'>) =>
   reservation.hotelRoom.trim() || reservation.name.trim() || 'Booking';
 
+const getDrivingLicenceUrl = (reservation: Pick<Reservation, 'licenceFrontUrl' | 'licenceBackUrl'>) =>
+  reservation.licenceFrontUrl || reservation.licenceBackUrl;
+
+const getDrivingLicenceState = (reservation: Pick<Reservation, 'licenceFrontUrl' | 'licenceBackUrl'>): LicenceState =>
+  getDrivingLicenceUrl(reservation) ? 'uploaded' : 'empty';
+
 const createReservationNotificationOnce = async (
   reservation: Pick<Reservation, 'id' | 'hotelRoom' | 'name'>,
   type: string,
@@ -509,6 +517,16 @@ const whatsappRowToMessage = (row: WhatsappMessageRow): WhatsappMessage => ({
   createdAt: row.created_at || '',
   isUnread: row.direction === 'incoming' && row.is_read === false,
 });
+
+const isIgnoredIncomingWhatsappMessage = (message?: string | null) => {
+  const normalizedMessage = (message || '').trim();
+  const lowerMessage = normalizedMessage.toLowerCase();
+
+  if (!normalizedMessage) return true;
+  if (lowerMessage === 'accepted') return true;
+
+  return ['sent', 'delivered', 'read', 'failed', 'undelivered'].includes(lowerMessage);
+};
 
 const hasAcceptedRequiredFields = (reservation: Pick<Reservation, 'pickupTime' | 'returnTime' | 'price'>) =>
   reservation.pickupTime.trim() !== '' && reservation.returnTime.trim() !== '' && reservation.price !== null;
@@ -627,6 +645,55 @@ export default function BookingsManager({
     return notification;
   };
 
+  const ensureCustomerMessageNotifications = async (nextReservations: Reservation[]) => {
+    const { data, error } = await supabase
+      .from('whatsapp_messages')
+      .select('reservation_id, message')
+      .eq('direction', 'incoming')
+      .eq('is_read', false);
+
+    if (error) {
+      console.warn('Fetch unread customer whatsapp messages warning', error);
+      return;
+    }
+
+    const unreadReservationIds = new Set(
+      ((data || []) as UnreadWhatsappReservationRow[])
+        .filter((row) => !isIgnoredIncomingWhatsappMessage(row.message))
+        .map((row) => String(row.reservation_id || ''))
+        .filter(Boolean)
+    );
+
+    if (unreadReservationIds.size === 0) return;
+
+    await Promise.all(
+      nextReservations
+        .filter((reservation) => unreadReservationIds.has(reservation.id))
+        .map(async (reservation) => {
+          const displayName = getReservationNotificationName(reservation);
+          const notification = await notifyBookingEventOnce(
+            reservation,
+            'customer_message_received',
+            'Customer WhatsApp message',
+            `${displayName} sent a WhatsApp message.`
+          );
+
+          if (notification?.read === true) {
+            const { error: reopenError } = await supabase
+              .from('notifications')
+              .update({ read: false })
+              .eq('id', notification.id);
+
+            if (reopenError) {
+              console.warn('Reopen customer message notification warning', reopenError);
+            } else {
+              await Promise.resolve(onNotificationsChanged?.());
+            }
+          }
+        })
+    );
+  };
+
   const ensureReservationNotifications = async (nextReservations: Reservation[]) => {
     await Promise.all(
       nextReservations.flatMap((reservation) => {
@@ -669,6 +736,8 @@ export default function BookingsManager({
         return notificationPromises;
       })
     );
+
+    await ensureCustomerMessageNotifications(nextReservations);
   };
 
   const loadReservations = async (preferredReservationId?: string) => {
@@ -719,7 +788,7 @@ export default function BookingsManager({
   const loadUnreadWhatsappReservations = async () => {
     const { data, error } = await supabase
       .from('whatsapp_messages')
-      .select('reservation_id')
+      .select('reservation_id, message')
       .eq('direction', 'incoming')
       .eq('is_read', false);
 
@@ -732,8 +801,17 @@ export default function BookingsManager({
     }
 
     setUnreadWhatsappReservationIds(
-      new Set((data || []).map((row) => String((row as { reservation_id?: string | number }).reservation_id)).filter(Boolean))
+      new Set(
+        ((data || []) as UnreadWhatsappReservationRow[])
+          .filter((row) => !isIgnoredIncomingWhatsappMessage(row.message))
+          .map((row) => String(row.reservation_id || ''))
+          .filter(Boolean)
+      )
     );
+
+    if (reservations.length > 0) {
+      void ensureCustomerMessageNotifications(reservations);
+    }
   };
 
   const loadWhatsappMessages = async (reservationId: string) => {
@@ -757,25 +835,20 @@ export default function BookingsManager({
 
     const rows = (data || []) as WhatsappMessageRow[];
     console.log('Loaded whatsapp_messages:', rows);
-    setWhatsappMessages(rows.map(whatsappRowToMessage));
+    setWhatsappMessages(
+      rows
+        .filter((row) => !(row.direction === 'incoming' && isIgnoredIncomingWhatsappMessage(row.message)))
+        .map(whatsappRowToMessage)
+    );
 
-    const hasUnreadIncoming = rows.some((row) => row.direction === 'incoming' && row.is_read === false);
-    if (hasUnreadIncoming) {
-      const { error: updateError } = await supabase
-        .from('whatsapp_messages')
-        .update({ is_read: true })
-        .eq('reservation_id', reservationId)
-        .eq('direction', 'incoming')
-        .eq('is_read', false);
+    if (rows.some((row) => row.direction === 'incoming' && row.is_read === false && !isIgnoredIncomingWhatsappMessage(row.message))) {
+      setUnreadWhatsappReservationIds((currentIds) => new Set(currentIds).add(reservationId));
+      const reservationForNotification =
+        reservations.find((reservation) => reservation.id === reservationId) ||
+        (selectedReservation?.id === reservationId ? selectedReservation : null);
 
-      if (updateError) {
-        console.warn('Mark whatsapp messages read warning', updateError);
-      } else {
-        setUnreadWhatsappReservationIds((currentIds) => {
-          const nextIds = new Set(currentIds);
-          nextIds.delete(reservationId);
-          return nextIds;
-        });
+      if (reservationForNotification) {
+        await ensureCustomerMessageNotifications([reservationForNotification]);
       }
     }
 
@@ -1434,14 +1507,14 @@ export default function BookingsManager({
             <tbody className="divide-y divide-white/[0.055]">
               {isLoadingReservations && (
                 <tr>
-                  <td colSpan={18} className="px-3 py-8 text-center text-sm text-zinc-500">
+                  <td colSpan={17} className="px-3 py-8 text-center text-sm text-zinc-500">
                     Φόρτωση κρατήσεων...
                   </td>
                 </tr>
               )}
               {!isLoadingReservations && filteredReservations.length === 0 && (
                 <tr>
-                  <td colSpan={18} className="px-3 py-8 text-center text-sm text-zinc-500">
+                  <td colSpan={17} className="px-3 py-8 text-center text-sm text-zinc-500">
                     Δεν υπάρχουν κρατήσεις.
                   </td>
                 </tr>
@@ -1498,8 +1571,7 @@ export default function BookingsManager({
                     <td className="whitespace-nowrap px-2 py-1"><BooleanBadge active={reservation.sendReturn} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><BooleanBadge active={reservation.confirmationSent} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><ExtrasBadges extras={reservation.extras} /></td>
-                    <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={reservation.licenceFront} url={reservation.licenceFrontUrl} /></td>
-                    <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={reservation.licenceBack} url={reservation.licenceBackUrl} /></td>
+                    <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={getDrivingLicenceState(reservation)} url={getDrivingLicenceUrl(reservation)} /></td>
                     <td className={`w-[82px] whitespace-nowrap px-2 py-1 font-mono text-[11px] ${isReturned ? 'text-cyan-100' : 'text-zinc-400'}`}>{formatCompactDateTime(reservation.lastModifiedAt)}</td>
                   </tr>
                 );
@@ -1803,8 +1875,7 @@ function ReservationInspector({
             </div>
 
             <div className="grid gap-1.5">
-              <LicenceCard title="Licence Front" state={draft.licenceFront} url={draft.licenceFrontUrl} onOpen={setViewerDocument} />
-              <LicenceCard title="Licence Back" state={draft.licenceBack} url={draft.licenceBackUrl} onOpen={setViewerDocument} />
+              <LicenceCard title="Driving Licence" state={getDrivingLicenceState(draft)} url={getDrivingLicenceUrl(draft)} onOpen={setViewerDocument} />
               <ExtrasQuantityGroup
                 extras={draft.extras}
                 onChange={(extras) => updateDraft({ extras })}
