@@ -42,6 +42,30 @@ type QuickReservationFilter =
   | 'pickupsTomorrow'
   | 'returnsTomorrow'
   | 'all';
+type ReservationListMode = 'active' | 'returned';
+type ReservationSortKey =
+  | 'phone'
+  | 'vehicleGroup'
+  | 'agency'
+  | 'representative'
+  | 'hotelRoom'
+  | 'pickupDate'
+  | 'returnDate'
+  | 'pickupTime'
+  | 'returnTime'
+  | 'price'
+  | 'status'
+  | 'language'
+  | 'sendReturn'
+  | 'confirmationSent'
+  | 'extras'
+  | 'licenceFront'
+  | 'licenceBack'
+  | 'modified';
+type ReservationSortState = {
+  key: ReservationSortKey;
+  direction: 'asc' | 'desc';
+};
 
 type WhatsappMessage = {
   id: string;
@@ -96,6 +120,7 @@ type LegacyBookingExtras = Partial<BookingExtras> & {
 type Reservation = {
   id: string;
   createdAt: string;
+  lastModifiedAt: string;
   phoneWhatsapp: string;
   name: string;
   email: string;
@@ -176,6 +201,26 @@ const quickReservationFilters: Array<{ id: QuickReservationFilter; label: string
   { id: 'returnsTomorrow', label: 'Επιστροφές αύριο' },
   { id: 'all', label: 'Όλες' },
 ];
+const bookingTableColumns: Array<{ key: ReservationSortKey; label: string; align?: 'right'; className?: string }> = [
+  { key: 'phone', label: 'Phone WhatsApp' },
+  { key: 'vehicleGroup', label: 'Vehicle Group' },
+  { key: 'agency', label: 'Agency' },
+  { key: 'representative', label: 'Representative' },
+  { key: 'hotelRoom', label: 'Hotel & Room' },
+  { key: 'pickupDate', label: 'Pickup Date' },
+  { key: 'returnDate', label: 'Return Date' },
+  { key: 'pickupTime', label: 'Pickup Time' },
+  { key: 'returnTime', label: 'Return Time' },
+  { key: 'price', label: 'Price', align: 'right' },
+  { key: 'status', label: 'Status' },
+  { key: 'language', label: 'Language' },
+  { key: 'sendReturn', label: 'Send Return' },
+  { key: 'confirmationSent', label: 'Confirmation Sent' },
+  { key: 'extras', label: 'Extras' },
+  { key: 'licenceFront', label: 'Licence Front' },
+  { key: 'licenceBack', label: 'Licence Back' },
+  { key: 'modified', label: 'Modified', className: 'w-[82px]' },
+];
 const statusActiveClasses: Record<ReservationStatus, string> = {
   PENDING: 'border-amber-300 bg-amber-400/25 text-amber-50 shadow-[0_0_16px_rgba(251,191,36,0.14)]',
   ACCEPTED: 'border-emerald-300 bg-emerald-400/24 text-emerald-50 shadow-[0_0_16px_rgba(52,211,153,0.14)]',
@@ -224,6 +269,19 @@ const money = (value: number | null) =>
 const formatDate = (value: string) => (value ? new Date(`${value}T00:00:00`).toLocaleDateString('el-GR') : '-');
 
 const formatDateTime = (value: string) => (value ? new Date(value).toLocaleString('el-GR') : '-');
+const formatCompactDateTime = (value: string) => {
+  if (!value) return '-';
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return '-';
+
+  return date.toLocaleString('el-GR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
 
 const formatDateInputValue = (date: Date) => {
   const year = date.getFullYear();
@@ -243,6 +301,12 @@ const tomorrowDateValue = () => {
 };
 
 const reservationSortValue = (reservation: Reservation) => {
+  const lastModifiedAt = reservation.lastModifiedAt ? new Date(reservation.lastModifiedAt).getTime() : Number.NaN;
+
+  if (Number.isFinite(lastModifiedAt)) {
+    return lastModifiedAt;
+  }
+
   const createdAt = reservation.createdAt ? new Date(reservation.createdAt).getTime() : Number.NaN;
 
   if (Number.isFinite(createdAt)) {
@@ -251,6 +315,41 @@ const reservationSortValue = (reservation: Reservation) => {
 
   const pickupDate = reservation.pickupDate ? new Date(`${reservation.pickupDate}T00:00:00`).getTime() : Number.NaN;
   return Number.isFinite(pickupDate) ? pickupDate : 0;
+};
+
+const reservationTableSortValue = (reservation: Reservation, key: ReservationSortKey): string | number => {
+  if (key === 'phone') return reservation.phoneWhatsapp.toLowerCase();
+  if (key === 'vehicleGroup') return reservation.vehicleGroup.toLowerCase();
+  if (key === 'agency') return reservation.agency.toLowerCase();
+  if (key === 'representative') return reservation.representative.toLowerCase();
+  if (key === 'hotelRoom') return (reservation.hotelRoom || reservation.name).toLowerCase();
+  if (key === 'pickupDate') return reservation.pickupDate || '';
+  if (key === 'returnDate') return reservation.returnDate || '';
+  if (key === 'pickupTime') return reservation.pickupTime || '';
+  if (key === 'returnTime') return reservation.returnTime || '';
+  if (key === 'price') return reservation.price ?? -1;
+  if (key === 'status') return reservation.status;
+  if (key === 'language') return reservation.language;
+  if (key === 'sendReturn') return reservation.sendReturn ? 1 : 0;
+  if (key === 'confirmationSent') return reservation.confirmationSent ? 1 : 0;
+  if (key === 'extras') {
+    return reservation.extras.baby_seat_qty + reservation.extras.booster_qty + reservation.extras.infant_qty;
+  }
+  if (key === 'licenceFront') return reservation.licenceFront === 'uploaded' ? 1 : 0;
+  if (key === 'licenceBack') return reservation.licenceBack === 'uploaded' ? 1 : 0;
+  return reservationSortValue(reservation);
+};
+
+const compareReservationTableValues = (firstReservation: Reservation, secondReservation: Reservation, sort: ReservationSortState) => {
+  const firstValue = reservationTableSortValue(firstReservation, sort.key);
+  const secondValue = reservationTableSortValue(secondReservation, sort.key);
+  const directionMultiplier = sort.direction === 'asc' ? 1 : -1;
+
+  if (typeof firstValue === 'number' && typeof secondValue === 'number') {
+    return (firstValue - secondValue) * directionMultiplier;
+  }
+
+  return String(firstValue).localeCompare(String(secondValue), 'el', { numeric: true, sensitivity: 'base' }) * directionMultiplier;
 };
 
 const withCurrentOption = (options: string[], current: string) =>
@@ -307,6 +406,7 @@ const resolveLicenceUrl = (value?: string | null) => {
 const reservationRecordToReservation = (record: ReservationRequestRecord): Reservation => ({
   id: String(record.id),
   createdAt: record.created_at || '',
+  lastModifiedAt: record.updated_at || record.last_modified || record.created_at || '',
   phoneWhatsapp: record.phone || '',
   name: record.customer_name || '',
   email: record.email || '',
@@ -498,6 +598,8 @@ export default function BookingsManager({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof statuses)[number]>('ALL');
   const [quickFilter, setQuickFilter] = useState<QuickReservationFilter>('latest20');
+  const [listMode, setListMode] = useState<ReservationListMode>('active');
+  const [tableSort, setTableSort] = useState<ReservationSortState>({ key: 'modified', direction: 'desc' });
   const [agencyQuickFilter, setAgencyQuickFilter] = useState('ALL');
   const [showNewModal, setShowNewModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -747,7 +849,12 @@ export default function BookingsManager({
     const today = todayDateValue();
     const tomorrow = tomorrowDateValue();
 
-    const reservationsForQuickFilter = reservations.filter((reservation) => {
+    const reservationsForListMode = reservations.filter((reservation) => {
+      const isReturnedReservation = reservation.status === 'RETURN' || reservation.returnConfirmed === true;
+      return listMode === 'returned' ? isReturnedReservation : !isReturnedReservation;
+    });
+
+    const reservationsForQuickFilter = reservationsForListMode.filter((reservation) => {
       if (quickFilter === 'returnsToday') return reservation.returnDate === today;
       if (quickFilter === 'pickupsToday') return reservation.pickupDate === today;
       if (quickFilter === 'pickupsTomorrow') return reservation.pickupDate === tomorrow;
@@ -776,8 +883,8 @@ export default function BookingsManager({
         reservation.hotelRoom.toLowerCase().includes(query);
 
       return matchesStatus && matchesAgency && matchesSearch;
-    });
-  }, [agencyQuickFilter, quickFilter, reservations, searchTerm, statusFilter]);
+    }).sort((firstReservation, secondReservation) => compareReservationTableValues(firstReservation, secondReservation, tableSort));
+  }, [agencyQuickFilter, listMode, quickFilter, reservations, searchTerm, statusFilter, tableSort]);
 
   const selectedReservation =
     filteredReservations.find((reservation) => reservation.id === selectedId) ||
@@ -955,6 +1062,7 @@ export default function BookingsManager({
     const reservationDraft: Reservation = {
       id: '',
       createdAt: '',
+      lastModifiedAt: '',
       phoneWhatsapp: form.phoneWhatsapp.replace(/\s+/g, ''),
       name: form.name.trim() || 'New Customer',
       email: form.email.trim(),
@@ -1222,6 +1330,28 @@ export default function BookingsManager({
       </div>
 
       <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 rounded-lg border border-white/[0.045] bg-white/[0.012] px-2 py-1">
+        {([
+          { id: 'active', label: 'Active' },
+          { id: 'returned', label: 'Returned' },
+        ] as Array<{ id: ReservationListMode; label: string }>).map((mode) => {
+          const isActive = listMode === mode.id;
+
+          return (
+            <button
+              key={mode.id}
+              type="button"
+              onClick={() => setListMode(mode.id)}
+              className={`rounded-lg border px-3 py-1 text-[11px] font-black transition duration-200 ${
+                isActive
+                  ? 'border-emerald-300/35 bg-emerald-300/12 text-emerald-50 shadow-[0_0_16px_rgba(52,211,153,0.08)]'
+                  : 'border-white/[0.055] bg-black/20 text-zinc-400 hover:border-emerald-300/20 hover:bg-emerald-300/[0.055] hover:text-zinc-100'
+              }`}
+            >
+              {mode.label}
+            </button>
+          );
+        })}
+        <span className="h-5 w-px bg-white/[0.07]" />
         {quickReservationFilters.map((filter) => {
           const isActive = quickFilter === filter.id;
 
@@ -1277,27 +1407,26 @@ export default function BookingsManager({
           <table className="w-full min-w-[1430px] text-left text-[12px]">
             <thead className="sticky top-0 z-10 bg-[#101824] text-[11px] font-semibold text-zinc-200 shadow-[0_1px_0_rgba(255,255,255,0.08)]">
               <tr>
-                {[
-                  'Phone WhatsApp',
-                  'Vehicle Group',
-                  'Agency',
-                  'Representative',
-                  'Name',
-                  'Pickup Date',
-                  'Return Date',
-                  'Pickup Time',
-                  'Return Time',
-                  'Price',
-                  'Status',
-                  'Language',
-                  'Send Return',
-                  'Confirmation Sent',
-                  'Extras',
-                  'Licence Front',
-                  'Licence Back',
-                ].map((column) => (
-                  <th key={column} className="whitespace-nowrap px-2 py-1.5">
-                    {column}
+                {bookingTableColumns.map((column) => (
+                  <th key={column.key} className={`whitespace-nowrap px-2 py-1.5 ${column.className || ''}`}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTableSort((currentSort) =>
+                          currentSort.key === column.key
+                            ? { key: column.key, direction: currentSort.direction === 'asc' ? 'desc' : 'asc' }
+                            : { key: column.key, direction: 'asc' }
+                        )
+                      }
+                      className={`flex w-full items-center gap-1 text-left font-semibold transition hover:text-white ${
+                        column.align === 'right' ? 'justify-end' : ''
+                      } ${tableSort.key === column.key ? 'text-sky-100' : 'text-zinc-200'}`}
+                    >
+                      <span>{column.label}</span>
+                      {tableSort.key === column.key && (
+                        <span className="text-[9px] text-sky-200">{tableSort.direction === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </button>
                   </th>
                 ))}
               </tr>
@@ -1305,21 +1434,21 @@ export default function BookingsManager({
             <tbody className="divide-y divide-white/[0.055]">
               {isLoadingReservations && (
                 <tr>
-                  <td colSpan={17} className="px-3 py-8 text-center text-sm text-zinc-500">
+                  <td colSpan={18} className="px-3 py-8 text-center text-sm text-zinc-500">
                     Φόρτωση κρατήσεων...
                   </td>
                 </tr>
               )}
               {!isLoadingReservations && filteredReservations.length === 0 && (
                 <tr>
-                  <td colSpan={17} className="px-3 py-8 text-center text-sm text-zinc-500">
+                  <td colSpan={18} className="px-3 py-8 text-center text-sm text-zinc-500">
                     Δεν υπάρχουν κρατήσεις.
                   </td>
                 </tr>
               )}
               {filteredReservations.map((reservation) => {
                 const isSelected = selectedReservation.id === reservation.id;
-                const isReturned = reservation.status === 'RETURN';
+                const isReturned = reservation.status === 'RETURN' || reservation.returnConfirmed === true;
                 const hasUnreadWhatsapp =
                   unreadWhatsappReservationIds.has(reservation.id) ||
                   (selectedReservation.id === reservation.id && whatsappMessages.some((message) => message.isUnread));
@@ -1357,8 +1486,8 @@ export default function BookingsManager({
                     </td>
                     <td className="whitespace-nowrap px-2 py-1"><VehicleGroupBadge value={reservation.vehicleGroup} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><AgencyBadge value={reservation.agency} /></td>
-                    <td className={`max-w-[118px] truncate whitespace-nowrap px-2 py-1 ${isReturned ? 'text-cyan-100' : 'text-zinc-300'}`} title={reservation.representative}>{reservation.representative}</td>
-                    <td className={`max-w-[132px] truncate whitespace-nowrap px-2 py-1 font-semibold ${isReturned ? 'text-cyan-50' : 'text-zinc-100'}`} title={reservation.name}>{reservation.name}</td>
+                    <td className={`max-w-[102px] truncate whitespace-nowrap px-2 py-1 ${isReturned ? 'text-cyan-100' : 'text-zinc-300'}`} title={reservation.representative}>{reservation.representative}</td>
+                    <td className={`max-w-[150px] truncate whitespace-nowrap px-2 py-1 font-semibold ${isReturned ? 'text-cyan-50' : 'text-zinc-100'}`} title={reservation.hotelRoom || reservation.name}>{reservation.hotelRoom || reservation.name}</td>
                     <td className={`whitespace-nowrap px-2 py-1 ${isReturned ? 'text-cyan-100' : 'text-zinc-300'}`}>{formatDate(reservation.pickupDate)}</td>
                     <td className={`whitespace-nowrap px-2 py-1 ${isReturned ? 'font-semibold text-cyan-50' : 'text-zinc-300'}`}>{formatDate(reservation.returnDate)}</td>
                     <td className={`whitespace-nowrap px-2 py-1 ${isReturned ? 'text-cyan-100' : 'text-zinc-300'}`}>{reservation.pickupTime}</td>
@@ -1371,6 +1500,7 @@ export default function BookingsManager({
                     <td className="whitespace-nowrap px-2 py-1"><ExtrasBadges extras={reservation.extras} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={reservation.licenceFront} url={reservation.licenceFrontUrl} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={reservation.licenceBack} url={reservation.licenceBackUrl} /></td>
+                    <td className={`w-[82px] whitespace-nowrap px-2 py-1 font-mono text-[11px] ${isReturned ? 'text-cyan-100' : 'text-zinc-400'}`}>{formatCompactDateTime(reservation.lastModifiedAt)}</td>
                   </tr>
                 );
               })}

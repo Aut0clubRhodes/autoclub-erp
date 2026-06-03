@@ -3,6 +3,8 @@ import { supabase } from './supabaseClient';
 export type ReservationRequestRecord = {
   id: string | number;
   created_at?: string;
+  updated_at?: string | null;
+  last_modified?: string | null;
   phone?: string | null;
   email?: string | null;
   customer_name?: string | null;
