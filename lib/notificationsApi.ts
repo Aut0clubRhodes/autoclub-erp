@@ -54,25 +54,67 @@ export async function createNotification(payload: {
   type: string;
   title: string;
   message: string;
+  display_name?: string;
 }) {
+  const insertPayload = {
+    reservation_id: payload.reservation_id ?? null,
+    type: payload.type,
+    title: payload.title,
+    message: payload.message,
+    read: false,
+  };
+
   const { data, error } = await supabase
     .from('notifications')
-    .insert({
-      reservation_id: payload.reservation_id ?? null,
-      type: payload.type,
-      title: payload.title,
-      message: payload.message,
-      read: false,
-    })
+    .insert(insertPayload)
     .select('id, reservation_id, type, title, message, read, created_at')
     .single();
 
   if (error) {
+    console.error('Notification creation failed', {
+      event_type: payload.type,
+      reservation_id: payload.reservation_id ?? null,
+      display_name: payload.display_name || '',
+      payload: insertPayload,
+      supabase_error: error,
+    });
     logNotificationError('Create notification error:', error);
     return null;
   }
 
+  console.log('Notification created', {
+    event_type: payload.type,
+    reservation_id: payload.reservation_id ?? null,
+    display_name: payload.display_name || '',
+    payload: insertPayload,
+  });
+
   return data as NotificationRecord;
+}
+
+export async function createNotificationOnce(payload: {
+  reservation_id: string;
+  type: string;
+  title: string;
+  message: string;
+  display_name?: string;
+}) {
+  const { data: existingNotification, error: existingError } = await supabase
+    .from('notifications')
+    .select('id, reservation_id, type, title, message, read, created_at')
+    .eq('reservation_id', payload.reservation_id)
+    .eq('type', payload.type)
+    .limit(1);
+
+  if (existingError) {
+    logNotificationWarning('Check existing notification warning:', existingError);
+  }
+
+  if (existingNotification?.[0]) {
+    return existingNotification[0] as NotificationRecord;
+  }
+
+  return createNotification(payload);
 }
 
 export async function markNotificationRead(id: string) {

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabaseClient';
-import { createNotification } from '@/lib/notificationsApi';
+import { createNotificationOnce } from '@/lib/notificationsApi';
 import { createReservationEvent } from '@/lib/reservationEventsApi';
 import type { ReservationRequestRecord } from '@/lib/reservationsApi';
 
@@ -110,7 +110,7 @@ export default function ReturnConfirmClient({ reservationId }: ReturnConfirmClie
   const notificationMessage = useMemo(() => {
     if (!reservation) return 'Customer confirmed vehicle return.';
 
-    return `${reservation.customer_name || reservation.phone || 'Customer'} confirmed vehicle return.`;
+    return `${reservation.hotel_room || reservation.customer_name || reservation.phone || 'Customer'} confirmed vehicle return.`;
   }, [reservation]);
 
   const confirmReturn = async () => {
@@ -144,11 +144,12 @@ export default function ReturnConfirmClient({ reservationId }: ReturnConfirmClie
       event_message: 'Customer confirmed vehicle return.',
     });
 
-    const notification = await createNotification({
+    const notification = await createNotificationOnce({
       reservation_id: reservationId,
       type: 'return_confirmed',
       title: 'Vehicle return confirmed',
       message: notificationMessage,
+      display_name: reservation?.hotel_room || reservation?.customer_name || reservation?.phone || 'Customer',
     });
 
     if (!notification) {

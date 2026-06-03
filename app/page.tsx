@@ -1704,7 +1704,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     return <ServicesManager />;
 
   case 'Κρατήσεις':
-    return <BookingsManager />;
+    return <BookingsManager onNotificationsChanged={loadNotifications} />;
 
   case 'Leasing':
     return <LeasingManager />;
@@ -1898,7 +1898,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         </header>
 
         <section className="min-h-0 w-[100dvw] flex-1 overflow-hidden pb-[calc(76px+env(safe-area-inset-bottom))]">
-          <BookingsManager mobileMode mobileFocus={bookingsMobileTab} />
+          <BookingsManager mobileMode mobileFocus={bookingsMobileTab} onNotificationsChanged={loadNotifications} />
         </section>
 
         <nav className="fixed bottom-0 left-0 right-0 z-[10000] grid w-[100dvw] grid-cols-3 gap-2 border-t border-white/[0.08] bg-black/70 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">

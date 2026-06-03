@@ -16,6 +16,7 @@ import {
   fetchReservationEvents,
   type ReservationEventRecord,
 } from '@/lib/reservationEventsApi';
+import { createNotificationOnce } from '@/lib/notificationsApi';
 import {
   fetchGroupStock,
   upsertGroupStock,
@@ -366,6 +367,27 @@ const reservationToPayload = (reservation: Reservation): ReservationRequestPaylo
   notes: reservation.notes || null,
 });
 
+const getReservationNotificationName = (reservation: Pick<Reservation, 'hotelRoom' | 'name'>) =>
+  reservation.hotelRoom.trim() || reservation.name.trim() || 'Booking';
+
+const createReservationNotificationOnce = async (
+  reservation: Pick<Reservation, 'id' | 'hotelRoom' | 'name'>,
+  type: string,
+  title: string,
+  message: string
+) => {
+  if (!reservation.id) return null;
+  const displayName = getReservationNotificationName(reservation);
+
+  return createNotificationOnce({
+    reservation_id: reservation.id,
+    type,
+    title,
+    message,
+    display_name: displayName,
+  });
+};
+
 const reservationEventToWorkflowEvent = (event: ReservationEventRecord): WorkflowEvent => ({
   id: event.id,
   eventType: event.event_type,
@@ -457,9 +479,11 @@ function buildReturnReminderPatch(reservation: Reservation): Partial<Reservation
 export default function BookingsManager({
   mobileMode = false,
   mobileFocus = 'bookings',
+  onNotificationsChanged,
 }: {
   mobileMode?: boolean;
   mobileFocus?: 'dashboard' | 'bookings' | 'whatsapp';
+  onNotificationsChanged?: () => void | Promise<void>;
 }) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -486,6 +510,65 @@ export default function BookingsManager({
   const [agencyRows, setAgencyRows] = useState<AgencyRow[]>([]);
   const [representativeRows, setRepresentativeRows] = useState<RepresentativeRow[]>([]);
 
+  const notifyBookingEventOnce = async (
+    reservation: Pick<Reservation, 'id' | 'hotelRoom' | 'name'>,
+    type: string,
+    title: string,
+    message: string
+  ) => {
+    const notification = await createReservationNotificationOnce(reservation, type, title, message);
+
+    if (notification) {
+      await Promise.resolve(onNotificationsChanged?.());
+    }
+
+    return notification;
+  };
+
+  const ensureReservationNotifications = async (nextReservations: Reservation[]) => {
+    await Promise.all(
+      nextReservations.flatMap((reservation) => {
+        const displayName = getReservationNotificationName(reservation);
+        const notificationPromises: Array<Promise<unknown>> = [];
+
+        if (reservation.licenceFrontUrl) {
+          notificationPromises.push(
+            notifyBookingEventOnce(
+              reservation,
+              'licence_front_uploaded',
+              'Licence front uploaded',
+              `${displayName} uploaded licence front.`
+            )
+          );
+        }
+
+        if (reservation.licenceBackUrl) {
+          notificationPromises.push(
+            notifyBookingEventOnce(
+              reservation,
+              'licence_back_uploaded',
+              'Licence back uploaded',
+              `${displayName} uploaded licence back.`
+            )
+          );
+        }
+
+        if (reservation.returnConfirmed) {
+          notificationPromises.push(
+            notifyBookingEventOnce(
+              reservation,
+              'return_confirmed',
+              'Vehicle return confirmed',
+              `${displayName} confirmed vehicle return.`
+            )
+          );
+        }
+
+        return notificationPromises;
+      })
+    );
+  };
+
   const loadReservations = async (preferredReservationId?: string) => {
     setIsLoadingReservations(true);
     const records = await fetchReservations();
@@ -500,6 +583,7 @@ export default function BookingsManager({
         : nextReservations[0]?.id || '';
     });
     setIsLoadingReservations(false);
+    void ensureReservationNotifications(nextReservations);
     return nextReservations;
   };
 
@@ -717,6 +801,8 @@ export default function BookingsManager({
   const updateSelectedReservation = async (reservationDraft: Reservation): Promise<Reservation | false> => {
     if (!selectedReservation) return false;
 
+    const previousReservation =
+      reservations.find((reservation) => reservation.id === reservationDraft.id) || selectedReservation;
     const payload = reservationToPayload(reservationDraft);
     console.log('SAVE PAYLOAD', payload);
 
@@ -735,6 +821,16 @@ export default function BookingsManager({
       freshReservations.find((reservation) => reservation.id === updatedReservation.id) || updatedReservation;
 
     setSelectedId(freshUpdatedReservation.id);
+    if (previousReservation.status !== freshUpdatedReservation.status) {
+      const displayName = getReservationNotificationName(freshUpdatedReservation);
+      await notifyBookingEventOnce(
+        freshUpdatedReservation,
+        'status_changed',
+        'Booking status changed',
+        `${displayName} status changed to ${freshUpdatedReservation.status}.`
+      );
+    }
+
     return freshUpdatedReservation;
   };
 
@@ -744,6 +840,7 @@ export default function BookingsManager({
       return false;
     }
 
+    const previousReservation = reservations.find((reservation) => reservation.id === reservationDraft.id);
     const updatedRecord = await updateReservation(reservationDraft.id, reservationToPayload(reservationDraft));
 
     if (!updatedRecord) {
@@ -756,6 +853,15 @@ export default function BookingsManager({
     setSelectedId(updatedReservation.id);
     setEditingReservation(null);
     await recordWorkflowEvent(updatedReservation.id, 'booking_updated', 'Booking details updated');
+    if (previousReservation && previousReservation.status !== updatedReservation.status) {
+      const displayName = getReservationNotificationName(updatedReservation);
+      await notifyBookingEventOnce(
+        updatedReservation,
+        'status_changed',
+        'Booking status changed',
+        `${displayName} status changed to ${updatedReservation.status}.`
+      );
+    }
     return true;
   };
 
@@ -887,6 +993,13 @@ export default function BookingsManager({
 
     const nextReservation = reservationRecordToReservation(createdRecord);
     await recordWorkflowEvent(nextReservation.id, 'booking_created', 'Booking created');
+    const displayName = getReservationNotificationName(nextReservation);
+    await notifyBookingEventOnce(
+      nextReservation,
+      'booking_created',
+      'New booking created',
+      `${displayName} created a new booking.`
+    );
 
     setReservations((current) => [nextReservation, ...current]);
     setSelectedId(nextReservation.id);
