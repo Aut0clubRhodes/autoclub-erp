@@ -2872,9 +2872,12 @@ function NotificationBell({
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 min-w-5 rounded-full border border-zinc-950 bg-rose-500 px-1.5 py-0.5 text-center text-[10px] font-black leading-none text-white shadow-[0_0_16px_rgba(244,63,94,0.45)]">
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
+          <>
+            <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full border border-zinc-950 bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.7)]" />
+            <span className="absolute -right-1 -top-1 min-w-5 rounded-full border border-zinc-950 bg-rose-500 px-1.5 py-0.5 text-center text-[10px] font-black leading-none text-white shadow-[0_0_16px_rgba(244,63,94,0.45)]">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          </>
         )}
       </button>
 

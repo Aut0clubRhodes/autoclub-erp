@@ -714,7 +714,7 @@ export default function BookingsManager({
     void Promise.resolve().then(() => loadWhatsappMessages(selectedReservation.id));
   }, [selectedReservation?.id]);
 
-  const updateSelectedReservation = async (reservationDraft: Reservation) => {
+  const updateSelectedReservation = async (reservationDraft: Reservation): Promise<Reservation | false> => {
     if (!selectedReservation) return false;
 
     const payload = reservationToPayload(reservationDraft);
@@ -730,8 +730,12 @@ export default function BookingsManager({
     const updatedReservation = reservationRecordToReservation(updatedRecord);
     console.log('UPDATED RESERVATION AFTER SAVE', updatedReservation);
 
-    await loadReservations(updatedReservation.id);
-    return true;
+    const freshReservations = await loadReservations(updatedReservation.id);
+    const freshUpdatedReservation =
+      freshReservations.find((reservation) => reservation.id === updatedReservation.id) || updatedReservation;
+
+    setSelectedId(freshUpdatedReservation.id);
+    return freshUpdatedReservation;
   };
 
   const saveEditedReservation = async (reservationDraft: Reservation) => {
@@ -1371,7 +1375,7 @@ function ReservationInspector({
   agencyOptions: string[];
   representativesByAgency: Record<string, string[]>;
   vehicleGroups: VehicleGroup[];
-  onUpdate: (reservation: Reservation) => Promise<boolean>;
+  onUpdate: (reservation: Reservation) => Promise<Reservation | false>;
   onDelete: () => void;
   workflowEvents: WorkflowEvent[];
   isLoadingWorkflowEvents: boolean;
@@ -1385,6 +1389,10 @@ function ReservationInspector({
   const [draft, setDraft] = useState<Reservation>(reservation);
   const [viewerDocument, setViewerDocument] = useState<LicenceViewerDocument | null>(null);
 
+  useEffect(() => {
+    setDraft(reservation);
+  }, [reservation.id]);
+
   const updateDraft = (patch: Partial<Reservation>) => {
     setDraft((currentDraft) => ({ ...currentDraft, ...patch }));
   };
@@ -1395,9 +1403,10 @@ function ReservationInspector({
       return;
     }
 
-    const updated = await onUpdate(draft);
-    if (updated) {
-      await onCreateWorkflowEvent(draft.id, 'booking_updated', 'Booking details updated');
+    const updatedReservation = await onUpdate(draft);
+    if (updatedReservation) {
+      setDraft(updatedReservation);
+      await onCreateWorkflowEvent(updatedReservation.id, 'booking_updated', 'Booking details updated');
     }
   };
 
@@ -1425,14 +1434,15 @@ function ReservationInspector({
 
     updateDraft(patch);
     const nextDraft = { ...draft, ...patch };
-    const updated = await onUpdate(nextDraft);
+    const updatedReservation = await onUpdate(nextDraft);
 
-    if (updated) {
-      await onCreateWorkflowEvent(draft.id, 'status_changed', `Status changed to ${status}`);
+    if (updatedReservation) {
+      setDraft(updatedReservation);
+      await onCreateWorkflowEvent(updatedReservation.id, 'status_changed', `Status changed to ${status}`);
 
       if (status === 'ACCEPTED' && draft.status !== 'ACCEPTED') {
         await onCreateWorkflowEvent(
-          draft.id,
+          updatedReservation.id,
           'confirmation_sent',
           'Confirmation sent with agreement/licence link'
         );
@@ -1922,7 +1932,7 @@ function MobileReservationModal({
   whatsappMessages: WhatsappMessage[];
   isLoadingWhatsappMessages: boolean;
   onClose: () => void;
-  onUpdate: (reservation: Reservation) => Promise<boolean>;
+  onUpdate: (reservation: Reservation) => Promise<Reservation | false>;
   onSendReminder: (reservation: Reservation) => Promise<Reservation | false>;
   onReloadWhatsappMessages: (reservationId: string) => Promise<void>;
 }) {
@@ -1950,7 +1960,10 @@ function MobileReservationModal({
       return;
     }
 
-    await onUpdate(draft);
+    const updatedReservation = await onUpdate(draft);
+    if (updatedReservation) {
+      setDraft(updatedReservation);
+    }
   };
 
   const sendReminder = async () => {
