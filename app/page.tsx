@@ -1716,7 +1716,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     return <ServicesManager />;
 
   case 'Κρατήσεις':
-    return <BookingsManager onNotificationsChanged={loadNotifications} />;
+    return <BookingsManager mobileMode={isPhoneViewport} mobileFocus="bookings" onNotificationsChanged={loadNotifications} />;
 
   case 'Leasing':
     return <LeasingManager />;

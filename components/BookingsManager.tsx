@@ -632,6 +632,24 @@ export default function BookingsManager({
   const [form, setForm] = useState<ReservationForm>(initialForm);
   const [agencyRows, setAgencyRows] = useState<AgencyRow[]>([]);
   const [representativeRows, setRepresentativeRows] = useState<RepresentativeRow[]>([]);
+  const [isPhoneBookingsViewport, setIsPhoneBookingsViewport] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 768px)').matches;
+  });
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 768px)');
+    const updatePhoneViewport = () => setIsPhoneBookingsViewport(mediaQuery.matches);
+
+    updatePhoneViewport();
+    mediaQuery.addEventListener('change', updatePhoneViewport);
+    window.addEventListener('orientationchange', updatePhoneViewport);
+
+    return () => {
+      mediaQuery.removeEventListener('change', updatePhoneViewport);
+      window.removeEventListener('orientationchange', updatePhoneViewport);
+    };
+  }, []);
 
   const notifyBookingEventOnce = async (
     reservation: Pick<Reservation, 'id' | 'hotelRoom' | 'name'>,
@@ -1285,6 +1303,112 @@ export default function BookingsManager({
           })
         : filteredReservations;
 
+    if (isPhoneBookingsViewport) {
+      return (
+        <div
+          className="flex h-full min-h-0 w-[100dvw] max-w-none flex-col overflow-x-hidden bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] px-3 pb-3 pt-2 text-white"
+          style={{ width: '100dvw', maxWidth: 'none' }}
+        >
+          <div className="flex flex-shrink-0 items-center justify-between px-1 pb-2">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-sky-200/60">Bookings</p>
+              <h2 className="text-lg font-black text-white">Κρατήσεις</h2>
+            </div>
+            <span className="rounded-2xl border border-white/[0.07] bg-white/[0.035] px-3 py-1.5 text-xs font-black text-zinc-200">
+              {mobileReservations.length}
+            </span>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-2">
+            {isLoadingReservations ? (
+              <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-5 text-center text-sm text-zinc-400">
+                Φόρτωση κρατήσεων...
+              </div>
+            ) : mobileReservations.length > 0 ? (
+              <div className="space-y-2.5">
+                {mobileReservations.map((reservation) => {
+                  const hasUnreadWhatsapp = unreadWhatsappReservationIds.has(reservation.id);
+                  const licenceState = getDrivingLicenceState(reservation);
+
+                  return (
+                    <button
+                      key={reservation.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedId(reservation.id);
+                        setMobileReservationId(reservation.id);
+                      }}
+                      className="w-full rounded-[22px] border border-white/[0.075] bg-white/[0.035] p-3 text-left shadow-[0_16px_42px_rgba(0,0,0,0.22)] transition active:scale-[0.99]"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex min-w-0 items-center gap-2">
+                            {hasUnreadWhatsapp && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.75)]" />}
+                            <p className="truncate text-base font-black text-white">{reservation.hotelRoom || '-'}</p>
+                          </div>
+                          <p className="mt-1 truncate text-sm font-semibold text-zinc-200">{reservation.name || 'Customer'}</p>
+                          <p className="mt-0.5 font-mono text-xs text-sky-100/80">{reservation.phoneWhatsapp || '-'}</p>
+                        </div>
+                        <StatusBadge status={reservation.status} />
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
+                          <p className="text-zinc-500">Group</p>
+                          <p className="mt-1 font-black text-sky-100">{reservation.vehicleGroup || '-'}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
+                          <p className="text-zinc-500">Driving Licence</p>
+                          <p className={`mt-1 font-black ${licenceState === 'uploaded' ? 'text-blue-100' : 'text-zinc-500'}`}>
+                            {licenceState === 'uploaded' ? 'Uploaded' : 'Empty'}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
+                          <p className="text-zinc-500">Pickup</p>
+                          <p className="mt-1 font-semibold text-zinc-100">{formatDate(reservation.pickupDate)}</p>
+                          <p className="font-mono text-[11px] text-zinc-400">{reservation.pickupTime || '-'}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
+                          <p className="text-zinc-500">Return</p>
+                          <p className="mt-1 font-semibold text-zinc-100">{formatDate(reservation.returnDate)}</p>
+                          <p className="font-mono text-[11px] text-zinc-400">{reservation.returnTime || '-'}</p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-5 text-center text-sm text-zinc-400">
+                Δεν υπάρχουν κρατήσεις.
+              </div>
+            )}
+          </div>
+
+          {mobileReservation && (
+            <MobileReservationModal
+              reservation={mobileReservation}
+              agencyOptions={agencyOptions}
+              representativesByAgency={representativesByAgency}
+              vehicleGroups={vehicleGroups}
+              workflowEvents={workflowEvents}
+              isLoadingWorkflowEvents={isLoadingWorkflowEvents}
+              whatsappMessages={whatsappMessages}
+              isLoadingWhatsappMessages={isLoadingWhatsappMessages}
+              onClose={() => setMobileReservationId('')}
+              onUpdate={updateSelectedReservation}
+              onSendReminder={sendReminder}
+              isReminderSending={sendingReminderIds.has(mobileReservation.id)}
+              isReminderDisabled={isBulkSendingReminders}
+              reminderFeedback={reminderFeedback}
+              onReloadWhatsappMessages={loadWhatsappMessages}
+              phoneLayout
+            />
+          )}
+        </div>
+      );
+    }
+
     if (mobileFocus === 'dashboard') {
       return (
         <div
@@ -1473,6 +1597,8 @@ export default function BookingsManager({
             agencyOptions={agencyOptions}
             representativesByAgency={representativesByAgency}
             vehicleGroups={vehicleGroups}
+            workflowEvents={workflowEvents}
+            isLoadingWorkflowEvents={isLoadingWorkflowEvents}
             whatsappMessages={whatsappMessages}
             isLoadingWhatsappMessages={isLoadingWhatsappMessages}
             onClose={() => setMobileReservationId('')}
@@ -2434,6 +2560,8 @@ function MobileReservationModal({
   agencyOptions,
   representativesByAgency,
   vehicleGroups,
+  workflowEvents,
+  isLoadingWorkflowEvents,
   whatsappMessages,
   isLoadingWhatsappMessages,
   onClose,
@@ -2443,11 +2571,14 @@ function MobileReservationModal({
   isReminderDisabled,
   reminderFeedback,
   onReloadWhatsappMessages,
+  phoneLayout = false,
 }: {
   reservation: Reservation;
   agencyOptions: string[];
   representativesByAgency: Record<string, string[]>;
   vehicleGroups: VehicleGroup[];
+  workflowEvents: WorkflowEvent[];
+  isLoadingWorkflowEvents: boolean;
   whatsappMessages: WhatsappMessage[];
   isLoadingWhatsappMessages: boolean;
   onClose: () => void;
@@ -2457,8 +2588,10 @@ function MobileReservationModal({
   isReminderDisabled: boolean;
   reminderFeedback: string;
   onReloadWhatsappMessages: (reservationId: string) => Promise<void>;
+  phoneLayout?: boolean;
 }) {
   const [draft, setDraft] = useState(reservation);
+  const [viewerDocument, setViewerDocument] = useState<LicenceViewerDocument | null>(null);
   const [messageDraft, setMessageDraft] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const representatives = representativesByAgency[draft.agency] || [];
@@ -2575,8 +2708,67 @@ function MobileReservationModal({
                 </button>
               ))}
             </div>
+            {phoneLayout && (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={saveDraft}
+                  className="min-h-12 rounded-2xl border border-emerald-300/35 bg-emerald-400/18 px-3 py-3 text-sm font-black text-emerald-50"
+                >
+                  Save Changes
+                </button>
+                <button
+                  type="button"
+                  onClick={sendReminder}
+                  disabled={isReminderSending || isReminderDisabled}
+                  className="min-h-12 rounded-2xl border border-cyan-300/35 bg-cyan-400/14 px-3 py-3 text-sm font-black text-cyan-50 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-900/70 disabled:text-zinc-500"
+                >
+                  {isReminderSending ? 'Sending...' : 'Send Reminder'}
+                </button>
+              </div>
+            )}
           </div>
         </section>
+
+        {phoneLayout && (
+          <section className="mt-3 rounded-3xl border border-white/[0.07] bg-white/[0.03] p-3">
+            <LicenceCard title="Driving Licence" state={getDrivingLicenceState(draft)} url={getDrivingLicenceUrl(draft)} onOpen={setViewerDocument} />
+          </section>
+        )}
+
+        {phoneLayout && (
+          <section className="mt-3 rounded-3xl border border-white/[0.07] bg-white/[0.03] p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-black text-white">Workflow</h3>
+              <span className="text-[10px] font-semibold text-zinc-500">audit</span>
+            </div>
+            <div className="max-h-[240px] space-y-2 overflow-y-auto pr-1">
+              {isLoadingWorkflowEvents ? (
+                <p className="rounded-2xl border border-white/[0.06] bg-black/20 p-3 text-sm text-zinc-500">Loading workflow...</p>
+              ) : workflowEvents.length > 0 ? (
+                workflowEvents.map((event) => {
+                  const eventStyle = getWorkflowEventStyle(event.eventType);
+
+                  return (
+                    <div key={event.id} className={`rounded-2xl border px-3 py-2 text-xs leading-5 ${eventStyle.className}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-bold text-zinc-50">{event.message}</p>
+                          <p className="mt-1 text-[10px] opacity-70">{formatDateTime(event.createdAt)}</p>
+                        </div>
+                        <span className={`shrink-0 rounded-full border px-2 py-1 text-[9px] font-black ${eventStyle.badgeClassName || 'border-white/[0.08] bg-white/[0.035] text-zinc-400'}`}>
+                          {eventStyle.badge || event.eventType}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="rounded-2xl border border-white/[0.06] bg-black/20 p-3 text-sm text-zinc-500">No workflow events yet.</p>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="mt-3 rounded-3xl border border-white/[0.07] bg-white/[0.03] p-3">
           <div className="mb-2 flex items-center justify-between">
@@ -2627,19 +2819,22 @@ function MobileReservationModal({
           {reminderFeedback}
         </p>
       )}
-      <footer className="grid flex-shrink-0 grid-cols-2 gap-2 border-t border-white/[0.08] bg-black/28 p-3">
-        <button
-          type="button"
-          onClick={sendReminder}
-          disabled={isReminderSending || isReminderDisabled}
-          className="rounded-2xl border border-cyan-300/35 bg-cyan-400/14 px-3 py-3 text-sm font-black text-cyan-50 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-900/70 disabled:text-zinc-500"
-        >
-          {isReminderSending ? 'Sending...' : 'Send reminder'}
-        </button>
-        <button type="button" onClick={saveDraft} className="rounded-2xl border border-emerald-300/35 bg-emerald-400/18 px-3 py-3 text-sm font-black text-emerald-50">
-          Save changes
-        </button>
-      </footer>
+      {!phoneLayout && (
+        <footer className="grid flex-shrink-0 grid-cols-2 gap-2 border-t border-white/[0.08] bg-black/28 p-3">
+          <button
+            type="button"
+            onClick={sendReminder}
+            disabled={isReminderSending || isReminderDisabled}
+            className="rounded-2xl border border-cyan-300/35 bg-cyan-400/14 px-3 py-3 text-sm font-black text-cyan-50 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-900/70 disabled:text-zinc-500"
+          >
+            {isReminderSending ? 'Sending...' : 'Send reminder'}
+          </button>
+          <button type="button" onClick={saveDraft} className="rounded-2xl border border-emerald-300/35 bg-emerald-400/18 px-3 py-3 text-sm font-black text-emerald-50">
+            Save changes
+          </button>
+        </footer>
+      )}
+      {phoneLayout && viewerDocument && <LicenceViewerModal document={viewerDocument} onClose={() => setViewerDocument(null)} />}
     </div>
   );
 }
