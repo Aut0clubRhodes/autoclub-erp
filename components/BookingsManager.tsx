@@ -198,11 +198,9 @@ const fallbackAgencies = Object.keys(fallbackAgencyRepresentatives);
 const statuses: Array<ReservationStatus | 'ALL'> = ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'RETURN'];
 const languageOptions: ReservationLanguage[] = ['English', 'French', 'Italian', 'German', 'Czech'];
 const quickReservationFilters: Array<{ id: QuickReservationFilter; label: string }> = [
-  { id: 'latest20', label: 'Τελευταίες 20' },
   { id: 'returnsToday', label: 'Επιστροφές σήμερα' },
   { id: 'pickupsToday', label: 'Παραδόσεις σήμερα' },
   { id: 'pickupsTomorrow', label: 'Παραδόσεις αύριο' },
-  { id: 'returnsTomorrow', label: 'Επιστροφές αύριο' },
   { id: 'all', label: 'Όλες' },
 ];
 const bookingTableColumns: Array<{ key: ReservationSortKey; label: string; align?: 'right'; className?: string }> = [
@@ -927,10 +925,13 @@ export default function BookingsManager({
     const today = todayDateValue();
     const tomorrow = tomorrowDateValue();
 
-    const reservationsForListMode = reservations.filter((reservation) => {
-      const isReturnedReservation = reservation.status === 'RETURN' || reservation.returnConfirmed === true;
-      return listMode === 'returned' ? isReturnedReservation : !isReturnedReservation;
-    });
+    const reservationsForListMode =
+      quickFilter === 'returnsToday'
+        ? reservations
+        : reservations.filter((reservation) => {
+            const isReturnedReservation = reservation.status === 'RETURN' || reservation.returnConfirmed === true;
+            return listMode === 'returned' ? isReturnedReservation : !isReturnedReservation;
+          });
 
     const reservationsForQuickFilter = reservationsForListMode.filter((reservation) => {
       if (quickFilter === 'returnsToday') return reservation.returnDate === today;
@@ -1669,7 +1670,16 @@ export default function BookingsManager({
                     <td className={`whitespace-nowrap px-2 py-1 ${isReturned ? 'text-cyan-100' : 'text-zinc-300'}`}>{reservation.pickupTime}</td>
                     <td className={`whitespace-nowrap px-2 py-1 ${isReturned ? 'font-semibold text-cyan-50' : 'text-zinc-300'}`}>{reservation.returnTime}</td>
                     <td className="whitespace-nowrap px-2 py-1 text-right font-semibold text-white">{money(reservation.price)}</td>
-                    <td className="whitespace-nowrap px-2 py-1"><StatusBadge status={reservation.status} /></td>
+                    <td className="whitespace-nowrap px-2 py-1">
+                      <span className="inline-flex items-center gap-1.5">
+                        <StatusBadge status={reservation.status} />
+                        {quickFilter === 'returnsToday' && isReturned && (
+                          <span className="rounded-full border border-emerald-300/45 bg-emerald-400/14 px-1.5 py-0.5 text-[9px] font-black leading-none text-emerald-100">
+                            ✓ RETURN
+                          </span>
+                        )}
+                      </span>
+                    </td>
                     <td className="whitespace-nowrap px-2 py-1"><LanguageBadge language={reservation.language} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><BooleanBadge active={reservation.sendReturn} /></td>
                     <td className="whitespace-nowrap px-2 py-1"><BooleanBadge active={reservation.confirmationSent} /></td>
