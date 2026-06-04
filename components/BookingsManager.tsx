@@ -303,6 +303,8 @@ const tomorrowDateValue = () => {
   return formatDateInputValue(tomorrow);
 };
 
+const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+
 const reservationSortValue = (reservation: Reservation) => {
   const lastModifiedAt = reservation.lastModifiedAt ? new Date(reservation.lastModifiedAt).getTime() : Number.NaN;
 
@@ -560,7 +562,7 @@ async function postReturnReminderWebhook(reservation: Reservation) {
   });
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(`${response.status} ${await response.text()}`);
   }
 }
 
@@ -624,6 +626,9 @@ export default function BookingsManager({
   const [showReturnsModal, setShowReturnsModal] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [showAvailabilityTestModal, setShowAvailabilityTestModal] = useState(false);
+  const [sendingReminderIds, setSendingReminderIds] = useState<Set<string>>(new Set());
+  const [isBulkSendingReminders, setIsBulkSendingReminders] = useState(false);
+  const [reminderFeedback, setReminderFeedback] = useState('');
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
   const [mobileReservationId, setMobileReservationId] = useState('');
   const [form, setForm] = useState<ReservationForm>(initialForm);
@@ -963,6 +968,18 @@ export default function BookingsManager({
     filteredReservations.find((reservation) => reservation.id === selectedId) ||
     filteredReservations[0] ||
     reservations[0];
+  const todayReturnReminderTargets = useMemo(() => {
+    const reservationIds = new Set<string>();
+
+    return filteredReservations.filter((reservation) => {
+      if (quickFilter !== 'returnsToday') return false;
+      if (reservationIds.has(reservation.id)) return false;
+      if (reservation.sendReturn || reservation.returnReminderSent) return false;
+
+      reservationIds.add(reservation.id);
+      return true;
+    });
+  }, [filteredReservations, quickFilter]);
   const mobileReservation =
     reservations.find((reservation) => reservation.id === mobileReservationId) ||
     filteredReservations.find((reservation) => reservation.id === mobileReservationId);
@@ -1067,11 +1084,26 @@ export default function BookingsManager({
   };
 
   const sendReminder = async (reservation: Reservation) => {
+    if (sendingReminderIds.has(reservation.id)) {
+      return false;
+    }
+
+    setReminderFeedback('');
+    setSendingReminderIds((currentIds) => new Set(currentIds).add(reservation.id));
+
     try {
       await postReturnReminderWebhook(reservation);
     } catch (error) {
       console.error('Send reminder webhook failed:', error);
-      window.alert('Το reminder δεν στάλθηκε. Δοκιμάστε ξανά.');
+      const message = error instanceof Error && error.message.includes('429')
+        ? 'Too many requests from Make. Please wait a little and try again.'
+        : 'Reminder was not sent. Please try again.';
+      setReminderFeedback(message);
+      setSendingReminderIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+        nextIds.delete(reservation.id);
+        return nextIds;
+      });
       return false;
     }
 
@@ -1083,7 +1115,12 @@ export default function BookingsManager({
     const updatedRecord = await updateReservation(nextReservation.id, reservationToPayload(nextReservation));
 
     if (!updatedRecord) {
-      window.alert('Το reminder στάλθηκε αλλά η κράτηση δεν ενημερώθηκε.');
+      setReminderFeedback('Reminder was sent, but the reservation was not updated.');
+      setSendingReminderIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+        nextIds.delete(reservation.id);
+        return nextIds;
+      });
       return false;
     }
 
@@ -1107,7 +1144,53 @@ export default function BookingsManager({
       setWorkflowEvents((currentEvents) => [reservationEventToWorkflowEvent(event), ...currentEvents]);
     }
 
+    setReminderFeedback('Reminder sent.');
+    setSendingReminderIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      nextIds.delete(reservation.id);
+      return nextIds;
+    });
     return updatedReservation;
+  };
+
+  const sendAllTodayReturnReminders = async () => {
+    if (isBulkSendingReminders || quickFilter !== 'returnsToday') return;
+
+    const processedReservationIds = new Set<string>();
+    const targetReservations = todayReturnReminderTargets.filter((reservation) => {
+      if (processedReservationIds.has(reservation.id)) return false;
+      processedReservationIds.add(reservation.id);
+      return true;
+    });
+
+    if (targetReservations.length === 0) {
+      setReminderFeedback('No unsent return reminders in the visible list.');
+      return;
+    }
+
+    setIsBulkSendingReminders(true);
+    setReminderFeedback(`Sending 1/${targetReservations.length}...`);
+
+    let sentCount = 0;
+    let failedCount = 0;
+
+    for (let index = 0; index < targetReservations.length; index += 1) {
+      setReminderFeedback(`Sending ${index + 1}/${targetReservations.length}...`);
+      const result = await sendReminder(targetReservations[index]);
+
+      if (result) {
+        sentCount += 1;
+      } else {
+        failedCount += 1;
+      }
+
+      if (index < targetReservations.length - 1) {
+        await wait(1200);
+      }
+    }
+
+    setReminderFeedback(`Sent ${sentCount} reminders. Failed ${failedCount}.`);
+    setIsBulkSendingReminders(false);
   };
 
   const saveReservation = async () => {
@@ -1329,6 +1412,9 @@ export default function BookingsManager({
             onClose={() => setMobileReservationId('')}
             onUpdate={updateSelectedReservation}
             onSendReminder={sendReminder}
+            isReminderSending={sendingReminderIds.has(mobileReservation.id)}
+            isReminderDisabled={isBulkSendingReminders}
+            reminderFeedback={reminderFeedback}
             onReloadWhatsappMessages={loadWhatsappMessages}
           />
         )}
@@ -1473,6 +1559,23 @@ export default function BookingsManager({
             </button>
           );
         })}
+        {quickFilter === 'returnsToday' && (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {reminderFeedback && (
+              <span className="rounded-lg border border-white/[0.055] bg-black/25 px-2.5 py-1 text-[11px] font-bold text-zinc-200">
+                {reminderFeedback}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={sendAllTodayReturnReminders}
+              disabled={isBulkSendingReminders || todayReturnReminderTargets.length === 0}
+              className="rounded-lg border border-cyan-300/30 bg-cyan-300/12 px-3 py-1 text-[11px] font-black text-cyan-50 transition hover:border-cyan-200/45 hover:bg-cyan-300/18 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-900/65 disabled:text-zinc-500"
+            >
+              {isBulkSendingReminders ? 'Sending...' : "Send all today's return reminders"}
+            </button>
+          </div>
+        )}
       </div>
 
       <section className="h-[46%] min-h-[276px] flex-shrink-0 overflow-hidden rounded-xl border border-white/[0.07] bg-[#060a11]">
@@ -1598,6 +1701,9 @@ export default function BookingsManager({
           onOpenWhatsappChat={() => setShowWhatsappChat(true)}
           onCreateWorkflowEvent={recordWorkflowEvent}
           onSendReminder={sendReminder}
+          isReminderSending={sendingReminderIds.has(selectedReservation.id)}
+          isReminderDisabled={isBulkSendingReminders}
+          reminderFeedback={reminderFeedback}
         />
       ) : (
         <section className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-6 text-sm text-zinc-500">
@@ -1644,6 +1750,9 @@ export default function BookingsManager({
           reservations={reservations}
           onClose={() => setShowReturnsModal(false)}
           onSendReminder={sendReminder}
+          sendingReminderIds={sendingReminderIds}
+          isBulkSending={isBulkSendingReminders}
+          reminderFeedback={reminderFeedback}
         />
       )}
 
@@ -1685,6 +1794,9 @@ function ReservationInspector({
   onOpenWhatsappChat,
   onCreateWorkflowEvent,
   onSendReminder,
+  isReminderSending,
+  isReminderDisabled,
+  reminderFeedback,
 }: {
   reservation: Reservation;
   agencyOptions: string[];
@@ -1700,6 +1812,9 @@ function ReservationInspector({
   onOpenWhatsappChat: () => void;
   onCreateWorkflowEvent: (reservationId: string, eventType: string, eventMessage: string) => Promise<void>;
   onSendReminder: (reservation: Reservation) => Promise<Reservation | false>;
+  isReminderSending: boolean;
+  isReminderDisabled: boolean;
+  reminderFeedback: string;
 }) {
   const [draft, setDraft] = useState<Reservation>(reservation);
   const [viewerDocument, setViewerDocument] = useState<LicenceViewerDocument | null>(null);
@@ -1769,8 +1884,14 @@ function ReservationInspector({
     label: string;
     tone: 'reminder' | 'save' | 'delete';
     onClick: () => void | Promise<void>;
+    disabled?: boolean;
   }> = [
-    { label: 'Send reminder', tone: 'reminder', onClick: sendReminder },
+    {
+      label: isReminderSending ? 'Sending...' : 'Send reminder',
+      tone: 'reminder',
+      onClick: sendReminder,
+      disabled: isReminderSending || isReminderDisabled,
+    },
     { label: 'Save changes', tone: 'save', onClick: saveDraft },
     { label: 'Delete booking', tone: 'delete', onClick: onDelete },
   ];
@@ -1860,18 +1981,24 @@ function ReservationInspector({
                     key={action.label}
                     type="button"
                     onClick={action.onClick}
+                    disabled={action.disabled}
                     className={`flex h-8 min-w-0 items-center justify-center whitespace-nowrap rounded-lg border px-1.5 text-center text-[10.5px] font-black leading-none tracking-normal transition duration-200 hover:-translate-y-0.5 ${
                       action.tone === 'reminder'
                         ? 'border-cyan-300/45 bg-cyan-400/14 text-cyan-50 hover:bg-cyan-400/22'
                         : action.tone === 'save'
                           ? 'border-emerald-300/45 bg-emerald-400/14 text-emerald-50 hover:bg-emerald-400/22'
                           : 'border-rose-300/45 bg-rose-400/12 text-rose-50 hover:bg-rose-400/20'
-                    }`}
+                    } disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-900/65 disabled:text-zinc-500 disabled:hover:translate-y-0`}
                   >
                     {action.label}
                   </button>
                 ))}
               </div>
+              {reminderFeedback && (
+                <p className="mt-1 rounded-md border border-white/[0.055] bg-black/25 px-2 py-1 text-[10.5px] font-bold text-zinc-300">
+                  {reminderFeedback}
+                </p>
+              )}
             </div>
 
             <div className="grid gap-1.5">
@@ -2237,6 +2364,9 @@ function MobileReservationModal({
   onClose,
   onUpdate,
   onSendReminder,
+  isReminderSending,
+  isReminderDisabled,
+  reminderFeedback,
   onReloadWhatsappMessages,
 }: {
   reservation: Reservation;
@@ -2248,6 +2378,9 @@ function MobileReservationModal({
   onClose: () => void;
   onUpdate: (reservation: Reservation) => Promise<Reservation | false>;
   onSendReminder: (reservation: Reservation) => Promise<Reservation | false>;
+  isReminderSending: boolean;
+  isReminderDisabled: boolean;
+  reminderFeedback: string;
   onReloadWhatsappMessages: (reservationId: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(reservation);
@@ -2281,6 +2414,8 @@ function MobileReservationModal({
   };
 
   const sendReminder = async () => {
+    if (isReminderSending || isReminderDisabled) return;
+
     const updated = await onSendReminder(draft);
     if (updated) {
       setDraft(updated);
@@ -2392,9 +2527,19 @@ function MobileReservationModal({
         </section>
       </div>
 
+      {reminderFeedback && (
+        <p className="mx-3 mb-2 rounded-2xl border border-white/[0.07] bg-black/30 px-3 py-2 text-xs font-bold text-zinc-300">
+          {reminderFeedback}
+        </p>
+      )}
       <footer className="grid flex-shrink-0 grid-cols-2 gap-2 border-t border-white/[0.08] bg-black/28 p-3">
-        <button type="button" onClick={sendReminder} className="rounded-2xl border border-cyan-300/35 bg-cyan-400/14 px-3 py-3 text-sm font-black text-cyan-50">
-          Send reminder
+        <button
+          type="button"
+          onClick={sendReminder}
+          disabled={isReminderSending || isReminderDisabled}
+          className="rounded-2xl border border-cyan-300/35 bg-cyan-400/14 px-3 py-3 text-sm font-black text-cyan-50 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-900/70 disabled:text-zinc-500"
+        >
+          {isReminderSending ? 'Sending...' : 'Send reminder'}
         </button>
         <button type="button" onClick={saveDraft} className="rounded-2xl border border-emerald-300/35 bg-emerald-400/18 px-3 py-3 text-sm font-black text-emerald-50">
           Save changes
@@ -2765,10 +2910,16 @@ function ReturnsModal({
   reservations,
   onClose,
   onSendReminder,
+  sendingReminderIds,
+  isBulkSending,
+  reminderFeedback,
 }: {
   reservations: Reservation[];
   onClose: () => void;
   onSendReminder: (reservation: Reservation) => Promise<Reservation | false>;
+  sendingReminderIds: Set<string>;
+  isBulkSending: boolean;
+  reminderFeedback: string;
 }) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [sendingReservationId, setSendingReservationId] = useState<string | null>(null);
@@ -2779,9 +2930,14 @@ function ReturnsModal({
   );
 
   const handleSendReminder = async (reservation: Reservation) => {
+    if (isBulkSending || sendingReminderIds.has(reservation.id)) return;
+
     setSendingReservationId(reservation.id);
-    await onSendReminder(reservation);
-    setSendingReservationId(null);
+    try {
+      await onSendReminder(reservation);
+    } finally {
+      setSendingReservationId(null);
+    }
   };
 
   return (
@@ -2813,6 +2969,11 @@ function ReturnsModal({
             {returnRows.length} επιστροφές
           </div>
         </div>
+        {reminderFeedback && (
+          <div className="border-b border-white/[0.06] bg-black/20 px-4 py-2 text-xs font-bold text-zinc-300">
+            {reminderFeedback}
+          </div>
+        )}
 
         <div className="min-h-0 flex-1 overflow-auto p-4">
           <div className="space-y-3">
@@ -2873,10 +3034,10 @@ function ReturnsModal({
                     <button
                       type="button"
                       onClick={() => handleSendReminder(reservation)}
-                      disabled={sendingReservationId === reservation.id}
+                      disabled={isBulkSending || sendingReservationId === reservation.id || sendingReminderIds.has(reservation.id)}
                       className="rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-1.5 text-xs font-bold text-cyan-100 transition hover:border-cyan-200/40 hover:bg-cyan-300/16 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {sendingReservationId === reservation.id ? 'Sending...' : 'Send reminder'}
+                      {sendingReservationId === reservation.id || sendingReminderIds.has(reservation.id) ? 'Sending...' : 'Send reminder'}
                     </button>
                   </div>
                 </article>
