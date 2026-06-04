@@ -42,6 +42,10 @@ export default function Window({
   onMinimize,
 }: WindowProps) {
   const [isMaximized, setIsMaximized] = useState(fullscreen);
+  const [isMobileWindow, setIsMobileWindow] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 768px)').matches;
+  });
   const [windowSize, setWindowSize] = useState({
     width: initialWidth || 1450,
     height: initialHeight || 910,
@@ -70,6 +74,20 @@ export default function Window({
     setIsMaximized(fullscreen);
   }, [fullscreen]);
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 768px)');
+    const updateMobileWindow = () => setIsMobileWindow(mediaQuery.matches);
+
+    updateMobileWindow();
+    mediaQuery.addEventListener('change', updateMobileWindow);
+    window.addEventListener('orientationchange', updateMobileWindow);
+
+    return () => {
+      mediaQuery.removeEventListener('change', updateMobileWindow);
+      window.removeEventListener('orientationchange', updateMobileWindow);
+    };
+  }, []);
+
   const clampPosition = (x: number, y: number) => {
     return {
       x: Math.min(Math.max(x, 230), window.innerWidth - 120),
@@ -80,6 +98,7 @@ export default function Window({
   const startDrag = (event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
     if (target.closest('[data-resize-handle="true"]')) return;
+    if (isMobileWindow) return;
     if (isMaximized) return;
 
     event.preventDefault();
@@ -197,7 +216,9 @@ export default function Window({
       <div
         onMouseDown={onFocus}
         className={`premium-window-in pointer-events-auto fixed flex flex-col overflow-hidden border border-sky-100/[0.1] bg-[linear-gradient(180deg,rgba(13,20,30,0.96),rgba(7,12,18,0.98))] shadow-[0_24px_90px_rgba(0,0,0,0.58)] backdrop-blur-xl ${
-          isMaximized
+          isMobileWindow
+            ? 'rounded-none'
+            : isMaximized
             ? 'rounded-2xl'
             : 'rounded-3xl'
         } ${
@@ -210,27 +231,27 @@ export default function Window({
                 : ''
         }`}
         style={{
-          left: isMaximized ? 'var(--autoclub-sidebar-width, 250px)' : position.x,
-          top: isMaximized ? 52 : position.y,
-          width: isMaximized ? 'calc(100vw - var(--autoclub-sidebar-width, 250px))' : windowSize.width,
-          height: isMaximized ? 'calc(100vh - 52px)' : windowSize.height,
+          left: isMobileWindow ? 0 : isMaximized ? 'var(--autoclub-sidebar-width, 250px)' : position.x,
+          top: isMobileWindow ? 64 : isMaximized ? 52 : position.y,
+          width: isMobileWindow ? '100vw' : isMaximized ? 'calc(100vw - var(--autoclub-sidebar-width, 250px))' : windowSize.width,
+          height: isMobileWindow ? 'calc(100dvh - 64px)' : isMaximized ? 'calc(100vh - 52px)' : windowSize.height,
           zIndex,
         }}
       >
         {/* Title Bar */}
         <div
           onMouseDown={startDrag}
-          className={`flex cursor-move items-center justify-between border-b border-sky-100/[0.08] px-6 ${financeDashboard ? 'py-3' : 'py-4'}`}
+          className={`flex ${isMobileWindow ? 'cursor-default px-3 py-3' : 'cursor-move px-6'} items-center justify-between border-b border-sky-100/[0.08] ${financeDashboard && !isMobileWindow ? 'py-3' : !isMobileWindow ? 'py-4' : ''}`}
         >
-          <h2 className="text-base font-semibold tracking-tight text-[#f4f7fb]">{title}</h2>
-          <div className="flex items-center gap-3">
+          <h2 className="min-w-0 truncate text-base font-semibold tracking-tight text-[#f4f7fb]">{title}</h2>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             {titleActions}
             <button
               onClick={(event) => {
                 event.stopPropagation();
                 onMinimize?.();
               }}
-              className="rounded-xl border border-transparent px-3 py-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white"
+              className="hidden rounded-xl border border-transparent px-3 py-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white sm:block"
               aria-label="Minimize window"
             >
               −
@@ -241,7 +262,7 @@ export default function Window({
                 onFocus?.();
                 setIsMaximized((current) => !current);
               }}
-              className="rounded-xl border border-transparent px-3 py-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white"
+              className="hidden rounded-xl border border-transparent px-3 py-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white sm:block"
               aria-label={isMaximized ? 'Restore window' : 'Maximize window'}
             >
               {isMaximized ? '\u2750' : '\u25A1'}
@@ -259,13 +280,13 @@ export default function Window({
         {/* Content */}
         <div
           className={`min-h-0 flex-1 overflow-auto ${
-            isMaximized ? 'p-0' : financeDashboard ? 'p-5' : 'p-7'
+            isMobileWindow ? 'p-3' : isMaximized ? 'p-0' : financeDashboard ? 'p-5' : 'p-7'
           }`}
         >
           {children}
         </div>
 
-        {!isMaximized && (
+        {!isMaximized && !isMobileWindow && (
           <>
             <div
               role="presentation"

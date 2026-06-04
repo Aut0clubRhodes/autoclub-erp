@@ -56,6 +56,8 @@ interface SidebarProps {
   userRole?: 'admin' | 'bookings' | null;
   onLogout?: () => void;
   onCollapsedChange?: (collapsed: boolean) => void;
+  onNavigate?: () => void;
+  forceExpanded?: boolean;
 }
 
 const NAV_SECTIONS: NavSection[] = [
@@ -120,7 +122,7 @@ const WINDOW_ITEMS = [
   'Κατηγορίες Εξόδων',
 ];
 
-export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRole, onLogout, onCollapsedChange }: SidebarProps) {
+export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRole, onLogout, onCollapsedChange, onNavigate, forceExpanded }: SidebarProps) {
   const pathname = usePathname();
   const [systemOpen, setSystemOpen] = useState(true);
   const [financeOpen, setFinanceOpen] = useState(true);
@@ -129,6 +131,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem('autoclub-sidebar-collapsed') === 'true';
   });
+  const displayCollapsed = forceExpanded ? false : isCollapsed;
   const visibleNavSections =
     userRole === 'bookings'
       ? NAV_SECTIONS.map((section) => ({
@@ -177,12 +180,12 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
         ? showVehicleGroupsPanel
       : pathname === item.href || pathname.startsWith(`${item.href}/`);
     const Icon = item.icon;
-    const className = `group relative flex min-h-[35px] w-full items-center ${isCollapsed ? 'justify-center gap-0 px-1.5' : 'gap-1.5 px-2'} rounded-xl border py-0.5 text-left transition duration-200 hover:-translate-y-px ${
+    const className = `group relative flex min-h-[35px] w-full items-center ${displayCollapsed ? 'justify-center gap-0 px-1.5' : 'gap-1.5 px-2'} rounded-xl border py-0.5 text-left transition duration-200 hover:-translate-y-px ${
       isActive || (hasChildren && childIsActive)
         ? 'border-sky-300/25 bg-sky-300/[0.08] text-white shadow-[0_0_0_1px_rgba(125,211,252,0.12),0_16px_30px_rgba(14,165,233,0.12)] before:absolute before:left-0 before:top-2 before:h-[calc(100%-1rem)] before:w-1 before:rounded-full before:bg-sky-300'
         : 'border-transparent text-zinc-300/90 hover:border-sky-100/[0.08] hover:bg-white/[0.035] hover:text-white'
     }`;
-    const childClassName = `group relative ${isCollapsed ? 'mx-auto flex w-full justify-center gap-0 px-1.5' : 'ml-5 flex w-[calc(100%-1.25rem)] gap-1.5 px-2'} min-h-[28px] items-center rounded-xl border py-0.5 text-left transition duration-200 hover:-translate-y-px ${
+    const childClassName = `group relative ${displayCollapsed ? 'mx-auto flex w-full justify-center gap-0 px-1.5' : 'ml-5 flex w-[calc(100%-1.25rem)] gap-1.5 px-2'} min-h-[28px] items-center rounded-xl border py-0.5 text-left transition duration-200 hover:-translate-y-px ${
       isActive
         ? 'border-sky-300/20 bg-sky-300/[0.07] text-white'
         : 'border-transparent text-zinc-400 hover:border-sky-100/[0.06] hover:bg-white/[0.03] hover:text-zinc-100'
@@ -197,7 +200,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
         >
           <Icon className={`h-[15px] w-[15px] ${item.tone}`} strokeWidth={1.9} />
         </span>
-        {!isCollapsed && <span className="text-[11px] font-medium leading-none tracking-[0.005em]">{visibleLabel}</span>}
+        {!displayCollapsed && <span className="text-[11px] font-medium leading-none tracking-[0.005em]">{visibleLabel}</span>}
       </>
     );
     const childContent = (
@@ -209,7 +212,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
         >
           <Icon className={`h-[11px] w-[11px] ${item.tone}`} strokeWidth={1.9} />
         </span>
-        {!isCollapsed && <span className="text-[10.5px] font-medium leading-none tracking-[0.005em]">{visibleLabel}</span>}
+        {!displayCollapsed && <span className="text-[10.5px] font-medium leading-none tracking-[0.005em]">{visibleLabel}</span>}
       </>
     );
 
@@ -220,12 +223,12 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
             <button
               type="button"
               onClick={() => handleItemClick(item)}
-              className={`${className} ${isCollapsed ? '' : 'pr-11'}`}
-              title={isCollapsed ? visibleLabel : undefined}
+              className={`${className} ${displayCollapsed ? '' : 'pr-11'}`}
+              title={displayCollapsed ? visibleLabel : undefined}
             >
               {content}
             </button>
-            {!isCollapsed && (
+            {!displayCollapsed && (
               <button
                 type="button"
                 onClick={(event) => {
@@ -241,7 +244,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
           </div>
           <div
             className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
-              isCollapsed || financeOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+              displayCollapsed || financeOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
             }`}
           >
             <div className="min-h-0 overflow-hidden">
@@ -257,9 +260,12 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
         <button
           key={item.href}
           type="button"
-          onClick={() => handleItemClick(item)}
+          onClick={() => {
+            handleItemClick(item);
+            onNavigate?.();
+          }}
           className={nested ? childClassName : className}
-          title={isCollapsed ? visibleLabel : undefined}
+          title={displayCollapsed ? visibleLabel : undefined}
         >
           {nested ? childContent : content}
         </button>
@@ -271,9 +277,12 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
         <button
           key={item.href}
           type="button"
-          onClick={() => handleItemClick(item)}
+          onClick={() => {
+            handleItemClick(item);
+            onNavigate?.();
+          }}
           className={nested ? childClassName : className}
-          title={isCollapsed ? visibleLabel : undefined}
+          title={displayCollapsed ? visibleLabel : undefined}
         >
           {nested ? childContent : content}
         </button>
@@ -281,7 +290,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
     }
 
     return (
-      <Link key={item.href} href={item.href} className={nested ? childClassName : className} title={isCollapsed ? visibleLabel : undefined}>
+      <Link key={item.href} href={item.href} onClick={onNavigate} className={nested ? childClassName : className} title={displayCollapsed ? visibleLabel : undefined}>
         {nested ? childContent : content}
       </Link>
     );
@@ -289,35 +298,35 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
 
   return (
     <>
-    <aside className={`fixed bottom-0 left-0 top-0 z-[9000] flex shrink-0 flex-col border-r border-white/[0.06] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] text-white shadow-[18px_0_48px_rgba(0,0,0,0.22)] transition-[width] duration-200 ${isCollapsed ? 'w-[72px]' : 'w-[250px]'}`}>
-      <div className={`border-b border-sky-100/[0.04] ${isCollapsed ? 'px-2 pb-2 pt-3' : 'px-4 pb-2.5 pt-3.5 sm:px-4 sm:pb-3 sm:pt-4'}`}>
+    <aside className={`fixed bottom-0 left-0 top-0 z-[9000] flex shrink-0 flex-col border-r border-white/[0.06] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] text-white shadow-[18px_0_48px_rgba(0,0,0,0.22)] transition-[width] duration-200 ${displayCollapsed ? 'w-[72px]' : 'w-[250px]'}`}>
+      <div className={`border-b border-sky-100/[0.04] ${displayCollapsed ? 'px-2 pb-2 pt-3' : 'px-4 pb-2.5 pt-3.5 sm:px-4 sm:pb-3 sm:pt-4'}`}>
         <div className="mb-2 flex items-center justify-end">
           <button
             type="button"
             onClick={toggleCollapsed}
             className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.025] text-zinc-300 transition hover:border-sky-300/25 hover:bg-sky-300/[0.08] hover:text-white"
-            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={displayCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            {displayCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </button>
         </div>
-        <div className={`relative mx-auto ${isCollapsed ? 'h-9 w-9' : 'h-[52px] w-[132px] sm:h-[58px] sm:w-[148px]'}`}>
+        <div className={`relative mx-auto ${displayCollapsed ? 'h-9 w-9' : 'h-[52px] w-[132px] sm:h-[58px] sm:w-[148px]'}`}>
           <div className="absolute inset-4 rounded-full bg-sky-400/[0.065] blur-2xl" />
           <Image src="/logo.png" alt="AUTOCLUB" fill priority className="relative object-cover object-center" sizes="176px" />
         </div>
-        {!isCollapsed && <p className="mt-1 text-center text-[9px] font-medium uppercase tracking-[0.22em] text-[#8e99a8]">
+        {!displayCollapsed && <p className="mt-1 text-center text-[9px] font-medium uppercase tracking-[0.22em] text-[#8e99a8]">
           Enterprise Fleet ERP
         </p>}
       </div>
 
-      <nav className={`autoclub-sidebar-scroll flex-1 overflow-y-auto ${isCollapsed ? 'space-y-1 px-2 py-2' : 'space-y-2 px-2.5 py-2.5 sm:px-3'}`}>
+      <nav className={`autoclub-sidebar-scroll flex-1 overflow-y-auto ${displayCollapsed ? 'space-y-1 px-2 py-2' : 'space-y-2 px-2.5 py-2.5 sm:px-3'}`}>
         {visibleNavSections.map((section) => {
           const isSystem = section.collapsible;
           const isOpen = !isSystem || systemOpen;
 
           return (
             <div key={section.title} className="space-y-0.5">
-              {isCollapsed ? null : isSystem ? (
+              {displayCollapsed ? null : isSystem ? (
                 <button
                   type="button"
                   onClick={() => setSystemOpen((current) => !current)}
@@ -332,24 +341,24 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
                 </div>
               )}
 
-              {(isOpen || isCollapsed) && <div className="space-y-0.5">{section.items.map((item) => renderItem(item))}</div>}
+              {(isOpen || displayCollapsed) && <div className="space-y-0.5">{section.items.map((item) => renderItem(item))}</div>}
             </div>
           );
         })}
       </nav>
 
-      <div className={`border-t border-sky-100/[0.04] ${isCollapsed ? 'px-2 py-2' : 'px-3 py-2'}`}>
-        <div className={`flex items-center gap-2 rounded-xl border border-white/[0.04] bg-white/[0.016] px-2 py-2 ${isCollapsed ? 'justify-center' : ''}`}>
+      <div className={`border-t border-sky-100/[0.04] ${displayCollapsed ? 'px-2 py-2' : 'px-3 py-2'}`}>
+        <div className={`flex items-center gap-2 rounded-xl border border-white/[0.04] bg-white/[0.016] px-2 py-2 ${displayCollapsed ? 'justify-center' : ''}`}>
           <div className="flex h-7 w-7 items-center justify-center rounded-full border border-sky-300/14 bg-sky-300/[0.06] text-[11px] font-semibold text-white">
             A
           </div>
-          {!isCollapsed && <div className="min-w-0">
+          {!displayCollapsed && <div className="min-w-0">
             <p className="truncate text-[11px] font-medium text-[#f4f7fb]">AutoClub</p>
             <p className="truncate text-[10px] text-[#8e99a8]">{userEmail || 'Administrator'}</p>
             <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-sky-200/55">{userRole || 'admin'}</p>
           </div>}
         </div>
-        {onLogout && !isCollapsed && (
+        {onLogout && !displayCollapsed && (
           <button
             type="button"
             onClick={onLogout}
@@ -358,7 +367,7 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
             Αποσύνδεση
           </button>
         )}
-        {!isCollapsed && <p className="mt-2 text-center text-[9px] uppercase tracking-[0.14em] text-zinc-600">v1.0.0</p>}
+        {!displayCollapsed && <p className="mt-2 text-center text-[9px] uppercase tracking-[0.14em] text-zinc-600">v1.0.0</p>}
       </div>
     </aside>
     {showVehicleGroupsPanel && <VehicleGroupsPanel onClose={() => setShowVehicleGroupsPanel(false)} />}

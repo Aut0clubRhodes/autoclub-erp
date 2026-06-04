@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import Image from 'next/image';
-import { Bell } from 'lucide-react';
+import { Bell, Menu, X } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import Window from '@/components/Window';
 import LoginScreen from '@/components/LoginScreen';
@@ -225,6 +225,11 @@ export default function Home() {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-width: 1023px)').matches;
   });
+  const [isPhoneViewport, setIsPhoneViewport] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 768px)').matches;
+  });
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [bookingsMobileTab, setBookingsMobileTab] = useState<'dashboard' | 'bookings' | 'whatsapp'>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -248,15 +253,22 @@ export default function Home() {
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 1023px)');
+    const phoneMediaQuery = window.matchMedia('(max-width: 768px)');
     const updateViewportMode = () => {
       setIsMobileViewport(mediaQuery.matches);
+      setIsPhoneViewport(phoneMediaQuery.matches);
+      if (!phoneMediaQuery.matches) {
+        setIsMobileMenuOpen(false);
+      }
     };
 
     updateViewportMode();
     mediaQuery.addEventListener('change', updateViewportMode);
+    phoneMediaQuery.addEventListener('change', updateViewportMode);
     window.addEventListener('orientationchange', updateViewportMode);
     return () => {
       mediaQuery.removeEventListener('change', updateViewportMode);
+      phoneMediaQuery.removeEventListener('change', updateViewportMode);
       window.removeEventListener('orientationchange', updateViewportMode);
     };
   }, []);
@@ -1884,18 +1896,55 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         className="fixed inset-0 z-[9999] flex h-[100dvh] w-[100dvw] max-w-none flex-col overflow-x-hidden overscroll-none bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] text-white"
         style={{ width: '100dvw', maxWidth: 'none' }}
       >
-        <header className="flex h-[64px] w-[100dvw] flex-shrink-0 items-center justify-between border-b border-white/[0.08] bg-black/20 px-4">
+        <header className="relative flex h-[64px] w-[100dvw] flex-shrink-0 items-center justify-between border-b border-white/[0.08] bg-black/20 px-4">
+          <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.035] text-zinc-200"
+            aria-label="Open menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
           <div className="relative h-10 w-28">
             <Image src="/logo.png" alt="AUTOCLUB" fill priority className="object-cover object-center" sizes="112px" />
           </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="rounded-2xl border border-white/[0.08] bg-white/[0.035] px-3 py-2 text-xs font-bold text-zinc-200"
-          >
-            Logout
-          </button>
+          <NotificationBell
+            notifications={notifications}
+            unreadCount={unreadNotificationsCount}
+            isOpen={showNotifications}
+            onToggle={() => setShowNotifications((current) => !current)}
+            onMarkRead={handleNotificationClick}
+            onMarkAllRead={handleMarkAllNotificationsRead}
+            mobile
+          />
         </header>
+
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-[12000] bg-black/62 backdrop-blur-sm" role="presentation" onClick={() => setIsMobileMenuOpen(false)}>
+            <div className="absolute inset-y-0 left-0 w-[min(82vw,290px)]" onClick={(event) => event.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="absolute right-3 top-3 z-[12020] flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-zinc-950/80 text-zinc-200"
+                aria-label="Close menu"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <Sidebar
+                onWindowOpen={(windowId) => {
+                  handleWindowOpen(windowId);
+                  setIsMobileMenuOpen(false);
+                }}
+                activeWindow={activeWindow}
+                userEmail={userEmail}
+                userRole={userRole}
+                onLogout={handleLogout}
+                onNavigate={() => setIsMobileMenuOpen(false)}
+                forceExpanded
+              />
+            </div>
+          </div>
+        )}
 
         <section className="min-h-0 w-[100dvw] flex-1 overflow-hidden pb-[calc(76px+env(safe-area-inset-bottom))]">
           <BookingsManager mobileMode mobileFocus={bookingsMobileTab} onNotificationsChanged={loadNotifications} />
@@ -1931,22 +1980,76 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
   return (
     <>
-      <Sidebar
-        onWindowOpen={handleWindowOpen}
-        activeWindow={activeWindow}
-        userEmail={userEmail}
-        userRole={userRole}
-        onLogout={handleLogout}
-        onCollapsedChange={setIsSidebarCollapsed}
-      />
+      {!isPhoneViewport && (
+        <Sidebar
+          onWindowOpen={handleWindowOpen}
+          activeWindow={activeWindow}
+          userEmail={userEmail}
+          userRole={userRole}
+          onLogout={handleLogout}
+          onCollapsedChange={setIsSidebarCollapsed}
+        />
+      )}
+      {isPhoneViewport && (
+        <>
+          <header className="fixed left-0 right-0 top-0 z-[9200] flex h-[64px] items-center justify-between border-b border-white/[0.08] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] px-4 text-white">
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.035] text-zinc-200"
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="relative h-10 w-28">
+              <Image src="/logo.png" alt="AUTOCLUB" fill priority className="object-cover object-center" sizes="112px" />
+            </div>
+            <NotificationBell
+              notifications={notifications}
+              unreadCount={unreadNotificationsCount}
+              isOpen={showNotifications}
+              onToggle={() => setShowNotifications((current) => !current)}
+              onMarkRead={handleNotificationClick}
+              onMarkAllRead={handleMarkAllNotificationsRead}
+              mobile
+            />
+          </header>
+          {isMobileMenuOpen && (
+            <div className="fixed inset-0 z-[12000] bg-black/62 backdrop-blur-sm" role="presentation" onClick={() => setIsMobileMenuOpen(false)}>
+              <div className="absolute inset-y-0 left-0 w-[min(82vw,290px)]" onClick={(event) => event.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="absolute right-3 top-3 z-[12020] flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-zinc-950/80 text-zinc-200"
+                  aria-label="Close menu"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <Sidebar
+                  onWindowOpen={(windowId) => {
+                    handleWindowOpen(windowId);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  activeWindow={activeWindow}
+                  userEmail={userEmail}
+                  userRole={userRole}
+                  onLogout={handleLogout}
+                  onNavigate={() => setIsMobileMenuOpen(false)}
+                  forceExpanded
+                />
+              </div>
+            </div>
+          )}
+        </>
+      )}
       <main
-        className="fixed bottom-0 right-0 top-[52px] overflow-hidden bg-[radial-gradient(circle_at_48%_42%,rgba(14,165,233,0.075),transparent_26%),radial-gradient(circle_at_62%_44%,rgba(34,197,94,0.045),transparent_24%),linear-gradient(180deg,#07101a_0%,#050910_100%)] transition-[left] duration-200"
-        style={{ left: sidebarWidth }}
+        className={`fixed bottom-0 right-0 overflow-hidden bg-[radial-gradient(circle_at_48%_42%,rgba(14,165,233,0.075),transparent_26%),radial-gradient(circle_at_62%_44%,rgba(34,197,94,0.045),transparent_24%),linear-gradient(180deg,#07101a_0%,#050910_100%)] transition-[left] duration-200 ${isPhoneViewport ? 'top-[64px]' : 'top-[52px]'}`}
+        style={{ left: isPhoneViewport ? 0 : sidebarWidth }}
       >
         {openWindows.length > 0 && (
           <div
-            className="pointer-events-none fixed right-0 top-0 z-[9000] flex h-[52px] items-end border-b border-white/[0.06] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] pl-3 transition-[left] duration-200"
-            style={{ left: sidebarWidth }}
+            className={`pointer-events-none fixed right-0 z-[9000] flex h-[52px] items-end border-b border-white/[0.06] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] pl-3 transition-[left] duration-200 ${isPhoneViewport ? 'top-[64px]' : 'top-0'}`}
+            style={{ left: isPhoneViewport ? 0 : sidebarWidth }}
           >
             <div className="pointer-events-auto flex max-w-full items-end gap-1 overflow-x-auto pt-2">
               {openWindows.map((windowItem) => {
@@ -1994,14 +2097,16 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           </div>
         )}
 
-        <NotificationBell
-          notifications={notifications}
-          unreadCount={unreadNotificationsCount}
-          isOpen={showNotifications}
-          onToggle={() => setShowNotifications((current) => !current)}
-          onMarkRead={handleNotificationClick}
-          onMarkAllRead={handleMarkAllNotificationsRead}
-        />
+        {!isPhoneViewport && (
+          <NotificationBell
+            notifications={notifications}
+            unreadCount={unreadNotificationsCount}
+            isOpen={showNotifications}
+            onToggle={() => setShowNotifications((current) => !current)}
+            onMarkRead={handleNotificationClick}
+            onMarkAllRead={handleMarkAllNotificationsRead}
+          />
+        )}
 
         {/* Homepage with centered logo */}
         {openWindows.length === 0 && (
@@ -2854,6 +2959,7 @@ function NotificationBell({
   onToggle,
   onMarkRead,
   onMarkAllRead,
+  mobile = false,
 }: {
   notifications: NotificationRecord[];
   unreadCount: number;
@@ -2861,9 +2967,10 @@ function NotificationBell({
   onToggle: () => void;
   onMarkRead: (notification: NotificationRecord) => void;
   onMarkAllRead: () => void;
+  mobile?: boolean;
 }) {
   return (
-    <div className="fixed right-4 top-2 z-[9100]">
+    <div className={mobile ? 'relative z-[9300]' : 'fixed right-4 top-2 z-[9100]'}>
       <button
         type="button"
         onClick={onToggle}
@@ -2882,7 +2989,7 @@ function NotificationBell({
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-3 w-[360px] overflow-hidden rounded-3xl border border-white/[0.08] bg-zinc-950/96 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-xl">
+        <div className={`${mobile ? 'fixed inset-x-3 top-[72px] max-h-[calc(100dvh-88px)] w-auto rounded-[24px]' : 'absolute right-0 mt-3 w-[360px] rounded-3xl'} overflow-hidden border border-white/[0.08] bg-zinc-950/96 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-xl`}>
           <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
             <div>
               <p className="text-sm font-semibold text-white">Notifications</p>
@@ -2898,7 +3005,7 @@ function NotificationBell({
             </button>
           </div>
 
-          <div className="max-h-[420px] overflow-y-auto p-2">
+          <div className={`${mobile ? 'max-h-[calc(100dvh-170px)]' : 'max-h-[420px]'} overflow-y-auto p-2`}>
             {notifications.length === 0 ? (
               <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] px-4 py-6 text-center text-sm text-zinc-500">
                 No notifications yet.

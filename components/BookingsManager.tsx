@@ -1342,6 +1342,54 @@ export default function BookingsManager({
             ))}
           </select>
         </div>
+        <div className="mb-2 flex w-full flex-shrink-0 gap-2 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => setQuickFilter('returnsToday')}
+            className={`shrink-0 rounded-2xl border px-3 py-2 text-xs font-black ${
+              quickFilter === 'returnsToday'
+                ? 'border-amber-300/35 bg-amber-300/14 text-amber-50'
+                : 'border-white/[0.07] bg-white/[0.025] text-zinc-300'
+            }`}
+          >
+            Επιστροφές σήμερα
+          </button>
+          <button
+            type="button"
+            onClick={() => setQuickFilter('pickupsToday')}
+            className={`shrink-0 rounded-2xl border px-3 py-2 text-xs font-black ${
+              quickFilter === 'pickupsToday'
+                ? 'border-sky-300/35 bg-sky-300/14 text-sky-50'
+                : 'border-white/[0.07] bg-white/[0.025] text-zinc-300'
+            }`}
+          >
+            Παραδόσεις σήμερα
+          </button>
+          <button
+            type="button"
+            onClick={() => setQuickFilter('all')}
+            className={`shrink-0 rounded-2xl border px-3 py-2 text-xs font-black ${
+              quickFilter === 'all'
+                ? 'border-zinc-300/35 bg-white/[0.08] text-white'
+                : 'border-white/[0.07] bg-white/[0.025] text-zinc-300'
+            }`}
+          >
+            Όλες
+          </button>
+        </div>
+        {quickFilter === 'returnsToday' && (
+          <div className="mb-2 flex flex-shrink-0 flex-col gap-1.5 rounded-2xl border border-amber-300/14 bg-amber-300/[0.045] p-2">
+            <button
+              type="button"
+              onClick={sendAllTodayReturnReminders}
+              disabled={isBulkSendingReminders || todayReturnReminderTargets.length === 0}
+              className="min-h-11 rounded-xl border border-cyan-300/30 bg-cyan-300/12 px-3 py-2 text-xs font-black text-cyan-50 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-900/65 disabled:text-zinc-500"
+            >
+              {isBulkSendingReminders ? 'Sending...' : "Send all today's return reminders"}
+            </button>
+            {reminderFeedback && <p className="px-1 text-[11px] font-bold text-zinc-300">{reminderFeedback}</p>}
+          </div>
+        )}
 
         <div className="min-h-0 w-full max-w-none flex-1 overflow-x-hidden overflow-y-auto pb-2">
           {isLoadingReservations ? (
@@ -1352,6 +1400,7 @@ export default function BookingsManager({
             <div className="space-y-2.5">
               {mobileReservations.map((reservation) => {
                 const hasUnreadWhatsapp = unreadWhatsappReservationIds.has(reservation.id);
+                const licenceState = getDrivingLicenceState(reservation);
 
                 return (
                   <button
@@ -1367,7 +1416,7 @@ export default function BookingsManager({
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           {hasUnreadWhatsapp && <span className="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.75)]" />}
-                          <p className="truncate text-base font-black text-white">{reservation.name || 'Customer'}</p>
+                          <p className="truncate text-base font-black text-white">{reservation.hotelRoom || reservation.name || 'Customer'}</p>
                         </div>
                         <p className="mt-1 font-mono text-xs text-sky-100/80">{reservation.phoneWhatsapp || '-'}</p>
                       </div>
@@ -1379,6 +1428,10 @@ export default function BookingsManager({
                         <p className="mt-1 font-black text-sky-100">{reservation.vehicleGroup || '-'}</p>
                       </div>
                       <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
+                        <p className="text-zinc-500">Price</p>
+                        <p className="mt-1 font-semibold text-zinc-100">{money(reservation.price)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
                         <p className="text-zinc-500">Pickup</p>
                         <p className="mt-1 font-semibold text-zinc-100">{formatDate(reservation.pickupDate)} {reservation.pickupTime}</p>
                       </div>
@@ -1387,9 +1440,21 @@ export default function BookingsManager({
                         <p className="mt-1 font-semibold text-zinc-100">{formatDate(reservation.returnDate)} {reservation.returnTime}</p>
                       </div>
                       <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
-                        <p className="text-zinc-500">Hotel</p>
-                        <p className="mt-1 truncate font-semibold text-zinc-100">{reservation.hotelRoom || '-'}</p>
+                        <p className="text-zinc-500">Driving Licence</p>
+                        <p className={`mt-1 font-semibold ${licenceState === 'uploaded' ? 'text-blue-100' : 'text-zinc-500'}`}>
+                          {licenceState === 'uploaded' ? 'Uploaded' : 'Empty'}
+                        </p>
                       </div>
+                      <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
+                        <p className="text-zinc-500">Modified</p>
+                        <p className="mt-1 font-mono text-[11px] font-semibold text-zinc-100">{formatCompactDateTime(reservation.lastModifiedAt)}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <span className="text-xs font-semibold text-zinc-500">Tap to open details</span>
+                      <span className="rounded-xl border border-sky-300/24 bg-sky-300/10 px-3 py-1.5 text-xs font-black text-sky-100">
+                        Open/Edit
+                      </span>
                     </div>
                   </button>
                 );
@@ -2490,6 +2555,26 @@ function MobileReservationModal({
             </div>
             <EditableCompactInput label="Price" type="number" value={draft.price === null ? '' : String(draft.price)} onChange={(value) => updateDraft({ price: value === '' ? null : Number(value) || null })} />
             <EditableCompactSelect label="Status" value={draft.status} options={statuses.filter((status) => status !== 'ALL')} onChange={(value) => updateDraft({ status: normalizeStatus(value) })} />
+            <div className="grid grid-cols-3 gap-2">
+              {(['ACCEPTED', 'REJECTED', 'RETURN'] as ReservationStatus[]).map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => updateDraft({ status })}
+                  className={`min-h-11 rounded-2xl border px-2 text-xs font-black ${
+                    draft.status === status
+                      ? status === 'ACCEPTED'
+                        ? 'border-emerald-300/45 bg-emerald-400/18 text-emerald-50'
+                        : status === 'REJECTED'
+                          ? 'border-rose-300/45 bg-rose-400/16 text-rose-50'
+                          : 'border-cyan-300/45 bg-cyan-400/16 text-cyan-50'
+                      : 'border-white/[0.08] bg-white/[0.025] text-zinc-300'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
           </div>
         </section>
 
