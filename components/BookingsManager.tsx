@@ -1306,26 +1306,26 @@ export default function BookingsManager({
     if (isPhoneBookingsViewport) {
       return (
         <div
-          className="flex h-full min-h-0 w-[100dvw] max-w-none flex-col overflow-x-hidden bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] px-3 pb-3 pt-2 text-white"
+          className="flex h-full min-h-0 w-[100dvw] max-w-none flex-col overflow-x-hidden bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] px-2.5 pb-2 pt-1 text-white"
           style={{ width: '100dvw', maxWidth: 'none' }}
         >
-          <div className="flex flex-shrink-0 items-center justify-between px-1 pb-2">
+          <div className="flex flex-shrink-0 items-center justify-between px-1 pb-1">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-sky-200/60">Bookings</p>
-              <h2 className="text-lg font-black text-white">Κρατήσεις</h2>
+              <p className="text-[9px] font-black uppercase tracking-[0.16em] text-sky-200/60">Bookings</p>
+              <h2 className="text-base font-black leading-5 text-white">Κρατήσεις</h2>
             </div>
-            <span className="rounded-2xl border border-white/[0.07] bg-white/[0.035] px-3 py-1.5 text-xs font-black text-zinc-200">
+            <span className="rounded-xl border border-white/[0.07] bg-white/[0.035] px-2.5 py-1 text-[11px] font-black text-zinc-200">
               {mobileReservations.length}
             </span>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-2">
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-1">
             {isLoadingReservations ? (
               <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-5 text-center text-sm text-zinc-400">
                 Φόρτωση κρατήσεων...
               </div>
             ) : mobileReservations.length > 0 ? (
-              <div className="space-y-2.5">
+              <div className="space-y-1.5">
                 {mobileReservations.map((reservation) => {
                   const hasUnreadWhatsapp = unreadWhatsappReservationIds.has(reservation.id);
                   const licenceState = getDrivingLicenceState(reservation);
@@ -1338,40 +1338,40 @@ export default function BookingsManager({
                         setSelectedId(reservation.id);
                         setMobileReservationId(reservation.id);
                       }}
-                      className="w-full rounded-[22px] border border-white/[0.075] bg-white/[0.035] p-3 text-left shadow-[0_16px_42px_rgba(0,0,0,0.22)] transition active:scale-[0.99]"
+                      className="w-full rounded-[18px] border border-white/[0.075] bg-white/[0.035] p-2.5 text-left shadow-[0_12px_34px_rgba(0,0,0,0.2)] transition active:scale-[0.99]"
                     >
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="flex min-w-0 items-center gap-2">
-                            {hasUnreadWhatsapp && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.75)]" />}
-                            <p className="truncate text-base font-black text-white">{reservation.hotelRoom || '-'}</p>
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            {hasUnreadWhatsapp && <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.7)]" />}
+                            <p className="truncate text-[15px] font-black leading-5 text-white">{reservation.hotelRoom || '-'}</p>
                           </div>
-                          <p className="mt-1 truncate text-sm font-semibold text-zinc-200">{reservation.name || 'Customer'}</p>
-                          <p className="mt-0.5 font-mono text-xs text-sky-100/80">{reservation.phoneWhatsapp || '-'}</p>
+                          <p className="mt-0.5 truncate text-[13px] font-semibold leading-4 text-zinc-200">{reservation.name || 'Customer'}</p>
+                          <p className="font-mono text-[11px] leading-4 text-sky-100/80">{reservation.phoneWhatsapp || '-'}</p>
                         </div>
                         <StatusBadge status={reservation.status} />
                       </div>
 
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                        <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
-                          <p className="text-zinc-500">Group</p>
-                          <p className="mt-1 font-black text-sky-100">{reservation.vehicleGroup || '-'}</p>
+                      <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
+                        <div className="rounded-xl border border-white/[0.055] bg-black/20 px-2.5 py-1.5">
+                          <p className="leading-4 text-zinc-500">Group</p>
+                          <p className="font-black leading-4 text-sky-100">{reservation.vehicleGroup || '-'}</p>
                         </div>
-                        <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
-                          <p className="text-zinc-500">Driving Licence</p>
-                          <p className={`mt-1 font-black ${licenceState === 'uploaded' ? 'text-blue-100' : 'text-zinc-500'}`}>
+                        <div className="rounded-xl border border-white/[0.055] bg-black/20 px-2.5 py-1.5">
+                          <p className="leading-4 text-zinc-500">Driving Licence</p>
+                          <p className={`font-black leading-4 ${licenceState === 'uploaded' ? 'text-blue-100' : 'text-zinc-500'}`}>
                             {licenceState === 'uploaded' ? 'Uploaded' : 'Empty'}
                           </p>
                         </div>
-                        <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
-                          <p className="text-zinc-500">Pickup</p>
-                          <p className="mt-1 font-semibold text-zinc-100">{formatDate(reservation.pickupDate)}</p>
-                          <p className="font-mono text-[11px] text-zinc-400">{reservation.pickupTime || '-'}</p>
+                        <div className="rounded-xl border border-white/[0.055] bg-black/20 px-2.5 py-1.5">
+                          <p className="leading-4 text-zinc-500">Pickup</p>
+                          <p className="font-semibold leading-4 text-zinc-100">{formatDate(reservation.pickupDate)}</p>
+                          <p className="font-mono text-[10px] leading-3 text-zinc-400">{reservation.pickupTime || '-'}</p>
                         </div>
-                        <div className="rounded-2xl border border-white/[0.055] bg-black/20 px-3 py-2">
-                          <p className="text-zinc-500">Return</p>
-                          <p className="mt-1 font-semibold text-zinc-100">{formatDate(reservation.returnDate)}</p>
-                          <p className="font-mono text-[11px] text-zinc-400">{reservation.returnTime || '-'}</p>
+                        <div className="rounded-xl border border-white/[0.055] bg-black/20 px-2.5 py-1.5">
+                          <p className="leading-4 text-zinc-500">Return</p>
+                          <p className="font-semibold leading-4 text-zinc-100">{formatDate(reservation.returnDate)}</p>
+                          <p className="font-mono text-[10px] leading-3 text-zinc-400">{reservation.returnTime || '-'}</p>
                         </div>
                       </div>
                     </button>

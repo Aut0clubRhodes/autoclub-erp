@@ -1896,17 +1896,17 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         className="fixed inset-0 z-[9999] flex h-[100dvh] w-[100dvw] max-w-none flex-col overflow-x-hidden overscroll-none bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] text-white"
         style={{ width: '100dvw', maxWidth: 'none' }}
       >
-        <header className="relative flex h-[64px] w-[100dvw] flex-shrink-0 items-center justify-between border-b border-white/[0.08] bg-black/20 px-4">
+        <header className="relative flex h-[54px] w-[100dvw] flex-shrink-0 items-center justify-between border-b border-white/[0.08] bg-black/20 px-3">
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(true)}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.035] text-zinc-200"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-zinc-200"
             aria-label="Open menu"
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-4 w-4" />
           </button>
-          <div className="relative h-10 w-28">
-            <Image src="/logo.png" alt="AUTOCLUB" fill priority className="object-cover object-center" sizes="112px" />
+          <div className="relative h-8 w-24">
+            <Image src="/logo.png" alt="AUTOCLUB" fill priority className="object-cover object-center" sizes="96px" />
           </div>
           <NotificationBell
             notifications={notifications}
