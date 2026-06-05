@@ -66,6 +66,12 @@ type ReservationSortState = {
   direction: 'asc' | 'desc';
 };
 
+type BookingHealthStatus = {
+  label: string;
+  state: 'active' | 'idle' | 'error';
+  lastEventAt: string;
+};
+
 type WhatsappMessage = {
   id: string;
   from: 'AutoClub' | 'Customer';
@@ -282,6 +288,22 @@ const formatCompactDateTime = (value: string) => {
     hour: '2-digit',
     minute: '2-digit',
   });
+};
+
+const latestValidTimestamp = (values: Array<string | undefined>) => {
+  let latestValue = '';
+  let latestTimestamp = Number.NEGATIVE_INFINITY;
+
+  values.forEach((value) => {
+    if (!value) return;
+    const timestamp = new Date(value).getTime();
+    if (!Number.isFinite(timestamp) || timestamp <= latestTimestamp) return;
+
+    latestTimestamp = timestamp;
+    latestValue = value;
+  });
+
+  return latestValue;
 };
 
 const formatDateInputValue = (date: Date) => {
@@ -937,6 +959,57 @@ export default function BookingsManager({
 
     return Array.from(agencyNames).sort((firstAgency, secondAgency) => firstAgency.localeCompare(secondAgency));
   }, [agencyOptions, reservations]);
+
+  const bookingHealthStatuses = useMemo<BookingHealthStatus[]>(() => {
+    const recentThreshold = Date.now() - 24 * 60 * 60 * 1000;
+    const workflowTimes = (eventTypes: string[]) =>
+      workflowEvents
+        .filter((event) => eventTypes.includes(event.eventType))
+        .map((event) => event.createdAt);
+    const buildStatus = (label: string, timestamps: Array<string | undefined>): BookingHealthStatus => {
+      const lastEventAt = latestValidTimestamp(timestamps);
+      const lastEventTimestamp = lastEventAt ? new Date(lastEventAt).getTime() : Number.NaN;
+
+      return {
+        label,
+        state: Number.isFinite(lastEventTimestamp) && lastEventTimestamp >= recentThreshold ? 'active' : 'idle',
+        lastEventAt,
+      };
+    };
+
+    return [
+      buildStatus('Confirmation', [
+        ...workflowTimes(['confirmation_sent']),
+        ...reservations
+          .filter((reservation) => reservation.confirmationSent)
+          .map((reservation) => reservation.lastModifiedAt || reservation.createdAt),
+      ]),
+      buildStatus('Send Reminder', [
+        ...workflowTimes(['return_reminder_sent', 'reminder_sent']),
+        ...reservations
+          .filter((reservation) => reservation.returnReminderSent || reservation.sendReturn)
+          .map((reservation) => reservation.returnReminderSentAt || reservation.lastModifiedAt),
+      ]),
+      buildStatus('Return Confirm', [
+        ...workflowTimes(['return_confirmed']),
+        ...reservations
+          .filter((reservation) => reservation.returnConfirmed || reservation.status === 'RETURN')
+          .map((reservation) => reservation.returnConfirmedAt || reservation.lastModifiedAt),
+      ]),
+      buildStatus(
+        'Licence Upload',
+        reservations
+          .filter((reservation) => Boolean(reservation.licenceFrontUrl || reservation.licenceBackUrl))
+          .map((reservation) => reservation.lastModifiedAt || reservation.createdAt)
+      ),
+      buildStatus(
+        'WhatsApp Incoming',
+        whatsappMessages
+          .filter((message) => message.from === 'Customer')
+          .map((message) => message.createdAt)
+      ),
+    ];
+  }, [reservations, whatsappMessages, workflowEvents]);
 
   const filteredReservations = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -1678,6 +1751,33 @@ export default function BookingsManager({
         >
           + Νέα Κράτηση
         </button>
+      </div>
+
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-emerald-300/[0.08] bg-emerald-300/[0.025] px-2 py-0.5 text-[9.5px] font-bold text-zinc-300">
+        {bookingHealthStatuses.map((health) => {
+          const stateLabel = health.state === 'active' ? 'active' : health.state === 'error' ? 'error' : 'no recent event';
+          const title = health.lastEventAt
+            ? `${health.label}: last event ${formatDateTime(health.lastEventAt)}`
+            : `${health.label}: no event available in loaded data`;
+
+          return (
+            <span key={health.label} title={title} className="inline-flex items-center gap-1.5 whitespace-nowrap">
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  health.state === 'active'
+                    ? 'bg-emerald-400 shadow-[0_0_7px_rgba(52,211,153,0.55)]'
+                    : health.state === 'error'
+                      ? 'bg-rose-500 shadow-[0_0_7px_rgba(244,63,94,0.5)]'
+                      : 'bg-amber-400 shadow-[0_0_7px_rgba(251,191,36,0.45)]'
+                }`}
+              />
+              <span>{health.label}</span>
+              <span className={health.state === 'active' ? 'text-emerald-200/75' : health.state === 'error' ? 'text-rose-200/75' : 'text-amber-200/75'}>
+                {stateLabel}
+              </span>
+            </span>
+          );
+        })}
       </div>
 
       <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 rounded-lg border border-white/[0.045] bg-white/[0.012] px-2 py-1">
