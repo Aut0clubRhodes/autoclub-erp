@@ -9,6 +9,13 @@ import KteoReport from './KteoReport';
 import SecretariatReport from './SecretariatReport';
 import SuppliersReport from './SuppliersReport';
 import { fetchDebts, type DebtRecord } from '@/lib/debtsApi';
+import {
+  fetchServiceInventoryItems,
+  fetchServiceInventoryMovements,
+  type ServiceInventoryItem,
+  type ServiceInventoryMovement,
+} from '@/lib/serviceInventoryApi';
+import { fetchServices, type ServiceRecord } from '@/lib/servicesApi';
 import type { ReportsData, ReportsFilters } from './types';
 
 type ReportSection = 'agencies' | 'expenses' | 'income' | 'suppliers' | 'cars' | 'kteo' | 'secretariat';
@@ -45,13 +52,27 @@ export default function ReportsCenter({
   const [activeSection, setActiveSection] = useState<ReportSection>('income');
   const [filters, setFilters] = useState(initialFilters);
   const [debts, setDebts] = useState<DebtRecord[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<ServiceInventoryItem[]>([]);
+  const [inventoryMovements, setInventoryMovements] = useState<ServiceInventoryMovement[]>([]);
+  const [services, setServices] = useState<ServiceRecord[]>([]);
 
   useEffect(() => {
-    const loadDebts = async () => {
-      setDebts(await fetchDebts());
+    const loadReportData = async () => {
+      const [loadedDebts, loadedInventoryItems, loadedInventoryMovements, loadedServices] =
+        await Promise.all([
+          fetchDebts(),
+          fetchServiceInventoryItems(),
+          fetchServiceInventoryMovements(),
+          fetchServices(),
+        ]);
+
+      setDebts(loadedDebts);
+      setInventoryItems(loadedInventoryItems);
+      setInventoryMovements(loadedInventoryMovements);
+      setServices(loadedServices);
     };
 
-    loadDebts();
+    loadReportData();
   }, []);
 
   const filteredTransactions = useMemo(
@@ -232,6 +253,9 @@ export default function ReportsCenter({
                 bookings={filteredBookings}
                 vehicles={vehicles}
                 debts={debts}
+                inventoryItems={inventoryItems}
+                inventoryMovements={inventoryMovements}
+                services={services}
                 fromDate={filters.fromDate}
                 toDate={filters.toDate}
               />
@@ -244,7 +268,14 @@ export default function ReportsCenter({
                 onUpdateKteo={onUpdateKteo}
               />
             )}
-            {activeSection === 'secretariat' && <SecretariatReport debts={debts} />}
+            {activeSection === 'secretariat' && (
+              <SecretariatReport
+                debts={debts.filter(
+                  (debt) =>
+                    !String(debt.notes || '').includes('[service_inventory_item:')
+                )}
+              />
+            )}
           </div>
         </main>
       </div>

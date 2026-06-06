@@ -3,6 +3,11 @@
 import { Fragment, useEffect, useState } from 'react';
 import type { BookingRecord } from '@/lib/bookingsApi';
 import type { DebtRecord } from '@/lib/debtsApi';
+import type {
+  ServiceInventoryItem,
+  ServiceInventoryMovement,
+} from '@/lib/serviceInventoryApi';
+import type { ServiceRecord } from '@/lib/servicesApi';
 import type { ReportTransaction, ReportVehicle } from './types';
 
 type CarsReportProps = {
@@ -10,6 +15,9 @@ type CarsReportProps = {
   bookings: BookingRecord[];
   vehicles: ReportVehicle[];
   debts: DebtRecord[];
+  inventoryItems: ServiceInventoryItem[];
+  inventoryMovements: ServiceInventoryMovement[];
+  services: ServiceRecord[];
   fromDate: string;
   toDate: string;
 };
@@ -17,7 +25,16 @@ type CarsReportProps = {
 const money = (value: number) =>
   `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function CarsReport({ transactions, vehicles, debts, fromDate, toDate }: CarsReportProps) {
+export default function CarsReport({
+  transactions,
+  vehicles,
+  debts,
+  inventoryItems,
+  inventoryMovements,
+  services,
+  fromDate,
+  toDate,
+}: CarsReportProps) {
   const [expandedCarId, setExpandedCarId] = useState<string | null>(null);
   const [allocationCarCount, setAllocationCarCount] = useState(vehicles.length);
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,12 +65,43 @@ export default function CarsReport({ transactions, vehicles, debts, fromDate, to
       const carTransactions = transactions.filter(
         (transaction) => transaction.car_id && String(transaction.car_id) === vehicle.id
       );
+      const carInventoryUsages = inventoryMovements
+        .filter(
+          (movement) =>
+            movement.movement_type === 'usage' &&
+            movement.car_id &&
+            String(movement.car_id) === vehicle.id
+        )
+        .map((movement) => {
+          const linkedService = services.find(
+            (service) => Number(service.id) === Number(movement.service_id)
+          );
+          const item = inventoryItems.find(
+            (inventoryItem) => Number(inventoryItem.id) === Number(movement.item_id)
+          );
+
+          return {
+            ...movement,
+            date: linkedService?.service_date || movement.created_at?.slice(0, 10) || '',
+            itemName: item?.name || movement.notes || `Item #${movement.item_id}`,
+          };
+        })
+        .filter(
+          (movement) =>
+            (!fromDate || !movement.date || movement.date >= fromDate) &&
+            (!toDate || !movement.date || movement.date <= toDate)
+        );
       const income = carTransactions
         .filter((transaction) => transaction.type === 'income')
         .reduce((sum, transaction) => sum + transaction.amount, 0);
-      const directExpenses = carTransactions
+      const transactionDirectExpenses = carTransactions
         .filter((transaction) => transaction.type === 'expense' && ['cash', 'card', 'bank'].includes(transaction.payment_method))
         .reduce((sum, transaction) => sum + transaction.amount, 0);
+      const inventoryUsageExpenses = carInventoryUsages.reduce(
+        (sum, movement) => sum + Number(movement.total_cost || 0),
+        0
+      );
+      const directExpenses = transactionDirectExpenses + inventoryUsageExpenses;
       const yearlyDebts = debts
         .filter(
           (debt) =>
@@ -77,9 +125,15 @@ export default function CarsReport({ transactions, vehicles, debts, fromDate, to
         net,
         netAfterDebts: net - yearlyDebts,
         transactions: carTransactions,
+        inventoryUsages: carInventoryUsages,
       };
     })
-    .filter((row) => row.transactions.length > 0 || row.yearlyDebts > 0)
+    .filter(
+      (row) =>
+        row.transactions.length > 0 ||
+        row.inventoryUsages.length > 0 ||
+        row.yearlyDebts > 0
+    )
     .sort((left, right) => right.net - left.net);
 
   return (
@@ -144,6 +198,7 @@ export default function CarsReport({ transactions, vehicles, debts, fromDate, to
                 net,
                 netAfterDebts,
                 transactions: carTransactions,
+                inventoryUsages: carInventoryUsages,
               }) => {
               const expanded = expandedCarId === vehicle.id;
               return (
@@ -184,6 +239,29 @@ export default function CarsReport({ transactions, vehicles, debts, fromDate, to
                               </tr>
                             </thead>
                             <tbody>
+                              {carInventoryUsages
+                                .slice()
+                                .sort((left, right) => right.date.localeCompare(left.date))
+                                .map((movement) => (
+                                  <tr
+                                    key={`inventory-usage-${movement.id}`}
+                                    className="border-t border-zinc-800"
+                                  >
+                                    <td className="px-4 py-3 text-sm text-zinc-200">
+                                      {movement.date || '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-zinc-200">
+                                      Ανάλωση Αποθήκης
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-zinc-200">
+                                      {money(Number(movement.total_cost || 0))}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-zinc-200">
+                                      {movement.itemName} · {movement.quantity} ×{' '}
+                                      {money(Number(movement.unit_cost || 0))}
+                                    </td>
+                                  </tr>
+                                ))}
                               {carTransactions
                                 .slice()
                                 .sort((left, right) => right.date.localeCompare(left.date))

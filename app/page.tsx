@@ -28,6 +28,7 @@ import SuppliersManager from '@/components/SuppliersManager';
 import ExpenseCategoriesManager from '@/components/ExpenseCategoriesManager';
 import ServicesManager from '@/components/ServicesManager';
 import VehicleDocumentsManager from '@/components/VehicleDocumentsManager';
+import FleetCalendarPrototype from '@/components/FleetCalendarPrototype';
 import { supabase } from '@/lib/supabaseClient';
 import {
   addIncomeEntry,
@@ -58,6 +59,7 @@ import {
   type NotificationRecord,
 } from '@/lib/notificationsApi';
 type WindowType =
+  | 'Πίνακας'
   | 'Αυτοκίνητα'
   | 'Κρατήσεις'
   | 'Service'
@@ -245,7 +247,8 @@ export default function Home() {
     ? visibleWindows.reduce((topWindow, windowItem) => (windowItem.zIndex > topWindow.zIndex ? windowItem : topWindow), visibleWindows[0]).id
     : null;
   const hasOpenWindow = (windowId: WindowId) => openWindows.some((windowItem) => windowItem.id === windowId);
-  const canOpenWindow = (windowId: WindowId | string) => userRole === 'admin' || windowId === 'Κρατήσεις';
+  const canOpenWindow = (windowId: WindowId | string) =>
+    userRole === 'admin' || windowId === 'Κρατήσεις' || windowId === 'Πίνακας';
 
   useEffect(() => {
     document.documentElement.style.setProperty('--autoclub-sidebar-width', `${sidebarWidth}px`);
@@ -1078,6 +1081,8 @@ const handleSaveSupplierPayment = async () => {
 
   const getWindowTitleForId = (windowId: WindowId) => {
     switch (windowId) {
+      case 'Πίνακας':
+        return 'Πλάνο Στόλου';
       case 'Αυτοκίνητα':
         return 'Διαχείριση Αυτοκινήτων';
       case 'Κρατήσεις':
@@ -1543,6 +1548,13 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     .slice(0, 4);
   const openDebts = debts.filter((debt) => Number(debt.remaining_amount || 0) > 0 && debt.status !== 'paid');
   const openDebtsTotal = openDebts.reduce((sum, debt) => sum + Number(debt.remaining_amount || 0), 0);
+  const homeAlertDebts = openDebts.filter(
+    (debt) => !String(debt.notes || '').includes('[service_inventory_item:')
+  );
+  const homeAlertDebtsTotal = homeAlertDebts.reduce(
+    (sum, debt) => sum + Number(debt.remaining_amount || 0),
+    0
+  );
   const paidExpenseTransactions = financeTransactions.filter((transaction) => {
     const paymentMethod = String(transaction.payment_method).toLowerCase();
     return (
@@ -1686,6 +1698,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const resolveWindowId = (windowId: WindowId | string, title?: string): WindowId | null => {
     const value = String(windowId || title || '');
     const knownWindows: WindowId[] = [
+      'Πίνακας',
       'Αυτοκίνητα',
       'Κρατήσεις',
       'Service',
@@ -1707,6 +1720,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
   const renderWindowContent = (windowId: WindowId) => {
     switch (resolveWindowId(windowId)) {
+  case 'Πίνακας':
+    return <FleetCalendarPrototype />;
+
   case 'Πρακτορεία':
     return (
       <AgenciesManager />
@@ -1816,6 +1832,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
   const getWindowTitle = (windowId: WindowId) => {
     switch (windowId) {
+      case 'Πίνακας':
+        return 'Πλάνο Στόλου';
       case 'Αυτοκίνητα':
         return 'Διαχείριση Αυτοκινήτων';
       case 'Κρατήσεις':
@@ -2208,9 +2226,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                     Alert Γραμματίων
                   </p>
                   <div className="mt-2.5 rounded-xl border border-white/[0.055] bg-black/20 px-3 py-2.5 transition duration-200 group-hover:border-amber-200/12">
-                    <p className="text-xl font-semibold text-amber-100">{formatMoney(openDebtsTotal)}</p>
+                    <p className="text-xl font-semibold text-amber-100">{formatMoney(homeAlertDebtsTotal)}</p>
                     <p className="mt-1 text-xs text-amber-200/60">
-                      {openDebts.length} ανοιχτά γραμμάτια
+                      {homeAlertDebts.length} ανοιχτά γραμμάτια
                     </p>
                   </div>
                 </button>
@@ -2264,9 +2282,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               zIndex={windowItem.zIndex}
               titleActions={getWindowActions(windowItem.id)}
               initialWidth={windowItem.id === 'Αναφορές' ? 1320 : undefined}
-              initialHeight={windowItem.id === 'Αναφορές' ? 792 : undefined}
+              initialHeight={windowItem.id === 'Αναφορές' ? 792 : windowItem.id === 'Πίνακας' ? 760 : undefined}
               financeDashboard={windowItem.id === 'Ταμείο'}
-              wide={windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Γραμμάτια' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα'}
+              wide={windowItem.id === 'Πίνακας' || windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Γραμμάτια' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα'}
             >
               {renderWindowContent(windowItem.id)}
             </Window>

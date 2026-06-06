@@ -2041,7 +2041,7 @@ export default function ServicesManager() {
                   </tr>
                 </thead>
                 <tbody>
-                  {inventoryItems.map((item) => (
+                  {inventoryItems.filter((item) => Number(item.current_stock) > 0).map((item) => (
                     <tr key={item.id} className="border-t border-white/[0.055] transition duration-200 hover:bg-white/[0.035]">
                       <td className="px-4 py-4 text-sm text-zinc-200">{inventoryTypeOptions.find((option) => option.value === item.type)?.label || item.type}</td>
                       <td className="px-4 py-4 text-sm font-semibold text-white">{item.name}</td>
@@ -2069,7 +2069,7 @@ export default function ServicesManager() {
                       </td>
                     </tr>
                   ))}
-                  {inventoryItems.length === 0 && (
+                  {inventoryItems.filter((item) => Number(item.current_stock) > 0).length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-4 py-8 text-center text-sm text-zinc-500">Δεν υπάρχουν είδη αποθήκης.</td>
                     </tr>

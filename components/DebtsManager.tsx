@@ -189,6 +189,9 @@ const handleDeleteDebt = async (debtId: number) => {
     closePaymentModal();
     await loadDebts();
   };
+  const visibleDebts = debts.filter(
+    (debt) => !String(debt.notes || '').includes('[service_inventory_item:')
+  );
 
   return (
     <div className="space-y-5">
@@ -232,7 +235,7 @@ const handleDeleteDebt = async (debtId: number) => {
             </tr>
           </thead>
           <tbody>
-            {[...debts]
+            {[...visibleDebts]
   .sort((a, b) => {
     const dateA = a.due_date ? new Date(a.due_date).getTime() : 0;
     const dateB = b.due_date ? new Date(b.due_date).getTime() : 0;
@@ -304,7 +307,7 @@ const handleDeleteDebt = async (debtId: number) => {
             ))}
           </tbody>
         </table>
-        {debts.length === 0 && <p className="p-6 text-sm text-zinc-500">Δεν υπάρχουν καταχωρημένα γραμμάτια.</p>}
+        {visibleDebts.length === 0 && <p className="p-6 text-sm text-zinc-500">Δεν υπάρχουν καταχωρημένα γραμμάτια.</p>}
       </div>
 
       {showModal && <DebtFormModal form={form} setForm={setForm} suppliers={suppliers} vehicles={vehicles} onClose={closeModal} onSave={handleSaveDebt} />}

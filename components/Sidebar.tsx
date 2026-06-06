@@ -106,6 +106,7 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 const WINDOW_ITEMS = [
+  'Πίνακας',
   'Αυτοκίνητα',
   'Κρατήσεις',
   'Service',
