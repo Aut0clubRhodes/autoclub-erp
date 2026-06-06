@@ -26,6 +26,8 @@ import {
 import AgenciesManager from '@/components/AgenciesManager';
 import SuppliersManager from '@/components/SuppliersManager';
 import ExpenseCategoriesManager from '@/components/ExpenseCategoriesManager';
+import SettingsManager from '@/components/SettingsManager';
+import MarketingManager from '@/components/MarketingManager';
 import ServicesManager from '@/components/ServicesManager';
 import VehicleDocumentsManager from '@/components/VehicleDocumentsManager';
 import FleetCalendarPrototype from '@/components/FleetCalendarPrototype';
@@ -74,6 +76,8 @@ type WindowType =
   | 'Κατηγορίες Εξόδων'
   | 'Αναφορές'
   | 'Πρακτορεία'
+  | 'Marketing'
+  | 'Ρυθμίσεις'
   | null;
 
 type WindowId = Exclude<WindowType, null>;
@@ -1111,6 +1115,10 @@ const handleSaveSupplierPayment = async () => {
         return 'Αναφορές';
       case 'Πρακτορεία':
         return 'Πρακτορεία';
+      case 'Marketing':
+        return 'Marketing';
+      case 'Ρυθμίσεις':
+        return 'Ρυθμίσεις';
       default:
         return '';
     }
@@ -1713,6 +1721,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       'Κατηγορίες Εξόδων',
       'Αναφορές',
       'Πρακτορεία',
+      'Marketing',
+      'Ρυθμίσεις',
     ];
 
     return knownWindows.includes(value as WindowId) ? (value as WindowId) : null;
@@ -1805,6 +1815,10 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return <VehicleDocumentsManager />;
       case 'Κατηγορίες Εξόδων':
         return <ExpenseCategoriesManager />;
+      case 'Marketing':
+        return <MarketingManager />;
+      case 'Ρυθμίσεις':
+        return <SettingsManager onSuppliersChange={setSuppliers} />;
       case 'Αναφορές':
         return (
           <ReportsCenter
@@ -1862,6 +1876,10 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return 'Αναφορές';
        case 'Πρακτορεία':
   return 'Πρακτορεία';
+      case 'Marketing':
+        return 'Marketing / Promotions';
+      case 'Ρυθμίσεις':
+        return 'Ρυθμίσεις';
       default:
         return '';
     }
@@ -2284,7 +2302,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               initialWidth={windowItem.id === 'Αναφορές' ? 1320 : undefined}
               initialHeight={windowItem.id === 'Αναφορές' ? 792 : windowItem.id === 'Πίνακας' ? 760 : undefined}
               financeDashboard={windowItem.id === 'Ταμείο'}
-              wide={windowItem.id === 'Πίνακας' || windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Γραμμάτια' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα'}
+              wide={windowItem.id === 'Πίνακας' || windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Γραμμάτια' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα' || windowItem.id === 'Marketing' || windowItem.id === 'Ρυθμίσεις'}
             >
               {renderWindowContent(windowItem.id)}
             </Window>

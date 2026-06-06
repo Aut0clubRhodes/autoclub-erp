@@ -14,13 +14,11 @@ import {
   FileText,
   FolderArchive,
   LayoutDashboard,
-  ListTree,
-  Network,
+  Megaphone,
   ReceiptText,
   SlidersHorizontal,
   TrendingDown,
   TrendingUp,
-  Truck,
   Wallet,
   Wrench,
   type LucideIcon,
@@ -95,11 +93,8 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'ΣΥΣΤΗΜΑ',
     collapsible: true,
     items: [
-      { label: 'Προμηθευτές', href: '/suppliers', icon: Truck, tone: 'text-violet-300', chip: 'border-violet-400/25 bg-violet-400/10' },
-      { label: 'Πρακτορεία', href: '/agencies', icon: Network, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
       { label: 'Έγγραφα', href: '/vehicle-documents', icon: FolderArchive, tone: 'text-sky-300', chip: 'border-sky-400/25 bg-sky-400/10' },
-      { label: 'Κατηγορίες Οχημάτων', href: '/vehicle-groups', icon: ListTree, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
-      { label: 'Κατηγορίες Εξόδων', href: '/expense-categories', icon: ListTree, tone: 'text-amber-300', chip: 'border-amber-400/25 bg-amber-400/10' },
+      { label: 'Marketing', href: '/marketing', icon: Megaphone, tone: 'text-rose-300', chip: 'border-rose-400/25 bg-rose-400/10' },
       { label: 'Ρυθμίσεις', href: '/settings', icon: SlidersHorizontal, tone: 'text-slate-300', chip: 'border-slate-400/20 bg-slate-400/10' },
     ],
   },
@@ -121,6 +116,8 @@ const WINDOW_ITEMS = [
   'Πρακτορεία',
   'Έγγραφα',
   'Κατηγορίες Εξόδων',
+  'Marketing',
+  'Ρυθμίσεις',
 ];
 
 export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRole, onLogout, onCollapsedChange, onNavigate, forceExpanded }: SidebarProps) {
@@ -376,7 +373,13 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
   );
 }
 
-function VehicleGroupsPanel({ onClose }: { onClose: () => void }) {
+export function VehicleGroupsPanel({
+  onClose,
+  embedded = false,
+}: {
+  onClose?: () => void;
+  embedded?: boolean;
+}) {
   const [groups, setGroups] = useState<VehicleGroupRecord[]>([]);
   const [newCode, setNewCode] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -437,21 +440,27 @@ function VehicleGroupsPanel({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
-      <section className="flex max-h-[82vh] w-[min(720px,94vw)] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[linear-gradient(145deg,#09111d_0%,#050910_100%)] text-white shadow-[0_30px_110px_rgba(0,0,0,0.58)]">
+    <div className={embedded ? 'w-full' : 'fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm'}>
+      <section className={`flex flex-col overflow-hidden border border-white/10 bg-[linear-gradient(145deg,#09111d_0%,#050910_100%)] text-white ${
+        embedded
+          ? 'w-full rounded-2xl'
+          : 'max-h-[82vh] w-[min(720px,94vw)] rounded-3xl shadow-[0_30px_110px_rgba(0,0,0,0.58)]'
+      }`}>
         <header className="flex flex-shrink-0 items-start justify-between border-b border-white/10 px-6 py-5">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-emerald-200/70">VEHICLE GROUPS</p>
             <h2 className="mt-1 text-xl font-semibold text-white">Κατηγορίες Οχημάτων</h2>
             <p className="mt-1 text-xs text-zinc-500">Global groups for bookings and vehicle categories.</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
-          >
-            ×
-          </button>
+          {!embedded && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+            >
+              ×
+            </button>
+          )}
         </header>
 
         <div className="min-h-0 flex-1 overflow-auto p-5">
