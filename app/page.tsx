@@ -1556,8 +1556,17 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     .slice(0, 4);
   const openDebts = debts.filter((debt) => Number(debt.remaining_amount || 0) > 0 && debt.status !== 'paid');
   const openDebtsTotal = openDebts.reduce((sum, debt) => sum + Number(debt.remaining_amount || 0), 0);
+  const dashboardToday = new Date();
+  const dashboardTodayKey = [
+    dashboardToday.getFullYear(),
+    String(dashboardToday.getMonth() + 1).padStart(2, '0'),
+    String(dashboardToday.getDate()).padStart(2, '0'),
+  ].join('-');
   const homeAlertDebts = openDebts.filter(
-    (debt) => !String(debt.notes || '').includes('[service_inventory_item:')
+    (debt) =>
+      !String(debt.notes || '').includes('[service_inventory_item:') &&
+      Boolean(debt.due_date) &&
+      String(debt.due_date) <= dashboardTodayKey
   );
   const homeAlertDebtsTotal = homeAlertDebts.reduce(
     (sum, debt) => sum + Number(debt.remaining_amount || 0),
@@ -2246,7 +2255,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                   <div className="mt-2.5 rounded-xl border border-white/[0.055] bg-black/20 px-3 py-2.5 transition duration-200 group-hover:border-amber-200/12">
                     <p className="text-xl font-semibold text-amber-100">{formatMoney(homeAlertDebtsTotal)}</p>
                     <p className="mt-1 text-xs text-amber-200/60">
-                      {homeAlertDebts.length} ανοιχτά γραμμάτια
+                      {homeAlertDebtsTotal > 0
+                        ? `${homeAlertDebts.length} ληξιπρόθεσμα / σήμερα`
+                        : '0 για σήμερα'}
                     </p>
                   </div>
                 </button>
