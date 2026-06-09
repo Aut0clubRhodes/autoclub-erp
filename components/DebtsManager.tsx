@@ -256,8 +256,9 @@ const handleDeleteDebt = async (debtId: number) => {
   const handleSavePayment = async () => {
     if (!paymentDebt) return;
 
-    const amount = Number(paymentForm.amount);
-    if (!amount || amount <= 0) {
+    const normalizedAmount = paymentForm.amount.trim().replace(',', '.');
+    const amount = Number(normalizedAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
       alert('Συμπληρώστε ποσό πληρωμής.');
       return;
     }
@@ -523,7 +524,12 @@ const handleDeleteDebt = async (debtId: number) => {
             </div>
             <div className="space-y-4 px-6 py-5">
               <Field label="Ποσό Πληρωμής">
-                <input value={paymentForm.amount} onChange={(event) => setPaymentForm({ ...paymentForm, amount: event.target.value })} className="input" />
+                <input
+                  inputMode="decimal"
+                  value={paymentForm.amount}
+                  onChange={(event) => setPaymentForm({ ...paymentForm, amount: event.target.value })}
+                  className="input"
+                />
               </Field>
               <Field label="Ημερομηνία">
                 <input type="date" value={paymentForm.date} onChange={(event) => setPaymentForm({ ...paymentForm, date: event.target.value })} className="input" />
