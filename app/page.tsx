@@ -2310,6 +2310,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               onMinimize={() => minimizeWindow(windowItem.id)}
               zIndex={windowItem.zIndex}
               titleActions={getWindowActions(windowItem.id)}
+              fullscreen={windowItem.id === 'Κρατήσεις'}
               initialWidth={windowItem.id === 'Αναφορές' ? 1320 : undefined}
               initialHeight={windowItem.id === 'Αναφορές' ? 792 : windowItem.id === 'Πίνακας' ? 760 : undefined}
               financeDashboard={windowItem.id === 'Ταμείο'}
