@@ -16,7 +16,10 @@ import {
   fetchReservationEvents,
   type ReservationEventRecord,
 } from '@/lib/reservationEventsApi';
-import { createNotificationOnce } from '@/lib/notificationsApi';
+import {
+  createNotificationOnce,
+  markReservationNotificationsRead,
+} from '@/lib/notificationsApi';
 import {
   fetchGroupStock,
   upsertGroupStock,
@@ -898,6 +901,55 @@ export default function BookingsManager({
     setIsLoadingWhatsappMessages(false);
   };
 
+  const markReservationRead = async (reservationId: string) => {
+    setUnreadWhatsappReservationIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      nextIds.delete(reservationId);
+      return nextIds;
+    });
+    setWhatsappMessages((currentMessages) =>
+      currentMessages.map((message) => ({ ...message, isUnread: false }))
+    );
+
+    const whatsappResult = await supabase
+      .from('whatsapp_messages')
+      .update({ is_read: true })
+      .eq('reservation_id', reservationId)
+      .eq('direction', 'incoming')
+      .eq('is_read', false);
+
+    if (whatsappResult.error) {
+      console.warn('Mark reservation WhatsApp messages read warning', whatsappResult.error);
+      await loadUnreadWhatsappReservations();
+    }
+
+    const notificationsUpdated = await markReservationNotificationsRead(reservationId);
+
+    if (!notificationsUpdated) {
+      console.warn('Reservation notifications were not marked read', { reservationId });
+    }
+
+    setUnreadWhatsappReservationIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      nextIds.delete(reservationId);
+      return nextIds;
+    });
+    setWhatsappMessages((currentMessages) =>
+      currentMessages.map((message) => ({ ...message, isUnread: false }))
+    );
+    await Promise.resolve(onNotificationsChanged?.());
+  };
+
+  const openReservation = (reservationId: string) => {
+    setSelectedId(reservationId);
+    void markReservationRead(reservationId);
+  };
+
+  const openWhatsappChat = (reservationId: string) => {
+    setShowWhatsappChat(true);
+    void markReservationRead(reservationId);
+  };
+
   const recordWorkflowEvent = async (reservationId: string, eventType: string, eventMessage: string) => {
     const event = await createReservationEvent({
       reservation_id: reservationId,
@@ -1408,7 +1460,7 @@ export default function BookingsManager({
                       key={reservation.id}
                       type="button"
                       onClick={() => {
-                        setSelectedId(reservation.id);
+                        openReservation(reservation.id);
                         setMobileReservationId(reservation.id);
                       }}
                       className="w-full rounded-[18px] border border-white/[0.075] bg-white/[0.035] p-2.5 text-left shadow-[0_12px_34px_rgba(0,0,0,0.2)] transition active:scale-[0.99]"
@@ -1604,7 +1656,7 @@ export default function BookingsManager({
                     key={reservation.id}
                     type="button"
                     onClick={() => {
-                      setSelectedId(reservation.id);
+                      openReservation(reservation.id);
                       setMobileReservationId(reservation.id);
                     }}
                     className="w-full rounded-3xl border border-white/[0.075] bg-white/[0.035] p-3 text-left shadow-[0_18px_48px_rgba(0,0,0,0.22)] transition active:scale-[0.99]"
@@ -1925,10 +1977,10 @@ export default function BookingsManager({
                   <tr
                     key={reservation.id}
                     onClick={() => {
-                      setSelectedId(reservation.id);
+                      openReservation(reservation.id);
                     }}
                     onDoubleClick={() => {
-                      setSelectedId(reservation.id);
+                      openReservation(reservation.id);
                       setEditingReservation(reservation);
                     }}
                     className={`cursor-pointer transition duration-200 hover:bg-white/[0.045] ${
@@ -1999,7 +2051,7 @@ export default function BookingsManager({
           whatsappMessages={whatsappMessages}
           isLoadingWhatsappMessages={isLoadingWhatsappMessages}
           unreadWhatsappCount={whatsappMessages.filter((message) => message.isUnread).length}
-          onOpenWhatsappChat={() => setShowWhatsappChat(true)}
+          onOpenWhatsappChat={() => openWhatsappChat(selectedReservation.id)}
           onCreateWorkflowEvent={recordWorkflowEvent}
           onSendReminder={sendReminder}
           isReminderSending={sendingReminderIds.has(selectedReservation.id)}
@@ -2040,7 +2092,7 @@ export default function BookingsManager({
           reservations={reservations}
           onClose={() => setShowHistoryModal(false)}
           onSelect={(reservationId) => {
-            setSelectedId(reservationId);
+            openReservation(reservationId);
             setShowHistoryModal(false);
           }}
         />

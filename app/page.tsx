@@ -300,24 +300,26 @@ export default function Home() {
 
   const handleNotificationClick = async (notification: NotificationRecord) => {
     if (notification.read === false) {
+      setNotifications((currentNotifications) =>
+        currentNotifications.map((currentNotification) =>
+          currentNotification.id === notification.id ? { ...currentNotification, read: true } : currentNotification
+        )
+      );
       const updated = await markNotificationRead(notification.id);
-      if (updated) {
-        setNotifications((currentNotifications) =>
-          currentNotifications.map((currentNotification) =>
-            currentNotification.id === notification.id ? { ...currentNotification, read: true } : currentNotification
-          )
-        );
+      if (!updated) {
+        await loadNotifications();
       }
     }
   };
 
   const handleMarkAllNotificationsRead = async () => {
-    const updated = await markAllNotificationsRead();
-    if (!updated) return;
-
     setNotifications((currentNotifications) =>
       currentNotifications.map((notification) => ({ ...notification, read: true }))
     );
+    const updated = await markAllNotificationsRead();
+    if (!updated) {
+      await loadNotifications();
+    }
   };
 
   const [showAddCar, setShowAddCar] = useState(false);

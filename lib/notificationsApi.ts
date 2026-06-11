@@ -144,3 +144,18 @@ export async function markAllNotificationsRead() {
 
   return true;
 }
+
+export async function markReservationNotificationsRead(reservationId: string) {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('reservation_id', reservationId)
+    .eq('read', false);
+
+  if (error) {
+    logNotificationWarning('Mark reservation notifications read warning:', error);
+    return false;
+  }
+
+  return true;
+}
