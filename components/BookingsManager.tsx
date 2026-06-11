@@ -232,10 +232,10 @@ const bookingTableColumns: Array<{ key: ReservationSortKey; label: string; align
   { key: 'modified', label: 'Modified', className: 'w-[82px]' },
 ];
 const statusActiveClasses: Record<ReservationStatus, string> = {
-  PENDING: 'border-amber-300 bg-amber-400/25 text-amber-50 shadow-[0_0_16px_rgba(251,191,36,0.14)]',
-  ACCEPTED: 'border-emerald-300 bg-emerald-400/24 text-emerald-50 shadow-[0_0_16px_rgba(52,211,153,0.14)]',
-  REJECTED: 'border-rose-300 bg-rose-400/24 text-rose-50 shadow-[0_0_16px_rgba(251,113,133,0.14)]',
-  RETURN: 'border-cyan-300 bg-cyan-400/24 text-cyan-50 shadow-[0_0_16px_rgba(34,211,238,0.14)]',
+  PENDING: 'border-amber-400 bg-amber-100 text-amber-900 shadow-sm',
+  ACCEPTED: 'border-emerald-400 bg-emerald-100 text-emerald-900 shadow-sm',
+  REJECTED: 'border-rose-400 bg-rose-100 text-rose-900 shadow-sm',
+  RETURN: 'border-cyan-400 bg-cyan-100 text-cyan-900 shadow-sm',
 };
 const statusSelectClasses: Record<ReservationStatus, string> = {
   PENDING: 'border-amber-300/45 text-amber-100 focus:border-amber-300/65',
@@ -1740,19 +1740,18 @@ export default function BookingsManager({
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col gap-1 text-white">
-      <div className="flex flex-shrink-0 flex-col gap-1 rounded-lg border border-white/[0.05] bg-white/[0.016] px-2 py-1 md:flex-row md:items-center">
-        <h2 className="mr-1 whitespace-nowrap text-[13px] font-semibold text-white">Κρατήσεις</h2>
+    <div className="relative flex h-full min-h-0 w-full flex-col gap-1 overflow-hidden rounded-xl bg-slate-100 p-1.5 text-slate-900">
+      <div className="flex flex-shrink-0 flex-col gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 shadow-sm md:flex-row md:items-center">
         <input
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
           placeholder="Search phone, name, group, agency, hotel..."
-          className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-white outline-none transition duration-200 focus:border-sky-300/60 focus:ring-2 focus:ring-sky-400/10"
+          className="h-7 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-none transition duration-200 placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
         />
         <select
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value as (typeof statuses)[number])}
-          className="rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-white outline-none transition duration-200 focus:border-sky-300/60"
+          className="h-7 rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-none transition duration-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
         >
           {statuses.map((status) => (
             <option key={status} value={status}>
@@ -1763,28 +1762,28 @@ export default function BookingsManager({
         <button
           type="button"
           onClick={() => setShowHistoryModal(true)}
-          className="shrink-0 rounded-lg border border-violet-300/25 bg-violet-300/10 px-3 py-1 text-xs font-bold text-violet-100 transition duration-200 hover:-translate-y-0.5 hover:border-violet-200/40 hover:bg-violet-300/16"
+          className="h-7 shrink-0 rounded-lg border border-violet-300 bg-violet-100 px-2.5 text-xs font-bold text-violet-800 transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-200"
         >
           Ιστορικό Κρατήσεων
         </button>
         <button
           type="button"
           onClick={() => setShowReturnsModal(true)}
-          className="shrink-0 rounded-lg border border-amber-300/25 bg-amber-300/10 px-3 py-1 text-xs font-bold text-amber-100 transition duration-200 hover:-translate-y-0.5 hover:border-amber-200/40 hover:bg-amber-300/16"
+          className="h-7 shrink-0 rounded-lg border border-amber-300 bg-amber-100 px-2.5 text-xs font-bold text-amber-800 transition duration-200 hover:-translate-y-0.5 hover:border-amber-400 hover:bg-amber-200"
         >
           Επιστροφές
         </button>
         <button
           type="button"
           onClick={() => setShowAvailabilityModal(true)}
-          className="shrink-0 rounded-lg border border-emerald-300/25 bg-emerald-300/10 px-3 py-1 text-xs font-bold text-emerald-100 transition duration-200 hover:-translate-y-0.5 hover:border-emerald-200/40 hover:bg-emerald-300/16"
+          className="h-7 shrink-0 rounded-lg border border-emerald-300 bg-emerald-100 px-2.5 text-xs font-bold text-emerald-800 transition duration-200 hover:-translate-y-0.5 hover:border-emerald-400 hover:bg-emerald-200"
         >
           Availability
         </button>
         <button
           type="button"
           onClick={() => setShowAvailabilityTestModal(true)}
-          className="shrink-0 rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-xs font-bold text-cyan-100 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-cyan-300/16"
+          className="h-7 shrink-0 rounded-lg border border-cyan-300 bg-cyan-100 px-2.5 text-xs font-bold text-cyan-800 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-400 hover:bg-cyan-200"
         >
           Check Availability
         </button>
@@ -1799,13 +1798,13 @@ export default function BookingsManager({
             });
             setShowNewModal(true);
           }}
-          className="shrink-0 rounded-lg border border-sky-300/25 bg-sky-300/12 px-3 py-1 text-xs font-bold text-sky-100 transition duration-200 hover:-translate-y-0.5 hover:border-sky-200/40 hover:bg-sky-300/18"
+          className="h-7 shrink-0 rounded-lg border border-sky-400 bg-sky-600 px-2.5 text-xs font-bold text-white transition duration-200 hover:-translate-y-0.5 hover:border-sky-500 hover:bg-sky-700"
         >
           + Νέα Κράτηση
         </button>
       </div>
 
-      <div className="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-emerald-300/[0.08] bg-emerald-300/[0.025] px-2 py-0.5 text-[9.5px] font-bold text-zinc-300">
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-slate-700">
         {bookingHealthStatuses.map((health) => {
           const stateLabel = health.state === 'active' ? 'active' : health.state === 'error' ? 'error' : 'no recent event';
           const title = health.lastEventAt
@@ -1824,7 +1823,7 @@ export default function BookingsManager({
                 }`}
               />
               <span>{health.label}</span>
-              <span className={health.state === 'active' ? 'text-emerald-200/75' : health.state === 'error' ? 'text-rose-200/75' : 'text-amber-200/75'}>
+              <span className={health.state === 'active' ? 'text-emerald-700' : health.state === 'error' ? 'text-rose-700' : 'text-amber-700'}>
                 {stateLabel}
               </span>
             </span>
@@ -1832,7 +1831,7 @@ export default function BookingsManager({
         })}
       </div>
 
-      <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 rounded-lg border border-white/[0.045] bg-white/[0.012] px-2 py-1">
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 shadow-sm">
         {([
           { id: 'active', label: 'Active' },
           { id: 'returned', label: 'Returned' },
@@ -1844,17 +1843,17 @@ export default function BookingsManager({
               key={mode.id}
               type="button"
               onClick={() => setListMode(mode.id)}
-              className={`rounded-lg border px-3 py-1 text-[11px] font-black transition duration-200 ${
+              className={`h-7 rounded-lg border px-2.5 text-[11px] font-black transition duration-200 ${
                 isActive
-                  ? 'border-emerald-300/35 bg-emerald-300/12 text-emerald-50 shadow-[0_0_16px_rgba(52,211,153,0.08)]'
-                  : 'border-white/[0.055] bg-black/20 text-zinc-400 hover:border-emerald-300/20 hover:bg-emerald-300/[0.055] hover:text-zinc-100'
+                  ? 'border-emerald-400 bg-emerald-100 text-emerald-900 shadow-sm'
+                  : 'border-slate-300 bg-white text-slate-600 hover:border-emerald-400 hover:bg-emerald-50 hover:text-slate-900'
               }`}
             >
               {mode.label}
             </button>
           );
         })}
-        <span className="h-5 w-px bg-white/[0.07]" />
+        <span className="h-5 w-px bg-slate-300" />
         {quickReservationFilters.map((filter) => {
           const isActive = quickFilter === filter.id;
 
@@ -1864,7 +1863,7 @@ export default function BookingsManager({
                 <select
                   value={agencyQuickFilter}
                   onChange={(event) => setAgencyQuickFilter(event.target.value)}
-                  className="h-[26px] rounded-lg border border-white/[0.055] bg-black/30 px-2.5 text-[11px] font-bold text-zinc-200 outline-none transition hover:border-sky-300/20 focus:border-sky-300/45"
+                  className="h-7 rounded-lg border border-slate-300 bg-white px-2.5 text-[11px] font-bold text-slate-700 outline-none transition hover:border-sky-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
                 >
                   <option value="ALL">All agencies</option>
                   {agencyQuickFilterOptions.map((agency) => (
@@ -1876,10 +1875,10 @@ export default function BookingsManager({
                 <button
                   type="button"
                   onClick={() => setQuickFilter(filter.id)}
-                  className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold transition duration-200 ${
+                  className={`h-7 rounded-lg border px-2.5 text-[11px] font-bold transition duration-200 ${
                     isActive
-                      ? 'border-sky-300/35 bg-sky-300/12 text-sky-50 shadow-[0_0_16px_rgba(56,189,248,0.08)]'
-                      : 'border-white/[0.055] bg-black/20 text-zinc-400 hover:border-sky-300/20 hover:bg-sky-300/[0.055] hover:text-zinc-100'
+                      ? 'border-sky-400 bg-sky-100 text-sky-900 shadow-sm'
+                      : 'border-slate-300 bg-white text-slate-600 hover:border-sky-400 hover:bg-sky-50 hover:text-slate-900'
                   }`}
                 >
                   {filter.label}
@@ -1893,10 +1892,10 @@ export default function BookingsManager({
               key={filter.id}
               type="button"
               onClick={() => setQuickFilter(filter.id)}
-              className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold transition duration-200 ${
+              className={`h-7 rounded-lg border px-2.5 text-[11px] font-bold transition duration-200 ${
                 isActive
-                  ? 'border-sky-300/35 bg-sky-300/12 text-sky-50 shadow-[0_0_16px_rgba(56,189,248,0.08)]'
-                  : 'border-white/[0.055] bg-black/20 text-zinc-400 hover:border-sky-300/20 hover:bg-sky-300/[0.055] hover:text-zinc-100'
+                  ? 'border-sky-400 bg-sky-100 text-sky-900 shadow-sm'
+                  : 'border-slate-300 bg-white text-slate-600 hover:border-sky-400 hover:bg-sky-50 hover:text-slate-900'
               }`}
             >
               {filter.label}
@@ -1906,7 +1905,7 @@ export default function BookingsManager({
         {quickFilter === 'returnsToday' && (
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {reminderFeedback && (
-              <span className="rounded-lg border border-white/[0.055] bg-black/25 px-2.5 py-1 text-[11px] font-bold text-zinc-200">
+              <span className="rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-700">
                 {reminderFeedback}
               </span>
             )}
@@ -1914,7 +1913,7 @@ export default function BookingsManager({
               type="button"
               onClick={sendAllTodayReturnReminders}
               disabled={isBulkSendingReminders || todayReturnReminderTargets.length === 0}
-              className="rounded-lg border border-cyan-300/30 bg-cyan-300/12 px-3 py-1 text-[11px] font-black text-cyan-50 transition hover:border-cyan-200/45 hover:bg-cyan-300/18 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-900/65 disabled:text-zinc-500"
+              className="rounded-lg border border-cyan-500 bg-cyan-600 px-3 py-1 text-[11px] font-black text-white transition hover:border-cyan-600 hover:bg-cyan-700 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500"
             >
               {isBulkSendingReminders ? 'Sending...' : "Send all today's return reminders"}
             </button>
@@ -1922,13 +1921,13 @@ export default function BookingsManager({
         )}
       </div>
 
-      <section className="h-[46%] min-h-[276px] flex-shrink-0 overflow-hidden rounded-xl border border-white/[0.07] bg-[#060a11]">
+      <section className="h-[38%] min-h-[230px] flex-shrink-0 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="h-full overflow-auto">
-          <table className="w-full min-w-[1430px] text-left text-[12px]">
-            <thead className="sticky top-0 z-10 bg-[#101824] text-[11px] font-semibold text-zinc-200 shadow-[0_1px_0_rgba(255,255,255,0.08)]">
+          <table className="w-full min-w-[1430px] text-left text-[13px]">
+            <thead className="sticky top-0 z-10 bg-slate-200 text-xs font-bold text-slate-800 shadow-[0_1px_0_rgba(15,23,42,0.15)]">
               <tr>
                 {bookingTableColumns.map((column) => (
-                  <th key={column.key} className={`whitespace-nowrap px-2 py-1.5 ${column.className || ''}`}>
+                  <th key={column.key} className={`whitespace-nowrap px-2.5 py-2.5 ${column.className || ''}`}>
                     <button
                       type="button"
                       onClick={() =>
@@ -1938,30 +1937,30 @@ export default function BookingsManager({
                             : { key: column.key, direction: 'asc' }
                         )
                       }
-                      className={`flex w-full items-center gap-1 text-left font-semibold transition hover:text-white ${
+                      className={`flex w-full items-center gap-1 text-left font-bold transition hover:text-slate-950 ${
                         column.align === 'right' ? 'justify-end' : ''
-                      } ${tableSort.key === column.key ? 'text-sky-100' : 'text-zinc-200'}`}
+                      } ${tableSort.key === column.key ? 'text-sky-800' : 'text-slate-700'}`}
                     >
                       <span>{column.label}</span>
                       {tableSort.key === column.key && (
-                        <span className="text-[9px] text-sky-200">{tableSort.direction === 'asc' ? '▲' : '▼'}</span>
+                        <span className="text-[9px] text-sky-700">{tableSort.direction === 'asc' ? '▲' : '▼'}</span>
                       )}
                     </button>
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.055]">
+            <tbody className="divide-y divide-slate-200">
               {isLoadingReservations && (
                 <tr>
-                  <td colSpan={17} className="px-3 py-8 text-center text-sm text-zinc-500">
+                  <td colSpan={17} className="px-3 py-8 text-center text-sm text-slate-500">
                     Φόρτωση κρατήσεων...
                   </td>
                 </tr>
               )}
               {!isLoadingReservations && filteredReservations.length === 0 && (
                 <tr>
-                  <td colSpan={17} className="px-3 py-8 text-center text-sm text-zinc-500">
+                  <td colSpan={17} className="px-3 py-8 text-center text-sm text-slate-500">
                     Δεν υπάρχουν κρατήσεις.
                   </td>
                 </tr>
@@ -1983,15 +1982,15 @@ export default function BookingsManager({
                       openReservation(reservation.id);
                       setEditingReservation(reservation);
                     }}
-                    className={`cursor-pointer transition duration-200 hover:bg-white/[0.045] ${
+                    className={`cursor-pointer transition duration-200 hover:bg-sky-50 ${
                       isSelected
-                        ? 'bg-sky-300/[0.075] shadow-[inset_2px_0_0_rgba(125,211,252,0.8)]'
+                        ? 'bg-sky-100 shadow-[inset_3px_0_0_rgb(14,165,233)]'
                         : isReturned
-                          ? 'bg-cyan-300/[0.06] text-cyan-50 shadow-[inset_3px_0_0_rgba(34,211,238,0.5)] hover:bg-cyan-300/[0.09]'
-                          : 'odd:bg-white/[0.012] even:bg-black/[0.05]'
+                          ? 'bg-cyan-50 text-cyan-950 shadow-[inset_3px_0_0_rgb(6,182,212)] hover:bg-cyan-100'
+                          : 'odd:bg-white even:bg-slate-50'
                     }`}
                   >
-                    <td className={`whitespace-nowrap px-2 py-1 font-mono text-[12px] ${isReturned ? 'font-semibold text-cyan-50' : 'text-sky-100'}`}>
+                    <td className={`whitespace-nowrap px-2.5 py-2 font-mono text-[13px] ${isReturned ? 'font-semibold text-cyan-900' : 'text-sky-800'}`}>
                       <span className="inline-flex items-center gap-1.5">
                         {hasUnreadWhatsapp && (
                           <span className="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.65)]" title="Unread WhatsApp message" />
@@ -2004,31 +2003,31 @@ export default function BookingsManager({
                         )}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-2 py-1"><VehicleGroupBadge value={reservation.vehicleGroup} /></td>
-                    <td className="whitespace-nowrap px-2 py-1"><AgencyBadge value={reservation.agency} /></td>
-                    <td className={`max-w-[102px] truncate whitespace-nowrap px-2 py-1 ${isReturned ? 'text-cyan-100' : 'text-zinc-300'}`} title={reservation.representative}>{reservation.representative}</td>
-                    <td className={`max-w-[150px] truncate whitespace-nowrap px-2 py-1 font-semibold ${isReturned ? 'text-cyan-50' : 'text-zinc-100'}`} title={reservation.hotelRoom || reservation.name}>{reservation.hotelRoom || reservation.name}</td>
-                    <td className={`whitespace-nowrap px-2 py-1 ${isReturned ? 'text-cyan-100' : 'text-zinc-300'}`}>{formatDate(reservation.pickupDate)}</td>
-                    <td className={`whitespace-nowrap px-2 py-1 ${isReturned ? 'font-semibold text-cyan-50' : 'text-zinc-300'}`}>{formatDate(reservation.returnDate)}</td>
-                    <td className={`whitespace-nowrap px-2 py-1 ${isReturned ? 'text-cyan-100' : 'text-zinc-300'}`}>{reservation.pickupTime}</td>
-                    <td className={`whitespace-nowrap px-2 py-1 ${isReturned ? 'font-semibold text-cyan-50' : 'text-zinc-300'}`}>{reservation.returnTime}</td>
-                    <td className="whitespace-nowrap px-2 py-1 text-right font-semibold text-white">{money(reservation.price)}</td>
-                    <td className="whitespace-nowrap px-2 py-1">
+                    <td className="whitespace-nowrap px-2.5 py-2"><VehicleGroupBadge value={reservation.vehicleGroup} /></td>
+                    <td className="whitespace-nowrap px-2.5 py-2"><AgencyBadge value={reservation.agency} /></td>
+                    <td className={`max-w-[102px] truncate whitespace-nowrap px-2.5 py-2 ${isReturned ? 'text-cyan-800' : 'text-slate-700'}`} title={reservation.representative}>{reservation.representative}</td>
+                    <td className={`max-w-[150px] truncate whitespace-nowrap px-2.5 py-2 font-semibold ${isReturned ? 'text-cyan-950' : 'text-slate-950'}`} title={reservation.hotelRoom || reservation.name}>{reservation.hotelRoom || reservation.name}</td>
+                    <td className={`whitespace-nowrap px-2.5 py-2 ${isReturned ? 'text-cyan-800' : 'text-slate-700'}`}>{formatDate(reservation.pickupDate)}</td>
+                    <td className={`whitespace-nowrap px-2.5 py-2 ${isReturned ? 'font-semibold text-cyan-950' : 'text-slate-700'}`}>{formatDate(reservation.returnDate)}</td>
+                    <td className={`whitespace-nowrap px-2.5 py-2 ${isReturned ? 'text-cyan-800' : 'text-slate-700'}`}>{reservation.pickupTime}</td>
+                    <td className={`whitespace-nowrap px-2.5 py-2 ${isReturned ? 'font-semibold text-cyan-950' : 'text-slate-700'}`}>{reservation.returnTime}</td>
+                    <td className="whitespace-nowrap px-2.5 py-2 text-right font-bold text-slate-950">{money(reservation.price)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-2">
                       <span className="inline-flex items-center gap-1.5">
                         <StatusBadge status={reservation.status} />
                         {quickFilter === 'returnsToday' && isReturned && (
-                          <span className="rounded-full border border-emerald-300/45 bg-emerald-400/14 px-1.5 py-0.5 text-[9px] font-black leading-none text-emerald-100">
+                          <span className="rounded-full border border-emerald-400 bg-emerald-100 px-1.5 py-0.5 text-[9px] font-black leading-none text-emerald-900">
                             ✓ RETURN
                           </span>
                         )}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-2 py-1"><LanguageBadge language={reservation.language} /></td>
-                    <td className="whitespace-nowrap px-2 py-1"><BooleanBadge active={reservation.sendReturn} /></td>
-                    <td className="whitespace-nowrap px-2 py-1"><BooleanBadge active={reservation.confirmationSent} /></td>
-                    <td className="whitespace-nowrap px-2 py-1"><ExtrasBadges extras={reservation.extras} /></td>
-                    <td className="whitespace-nowrap px-2 py-1"><LicenceCell state={getDrivingLicenceState(reservation)} url={getDrivingLicenceUrl(reservation)} /></td>
-                    <td className={`w-[82px] whitespace-nowrap px-2 py-1 font-mono text-[11px] ${isReturned ? 'text-cyan-100' : 'text-zinc-400'}`}>{formatCompactDateTime(reservation.lastModifiedAt)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-2"><LanguageBadge language={reservation.language} /></td>
+                    <td className="whitespace-nowrap px-2.5 py-2"><BooleanBadge active={reservation.sendReturn} /></td>
+                    <td className="whitespace-nowrap px-2.5 py-2"><BooleanBadge active={reservation.confirmationSent} /></td>
+                    <td className="whitespace-nowrap px-2.5 py-2"><ExtrasBadges extras={reservation.extras} /></td>
+                    <td className="whitespace-nowrap px-2.5 py-2"><LicenceCell state={getDrivingLicenceState(reservation)} url={getDrivingLicenceUrl(reservation)} /></td>
+                    <td className={`w-[88px] whitespace-nowrap px-2.5 py-2 font-mono text-xs ${isReturned ? 'text-cyan-800' : 'text-slate-500'}`}>{formatCompactDateTime(reservation.lastModifiedAt)}</td>
                   </tr>
                 );
               })}
@@ -2059,7 +2058,7 @@ export default function BookingsManager({
           reminderFeedback={reminderFeedback}
         />
       ) : (
-        <section className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-6 text-sm text-zinc-500">
+        <section className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white p-6 text-sm text-slate-500 shadow-sm">
           Δεν υπάρχουν κρατήσεις.
         </section>
       )}
@@ -2250,7 +2249,7 @@ function ReservationInspector({
   ];
   return (
     <>
-    <section className="mt-1.5 min-h-0 flex-1 rounded-xl border border-white/[0.07] bg-[#070b12]/90 p-1.5 shadow-[0_18px_55px_rgba(0,0,0,0.22)]">
+    <section className="min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-300 bg-white p-1.5 shadow-sm">
       <div className="grid h-full min-h-0 gap-1.5 xl:grid-cols-[minmax(390px,1.12fr)_minmax(300px,0.88fr)_minmax(230px,0.55fr)]">
         <Panel title="Reservation record" subtitle={reservation.id}>
           <div className="grid gap-1 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
@@ -2286,15 +2285,15 @@ function ReservationInspector({
         </Panel>
 
         <Panel title="Actions & files" subtitle="workflow">
-          <div className="grid min-h-0 gap-1.5 md:grid-cols-[minmax(0,1.08fr)_minmax(126px,0.72fr)] xl:mt-4 2xl:mt-5">
-            <div className="flex min-h-0 flex-col rounded-lg border border-white/[0.055] bg-black/20 p-1.5">
+          <div className="grid min-h-0 gap-1.5 md:grid-cols-[minmax(0,1.08fr)_minmax(126px,0.72fr)] xl:mt-2 2xl:mt-3">
+            <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-slate-50 p-2">
               <div className="mb-1 flex items-center justify-between">
-                <p className="text-[11px] font-black text-zinc-50">Workflow log</p>
-                <span className="text-[10px] font-semibold text-zinc-500">audit</span>
+                <p className="text-xs font-black text-slate-900">Workflow log</p>
+                <span className="text-[11px] font-semibold text-slate-500">audit</span>
               </div>
-              <div className="grid max-h-[154px] min-h-[104px] gap-1 overflow-auto pr-1">
+              <div className="grid max-h-[136px] min-h-[88px] gap-1 overflow-auto pr-1">
                 {isLoadingWorkflowEvents ? (
-                  <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
+                  <p className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-500">
                     Loading workflow events...
                   </p>
                 ) : workflowEvents.length > 0 ? (
@@ -2302,11 +2301,11 @@ function ReservationInspector({
                     const eventStyle = getWorkflowEventStyle(event.eventType);
 
                     return (
-                      <div key={event.id} className={`rounded-md border px-2 py-1.5 text-[11px] leading-4 ${eventStyle.className}`}>
+                      <div key={event.id} className={`rounded-md border px-2.5 py-2 text-xs leading-5 ${eventStyle.className}`}>
                         <div className="flex items-start justify-between gap-2">
                           <span>
-                            <span className="block font-bold text-zinc-50">{event.message}</span>
-                            <span className="mt-0.5 block text-[10px] opacity-70">{formatDateTime(event.createdAt)}</span>
+                            <span className="block font-bold text-slate-900">{event.message}</span>
+                            <span className="mt-0.5 block text-[11px] opacity-75">{formatDateTime(event.createdAt)}</span>
                           </span>
                           {eventStyle.badge ? (
                             <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[8.5px] font-black tracking-wide ${eventStyle.badgeClassName}`}>
@@ -2314,7 +2313,7 @@ function ReservationInspector({
                             </span>
                           ) : null}
                           {!eventStyle.badge ? (
-                            <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.035] px-1.5 py-0.5 text-[8.5px] font-black tracking-wide text-zinc-400">
+                            <span className="shrink-0 rounded-full border border-slate-300 bg-white px-1.5 py-0.5 text-[8.5px] font-black tracking-wide text-slate-600">
                               {event.eventType}
                             </span>
                           ) : null}
@@ -2323,7 +2322,7 @@ function ReservationInspector({
                     );
                   })
                 ) : (
-                  <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
+                  <p className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-500">
                     No workflow events yet.
                   </p>
                 )}
@@ -2335,20 +2334,20 @@ function ReservationInspector({
                     type="button"
                     onClick={action.onClick}
                     disabled={action.disabled}
-                    className={`flex h-8 min-w-0 items-center justify-center whitespace-nowrap rounded-lg border px-1.5 text-center text-[10.5px] font-black leading-none tracking-normal transition duration-200 hover:-translate-y-0.5 ${
+                    className={`flex h-9 min-w-0 items-center justify-center whitespace-nowrap rounded-lg border px-2 text-center text-[11.5px] font-black leading-none tracking-normal transition duration-200 hover:-translate-y-0.5 ${
                       action.tone === 'reminder'
-                        ? 'border-cyan-300/45 bg-cyan-400/14 text-cyan-50 hover:bg-cyan-400/22'
+                        ? 'border-cyan-600 bg-cyan-600 text-white hover:bg-cyan-700'
                         : action.tone === 'save'
-                          ? 'border-emerald-300/45 bg-emerald-400/14 text-emerald-50 hover:bg-emerald-400/22'
-                          : 'border-rose-300/45 bg-rose-400/12 text-rose-50 hover:bg-rose-400/20'
-                    } disabled:cursor-not-allowed disabled:border-zinc-700 disabled:bg-zinc-900/65 disabled:text-zinc-500 disabled:hover:translate-y-0`}
+                          ? 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
+                          : 'border-rose-600 bg-rose-600 text-white hover:bg-rose-700'
+                    } disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500 disabled:hover:translate-y-0`}
                   >
                     {action.label}
                   </button>
                 ))}
               </div>
               {reminderFeedback && (
-                <p className="mt-1 rounded-md border border-white/[0.055] bg-black/25 px-2 py-1 text-[10.5px] font-bold text-zinc-300">
+                <p className="mt-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10.5px] font-bold text-slate-700">
                   {reminderFeedback}
                 </p>
               )}
@@ -2374,21 +2373,21 @@ function ReservationInspector({
               event.preventDefault();
               onOpenWhatsappChat();
             }}
-            className="cursor-pointer rounded-lg border border-white/[0.055] bg-black/20 p-1.5 transition hover:border-sky-300/20 hover:bg-sky-300/[0.035]"
+            className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 p-2 transition hover:border-sky-300 hover:bg-sky-50"
           >
             <div className="mb-1 flex items-center justify-between">
-              <p className="text-[11px] font-bold text-zinc-100">WhatsApp messages</p>
+              <p className="text-xs font-bold text-slate-900">WhatsApp messages</p>
               {unreadWhatsappCount > 0 ? (
                 <span className="rounded-full border border-rose-300/40 bg-rose-500 px-1.5 py-0.5 text-[9px] font-black leading-none text-white">
                   {unreadWhatsappCount} unread
                 </span>
               ) : (
-                <span className="text-[10px] text-zinc-500">live</span>
+                <span className="text-[10px] text-slate-500">live</span>
               )}
             </div>
             <div className="grid max-h-24 gap-1 overflow-auto pr-1">
               {isLoadingWhatsappMessages ? (
-                <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
+                <p className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-500">
                   Loading WhatsApp messages...
                 </p>
               ) : whatsappMessages.length > 0 ? (
@@ -2397,12 +2396,12 @@ function ReservationInspector({
                     key={message.id}
                     className={`rounded-md border px-2 py-1.5 ${
                       message.from === 'Customer'
-                        ? 'ml-0 mr-5 border-emerald-300/20 bg-emerald-300/[0.07]'
-                        : 'ml-5 mr-0 border-sky-300/18 bg-sky-300/[0.06]'
+                        ? 'ml-0 mr-5 border-emerald-200 bg-emerald-50'
+                        : 'ml-5 mr-0 border-sky-200 bg-sky-50'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <p className={`text-[10px] font-black ${message.from === 'Customer' ? 'text-emerald-100' : 'text-sky-100'}`}>
+                      <p className={`text-[10px] font-black ${message.from === 'Customer' ? 'text-emerald-800' : 'text-sky-800'}`}>
                         {message.from}
                       </p>
                       {message.isUnread && (
@@ -2411,12 +2410,12 @@ function ReservationInspector({
                         </span>
                       )}
                     </div>
-                    <p className="mt-0.5 text-[11px] leading-4 text-zinc-200">{message.text || '-'}</p>
-                    {message.createdAt && <p className="mt-0.5 text-[9.5px] font-semibold text-zinc-500">{formatDateTime(message.createdAt)}</p>}
+                    <p className="mt-0.5 text-xs leading-5 text-slate-800">{message.text || '-'}</p>
+                    {message.createdAt && <p className="mt-0.5 text-[10.5px] font-semibold text-slate-500">{formatDateTime(message.createdAt)}</p>}
                   </div>
                 ))
               ) : (
-                <p className="rounded-md border border-white/[0.045] bg-white/[0.018] px-2 py-1.5 text-[11px] text-zinc-500">
+                <p className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-500">
                   No WhatsApp messages yet.
                 </p>
               )}
@@ -2426,24 +2425,24 @@ function ReservationInspector({
                 placeholder="Write WhatsApp message..."
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => event.stopPropagation()}
-                className="min-w-0 flex-1 rounded-lg border border-white/[0.07] bg-zinc-950 px-2 py-1.5 text-[11px] text-white outline-none focus:border-sky-300/50"
+                className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
               />
               <button
                 type="button"
                 onClick={(event) => event.stopPropagation()}
-                className="rounded-lg border border-sky-300/25 bg-sky-300/12 px-3 py-1.5 text-[11px] font-semibold text-sky-100 transition hover:bg-sky-300/18"
+                className="rounded-lg border border-sky-600 bg-sky-600 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-sky-700"
               >
                 Send
               </button>
             </div>
           </div>
 
-          <label className="mt-1.5 grid gap-1 text-[11px] font-semibold text-zinc-500">
+          <label className="mt-1.5 grid gap-1 text-xs font-bold text-slate-700">
             Notes
             <textarea
               value={draft.notes}
               onChange={(event) => updateDraft({ notes: event.target.value })}
-              className="min-h-[78px] resize-none rounded-lg border border-white/[0.065] bg-black/25 px-2.5 py-1.5 text-[12px] leading-5 text-zinc-100 outline-none transition focus:border-sky-300/45"
+              className="min-h-[58px] resize-none rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[13px] leading-5 text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
             />
           </label>
 
@@ -3774,30 +3773,30 @@ function getWorkflowEventStyle(text: string) {
   if (text === 'confirmation_sent') {
     return {
       badge: 'SENT',
-      className: 'border-emerald-300/35 bg-emerald-400/12 text-emerald-50',
-      badgeClassName: 'border-emerald-200/35 bg-emerald-300/16 text-emerald-50',
+      className: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+      badgeClassName: 'border-emerald-300 bg-emerald-100 text-emerald-800',
     };
   }
 
   if (text === 'return_reminder_sent') {
     return {
       badge: 'REMINDER SENT',
-      className: 'border-cyan-300/35 bg-cyan-400/12 text-cyan-50',
-      badgeClassName: 'border-cyan-200/35 bg-cyan-300/16 text-cyan-50',
+      className: 'border-cyan-200 bg-cyan-50 text-cyan-900',
+      badgeClassName: 'border-cyan-300 bg-cyan-100 text-cyan-800',
     };
   }
 
   if (text === 'status_changed') {
     return {
       badge: 'STATUS',
-      className: 'border-amber-300/25 bg-amber-400/10 text-amber-50',
-      badgeClassName: 'border-amber-200/30 bg-amber-300/14 text-amber-50',
+      className: 'border-amber-200 bg-amber-50 text-amber-900',
+      badgeClassName: 'border-amber-300 bg-amber-100 text-amber-800',
     };
   }
 
   return {
     badge: '',
-    className: 'border-white/[0.045] bg-white/[0.025] text-zinc-300',
+    className: 'border-slate-200 bg-white text-slate-700',
     badgeClassName: '',
   };
 }
@@ -3808,11 +3807,11 @@ function StatusBadge({ status }: { status: ReservationStatus }) {
 
 function LanguageBadge({ language }: { language: ReservationLanguage }) {
   const languageClassName: Record<ReservationLanguage, string> = {
-    English: 'border-sky-300/35 bg-sky-300/14 text-sky-50',
-    French: 'border-indigo-300/35 bg-indigo-300/14 text-indigo-50',
-    Italian: 'border-emerald-300/35 bg-emerald-300/14 text-emerald-50',
-    German: 'border-amber-300/35 bg-amber-300/14 text-amber-50',
-    Czech: 'border-fuchsia-300/35 bg-fuchsia-300/14 text-fuchsia-50',
+    English: 'border-sky-300 bg-sky-100 text-sky-900',
+    French: 'border-indigo-300 bg-indigo-100 text-indigo-900',
+    Italian: 'border-emerald-300 bg-emerald-100 text-emerald-900',
+    German: 'border-amber-300 bg-amber-100 text-amber-900',
+    Czech: 'border-fuchsia-300 bg-fuchsia-100 text-fuchsia-900',
   };
 
   return (
@@ -3840,8 +3839,8 @@ function EditableCompactInput({
   disabled?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-2 rounded-md border border-white/[0.045] bg-black/20 px-2 py-1">
-      <span className="text-[10px] font-semibold text-zinc-500">{label}</span>
+    <div className="grid grid-cols-[118px_minmax(0,1fr)] items-center gap-2.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+      <span className="text-[11px] font-bold text-slate-600">{label}</span>
       <input
         type={type}
         value={value}
@@ -3854,7 +3853,7 @@ function EditableCompactInput({
           if (type === 'date') openNativeDatePicker(event.currentTarget);
         }}
         onChange={(event) => onChange(event.target.value)}
-        className={`h-6 min-w-0 rounded-md border border-white/[0.05] bg-zinc-950/70 px-2 text-[11px] font-semibold text-zinc-100 outline-none transition focus:border-sky-300/45 disabled:border-transparent disabled:bg-transparent disabled:px-0 disabled:text-zinc-200 ${mono ? 'font-mono' : ''}`}
+        className={`h-7 min-w-0 rounded-md border border-slate-300 bg-white px-2.5 text-[12.5px] font-semibold text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200 disabled:border-transparent disabled:bg-transparent disabled:px-0 disabled:text-slate-700 ${mono ? 'font-mono' : ''}`}
       />
     </div>
   );
@@ -3901,22 +3900,22 @@ function CompactStatusButtons({
   onChange: (status: ReservationStatus) => void;
 }) {
   return (
-    <div className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-2 rounded-md border border-white/[0.045] bg-black/20 px-2 py-1">
-      <span className="text-[10px] font-semibold text-zinc-500">Status</span>
+    <div className="grid grid-cols-[118px_minmax(0,1fr)] items-center gap-2.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+      <span className="text-[11px] font-bold text-slate-600">Status</span>
       <div className="grid grid-cols-3 gap-1">
         {(['PENDING', 'ACCEPTED', 'REJECTED'] as ReservationStatus[]).map((status) => (
           <button
             key={status}
             type="button"
             onClick={() => onChange(status)}
-            className={`h-6 rounded-md border px-1 text-[9.5px] font-black leading-none transition hover:-translate-y-px ${
+            className={`h-7 rounded-md border px-1.5 text-[10.5px] font-black leading-none transition hover:-translate-y-px ${
               value === status
                 ? statusActiveClasses[status]
                 : status === 'PENDING'
-                  ? 'border-amber-300/25 bg-amber-300/[0.055] text-amber-100 hover:border-amber-300/45'
+                  ? 'border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-400'
                   : status === 'ACCEPTED'
-                    ? 'border-emerald-300/25 bg-emerald-300/[0.055] text-emerald-100 hover:border-emerald-300/45'
-                    : 'border-rose-300/25 bg-rose-300/[0.055] text-rose-100 hover:border-rose-300/45'
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:border-emerald-400'
+                    : 'border-rose-300 bg-rose-50 text-rose-800 hover:border-rose-400'
             }`}
           >
             {status}
@@ -3943,13 +3942,13 @@ function EditableCompactSelect({
   inputClassName?: string;
 }) {
   return (
-    <label className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-2 rounded-md border border-white/[0.045] bg-black/20 px-2 py-1">
-      <span className="text-[10px] font-semibold text-zinc-500">{label}</span>
+    <label className="grid grid-cols-[118px_minmax(0,1fr)] items-center gap-2.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+      <span className="text-[11px] font-bold text-slate-600">{label}</span>
       <select
         value={value}
         disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
-      className={`h-6 min-w-0 rounded-md border border-white/[0.05] bg-zinc-950/70 px-2 text-[11px] font-semibold text-zinc-100 outline-none transition focus:border-sky-300/45 disabled:border-transparent disabled:bg-transparent disabled:px-0 disabled:text-zinc-200 ${inputClassName}`}
+      className={`h-7 min-w-0 rounded-md border border-slate-300 bg-white px-2.5 text-[12.5px] font-semibold text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200 disabled:border-transparent disabled:bg-transparent disabled:px-0 disabled:text-slate-700 ${inputClassName}`}
     >
         {options.map((option) => (
           <option key={option} value={option}>
@@ -3976,16 +3975,16 @@ function LicenceCard({
   const isImage = /\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(resolvedUrl);
 
   return (
-    <div className="rounded-lg border border-white/[0.065] bg-black/25 p-1">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-1">
       <div className="flex items-center justify-between gap-1.5">
-        <p className="truncate text-[10.5px] font-black text-zinc-50">{title}</p>
+        <p className="truncate text-[10.5px] font-black text-slate-900">{title}</p>
         <LicenceBadge state={state} />
       </div>
       {state === 'uploaded' && resolvedUrl ? (
         <button
           type="button"
           onClick={() => onOpen({ title, url: resolvedUrl })}
-          className="mt-1 flex h-10 items-center justify-center overflow-hidden rounded-md border border-blue-300/20 bg-blue-300/[0.045] text-[10.5px] font-black text-blue-50 transition hover:border-blue-200/45 hover:bg-blue-300/[0.08]"
+          className="mt-1 flex h-10 items-center justify-center overflow-hidden rounded-md border border-blue-300 bg-blue-50 text-[10.5px] font-black text-blue-800 transition hover:border-blue-400 hover:bg-blue-100"
         >
           {isImage ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -3995,7 +3994,7 @@ function LicenceCard({
           )}
         </button>
       ) : (
-        <div className="mt-1 flex h-10 items-center justify-center rounded-md border border-dashed border-white/[0.12] bg-white/[0.025] text-[10.5px] font-bold text-zinc-500">
+        <div className="mt-1 flex h-10 items-center justify-center rounded-md border border-dashed border-slate-300 bg-white text-[10.5px] font-bold text-slate-500">
           No attachment
         </div>
       )}
@@ -4006,8 +4005,8 @@ function LicenceCard({
 function LicenceCell({ state }: { state: LicenceState; url?: string }) {
   const className = `inline-flex h-5 w-8 items-center justify-center rounded-md border text-[11px] ${
     state === 'uploaded'
-      ? 'border-blue-300/35 bg-blue-300/14 text-blue-100'
-      : 'border-white/[0.08] bg-white/[0.025] text-zinc-500'
+      ? 'border-blue-300 bg-blue-100 text-blue-900'
+      : 'border-slate-300 bg-slate-100 text-slate-500'
   }`;
 
   return (
@@ -4103,7 +4102,7 @@ function LicenceViewerModal({
 
 function VehicleGroupBadge({ value }: { value: VehicleGroup }) {
   return (
-    <span className="inline-flex min-w-7 justify-center rounded-md border border-violet-300/35 bg-violet-300/16 px-1.5 py-0.5 text-[11px] font-bold text-violet-50">
+    <span className="inline-flex min-w-7 justify-center rounded-md border border-violet-300 bg-violet-100 px-1.5 py-0.5 text-[11px] font-bold text-violet-900">
       {value}
     </span>
   );
@@ -4111,7 +4110,7 @@ function VehicleGroupBadge({ value }: { value: VehicleGroup }) {
 
 function AgencyBadge({ value }: { value: string }) {
   return (
-    <span className="inline-flex rounded-md border border-sky-300/25 bg-sky-300/12 px-1.5 py-0.5 text-[11px] font-semibold text-sky-50">
+    <span className="inline-flex rounded-md border border-sky-300 bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-900">
       {value}
     </span>
   );
@@ -4122,8 +4121,8 @@ function BooleanBadge({ active }: { active: boolean }) {
     <span
       className={`inline-flex rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${
         active
-          ? 'border-emerald-300/35 bg-emerald-300/14 text-emerald-100'
-          : 'border-zinc-500/25 bg-zinc-500/10 text-zinc-400'
+          ? 'border-emerald-300 bg-emerald-100 text-emerald-900'
+          : 'border-slate-300 bg-slate-100 text-slate-600'
       }`}
     >
       {active ? 'Yes' : 'No'}
@@ -4139,7 +4138,7 @@ function ExtrasBadges({ extras }: { extras: BookingExtras }) {
   ].filter(Boolean);
 
   if (selectedExtras.length === 0) {
-    return <span className="text-[11px] font-semibold text-zinc-600">-</span>;
+    return <span className="text-[11px] font-semibold text-slate-400">-</span>;
   }
 
   return (
@@ -4147,7 +4146,7 @@ function ExtrasBadges({ extras }: { extras: BookingExtras }) {
       {selectedExtras.map((extra) => (
         <span
           key={extra}
-          className="rounded-md border border-amber-300/35 bg-amber-300/14 px-1.5 py-0.5 text-[10px] font-bold text-amber-100"
+          className="rounded-md border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900"
         >
           {extra}
         </span>
@@ -4182,11 +4181,11 @@ function ExtrasQuantityGroup({
       className={`rounded-lg border p-1.5 transition ${
         hasExtras
           ? 'border-amber-300/25 bg-amber-300/[0.07] shadow-[0_0_14px_rgba(251,191,36,0.08)]'
-          : 'border-white/[0.06] bg-black/20'
+          : 'border-slate-200 bg-slate-50'
       }`}
     >
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-amber-100">Extras</span>
+        <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-amber-800">Extras</span>
         <ExtrasBadges extras={extras} />
       </div>
       <div className="grid gap-1 sm:grid-cols-3 md:grid-cols-1 2xl:grid-cols-3">
@@ -4199,8 +4198,8 @@ function ExtrasQuantityGroup({
               key={option.key}
               className={`rounded-lg border px-1.5 py-1 transition ${
                 isActive
-                  ? 'border-amber-300 bg-amber-300/18 text-amber-50 shadow-[0_0_14px_rgba(251,191,36,0.12)]'
-                  : 'border-white/[0.08] bg-black/20 text-zinc-300 hover:border-amber-300/35 hover:text-amber-100'
+                  ? 'border-amber-400 bg-amber-100 text-amber-900 shadow-sm'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-amber-300 hover:text-amber-800'
               }`}
             >
               <div className="mb-0.5 text-[10.5px] font-bold">{option.label}</div>
@@ -4209,17 +4208,17 @@ function ExtrasQuantityGroup({
                   type="button"
                   onClick={() => updateQuantity(option.key, -1)}
                   disabled={quantity <= 0}
-                  className="flex h-5 w-5 items-center justify-center rounded-md border border-white/[0.08] bg-black/25 text-xs font-black text-zinc-200 transition hover:border-amber-300/35 hover:text-amber-100 disabled:cursor-not-allowed disabled:opacity-35"
+                  className="flex h-5 w-5 items-center justify-center rounded-md border border-slate-300 bg-white text-xs font-black text-slate-700 transition hover:border-amber-400 hover:text-amber-800 disabled:cursor-not-allowed disabled:opacity-35"
                   aria-label={`Decrease ${option.label}`}
                 >
                   -
                 </button>
-                <span className="min-w-5 text-center text-xs font-black text-amber-50">{quantity}</span>
+                <span className="min-w-5 text-center text-xs font-black text-amber-900">{quantity}</span>
                 <button
                   type="button"
                   onClick={() => updateQuantity(option.key, 1)}
                   disabled={quantity >= 5}
-                  className="flex h-5 w-5 items-center justify-center rounded-md border border-amber-300/25 bg-amber-300/12 text-xs font-black text-amber-50 transition hover:border-amber-200/45 hover:bg-amber-300/18 disabled:cursor-not-allowed disabled:opacity-35"
+                  className="flex h-5 w-5 items-center justify-center rounded-md border border-amber-300 bg-amber-100 text-xs font-black text-amber-900 transition hover:border-amber-400 hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-35"
                   aria-label={`Increase ${option.label}`}
                 >
                   +
@@ -4238,8 +4237,8 @@ function LicenceBadge({ state }: { state: LicenceState }) {
     <span
       className={`inline-flex rounded-md border px-1.5 py-0.5 text-[9.5px] font-black leading-none ${
         state === 'uploaded'
-          ? 'border-blue-300/40 bg-blue-300/14 text-blue-50'
-          : 'border-white/[0.1] bg-white/[0.03] text-zinc-400'
+          ? 'border-blue-300 bg-blue-100 text-blue-900'
+          : 'border-slate-300 bg-slate-100 text-slate-600'
       }`}
     >
       {state === 'uploaded' ? 'Uploaded' : 'Empty'}
@@ -4249,10 +4248,10 @@ function LicenceBadge({ state }: { state: LicenceState }) {
 
 function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
-    <div className="min-h-0 rounded-lg border border-white/[0.055] bg-white/[0.022] p-1.5">
-      <div className="flex items-start justify-between gap-2 border-b border-white/[0.045] pb-0.5">
-        <p className="text-[11px] font-bold text-zinc-100">{title}</p>
-        <p className="truncate text-[10px] font-medium text-zinc-500">{subtitle}</p>
+    <div className="min-h-0 overflow-y-auto overflow-x-hidden rounded-lg border border-slate-200 bg-white p-1.5 shadow-sm">
+      <div className="flex items-start justify-between gap-2.5 border-b border-slate-200 pb-1">
+        <p className="text-[12.5px] font-black text-slate-900">{title}</p>
+        <p className="truncate text-[11px] font-medium text-slate-500">{subtitle}</p>
       </div>
       <div className="mt-1 grid gap-1">{children}</div>
     </div>
