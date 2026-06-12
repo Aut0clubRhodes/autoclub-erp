@@ -276,7 +276,15 @@ const initialForm: ReservationForm = {
 const money = (value: number | null) =>
   value === null ? '' : `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const formatDate = (value: string) => (value ? new Date(`${value}T00:00:00`).toLocaleDateString('el-GR') : '-');
+const formatDate = (value: string) => {
+  if (!value) return '-';
+
+  const dateOnlyMatch = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!dateOnlyMatch) return value;
+
+  const [, year, month, day] = dateOnlyMatch;
+  return `${day}/${month}/${year}`;
+};
 
 const formatDateTime = (value: string) => (value ? new Date(value).toLocaleString('el-GR') : '-');
 const formatCompactDateTime = (value: string) => {
@@ -497,11 +505,14 @@ const reservationToPayload = (reservation: Reservation): ReservationRequestPaylo
 const getReservationNotificationName = (reservation: Pick<Reservation, 'hotelRoom' | 'name'>) =>
   reservation.hotelRoom.trim() || reservation.name.trim() || 'Booking';
 
-const getDrivingLicenceUrl = (reservation: Pick<Reservation, 'licenceFrontUrl' | 'licenceBackUrl'>) =>
-  reservation.licenceFrontUrl || reservation.licenceBackUrl;
+const getDrivingLicenceUrl = (reservation: Pick<Reservation, 'licenceFrontUrl' | 'licenceBackUrl'>) => {
+  if (hasLicenceUrl(reservation.licenceFrontUrl)) return reservation.licenceFrontUrl;
+  if (hasLicenceUrl(reservation.licenceBackUrl)) return reservation.licenceBackUrl;
+  return '';
+};
 
 const getDrivingLicenceState = (reservation: Pick<Reservation, 'licenceFrontUrl' | 'licenceBackUrl'>): LicenceState =>
-  getDrivingLicenceUrl(reservation) ? 'uploaded' : 'empty';
+  hasLicenceUrl(reservation.licenceFrontUrl) || hasLicenceUrl(reservation.licenceBackUrl) ? 'uploaded' : 'empty';
 
 const createReservationNotificationOnce = async (
   reservation: Pick<Reservation, 'id' | 'hotelRoom' | 'name'>,
@@ -2026,7 +2037,7 @@ export default function BookingsManager({
                     <td className="whitespace-nowrap px-2.5 py-2"><BooleanBadge active={reservation.sendReturn} /></td>
                     <td className="whitespace-nowrap px-2.5 py-2"><BooleanBadge active={reservation.confirmationSent} /></td>
                     <td className="whitespace-nowrap px-2.5 py-2"><ExtrasBadges extras={reservation.extras} /></td>
-                    <td className="whitespace-nowrap px-2.5 py-2"><LicenceCell state={getDrivingLicenceState(reservation)} url={getDrivingLicenceUrl(reservation)} /></td>
+                    <td className="whitespace-nowrap px-2.5 py-2"><LicenceCell url={getDrivingLicenceUrl(reservation)} /></td>
                     <td className={`w-[88px] whitespace-nowrap px-2.5 py-2 font-mono text-xs ${isReturned ? 'text-cyan-800' : 'text-slate-500'}`}>{formatCompactDateTime(reservation.lastModifiedAt)}</td>
                   </tr>
                 );
@@ -2173,7 +2184,7 @@ function ReservationInspector({
 
   useEffect(() => {
     setDraft(reservation);
-  }, [reservation.id]);
+  }, [reservation]);
 
   const updateDraft = (patch: Partial<Reservation>) => {
     setDraft((currentDraft) => ({ ...currentDraft, ...patch }));
@@ -2354,7 +2365,7 @@ function ReservationInspector({
             </div>
 
             <div className="grid gap-1.5">
-              <LicenceCard title="Driving Licence" state={getDrivingLicenceState(draft)} url={getDrivingLicenceUrl(draft)} onOpen={setViewerDocument} />
+              <LicenceCard title="Driving Licence" url={getDrivingLicenceUrl(draft)} onOpen={setViewerDocument} />
               <ExtrasQuantityGroup
                 extras={draft.extras}
                 onChange={(extras) => updateDraft({ extras })}
@@ -2883,7 +2894,7 @@ function MobileReservationModal({
 
         {phoneLayout && (
           <section className="mt-3 rounded-3xl border border-white/[0.07] bg-white/[0.03] p-3">
-            <LicenceCard title="Driving Licence" state={getDrivingLicenceState(draft)} url={getDrivingLicenceUrl(draft)} onOpen={setViewerDocument} />
+            <LicenceCard title="Driving Licence" url={getDrivingLicenceUrl(draft)} onOpen={setViewerDocument} />
           </section>
         )}
 
@@ -3962,16 +3973,15 @@ function EditableCompactSelect({
 
 function LicenceCard({
   title,
-  state,
   url,
   onOpen,
 }: {
   title: string;
-  state: LicenceState;
   url?: string;
   onOpen: (document: LicenceViewerDocument) => void;
 }) {
   const resolvedUrl = resolveLicenceUrl(url);
+  const state: LicenceState = resolvedUrl ? 'uploaded' : 'empty';
   const isImage = /\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(resolvedUrl);
 
   return (
@@ -4002,7 +4012,8 @@ function LicenceCard({
   );
 }
 
-function LicenceCell({ state }: { state: LicenceState; url?: string }) {
+function LicenceCell({ url }: { url?: string }) {
+  const state: LicenceState = hasLicenceUrl(url) ? 'uploaded' : 'empty';
   const className = `inline-flex h-5 w-8 items-center justify-center rounded-md border text-[11px] ${
     state === 'uploaded'
       ? 'border-blue-300 bg-blue-100 text-blue-900'
