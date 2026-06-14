@@ -23,6 +23,7 @@ type MarketingContact = {
   email: string;
   phone: string;
   language: MarketingLanguage;
+  languageKey: string;
   agency: string;
   bookingDate: string;
 };
@@ -41,11 +42,11 @@ const emptyDraft: CampaignDraft = {
   link: '',
 };
 
-const normalizeLanguage = (value: string | null | undefined): MarketingLanguage | null => {
-  const normalized = String(value || '').trim().toLowerCase();
+const normalizeLanguageKey = (value: string | null | undefined) =>
+  String(value || '').trim().toLowerCase();
 
-  return languageGroups.find((language) => language.toLowerCase() === normalized) || null;
-};
+const normalizeLanguage = (value: string | null | undefined): MarketingLanguage | null =>
+  languageGroups.find((language) => normalizeLanguageKey(language) === normalizeLanguageKey(value)) || null;
 
 const csvValue = (value: string) => `"${value.replace(/"/g, '""')}"`;
 
@@ -110,6 +111,7 @@ export default function MarketingManager() {
         email,
         phone: String(reservation.phone || '').trim() || '-',
         language,
+        languageKey: normalizeLanguageKey(reservation.language),
         agency: String(reservation.agency || '').trim() || 'Direct',
         bookingDate: reservation.created_at || reservation.pickup_date || '',
       };
@@ -125,11 +127,33 @@ export default function MarketingManager() {
     );
   }, [reservations]);
 
+  const contactsByLanguage = useMemo(
+    () =>
+      contacts.reduce<Record<MarketingLanguage, MarketingContact[]>>(
+        (result, contact) => {
+          const language = languageGroups.find(
+            (group) => normalizeLanguageKey(group) === contact.languageKey
+          );
+
+          if (language) result[language].push(contact);
+          return result;
+        },
+        {
+          English: [],
+          French: [],
+          Italian: [],
+          German: [],
+          Czech: [],
+        }
+      ),
+    [contacts]
+  );
+
   const counts = useMemo(
     () =>
       languageGroups.reduce<Record<MarketingLanguage, number>>(
         (result, language) => {
-          result[language] = contacts.filter((contact) => contact.language === language).length;
+          result[language] = contactsByLanguage[language].length;
           return result;
         },
         {
@@ -140,13 +164,10 @@ export default function MarketingManager() {
           Czech: 0,
         }
       ),
-    [contacts]
+    [contactsByLanguage]
   );
 
-  const selectedContacts = useMemo(
-    () => contacts.filter((contact) => contact.language === selectedLanguage),
-    [contacts, selectedLanguage]
-  );
+  const selectedContacts = contactsByLanguage[selectedLanguage];
 
   const visibleContacts = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
