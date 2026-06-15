@@ -102,14 +102,14 @@ export default function FinanceExpenses({
           <button
             type="button"
             onClick={onAddExpense}
-            className="rounded-2xl border border-rose-600 bg-rose-600/10 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-600/20"
+            className="erp-action-primary rounded-2xl border border-rose-600 bg-rose-600/10 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-600/20"
           >
             + Καταχώρηση Εξόδου
           </button>
           <button
             type="button"
             onClick={onAddSupplierPayment}
-            className="rounded-2xl border border-rose-600 bg-rose-600/10 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-600/20"
+            className="erp-action-primary rounded-2xl border border-rose-600 bg-rose-600/10 px-4 py-3 text-sm font-semibold text-rose-300 transition hover:bg-rose-600/20"
           >
             Πληρωμή Προμηθευτή
           </button>
@@ -183,14 +183,14 @@ export default function FinanceExpenses({
                     <button
                       type="button"
                       onClick={() => onEditExpense(transaction)}
-                      className="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] text-zinc-200 hover:bg-zinc-900"
+                      className="erp-action-primary rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] text-zinc-200 hover:bg-zinc-900"
                     >
                       Επεξεργασία
                     </button>
                     <button
                       type="button"
                       onClick={() => onDeleteExpense(transaction)}
-                      className="rounded-lg border border-red-700 px-2.5 py-1.5 text-[11px] text-red-300 hover:bg-red-950/40"
+                      className="erp-action-danger rounded-lg border border-red-700 px-2.5 py-1.5 text-[11px] text-red-300 hover:bg-red-950/40"
                     >
                       Διαγραφή
                     </button>

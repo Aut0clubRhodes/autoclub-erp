@@ -1,0 +1,4266 @@
+'use client';
+
+import { useRef, useState } from 'react';
+import {
+  CalendarRange,
+  Car,
+  Check,
+  CreditCard,
+  Edit3,
+  Gift,
+  Globe2,
+  ImagePlus,
+  Layers3,
+  ListChecks,
+  Mail,
+  MapPin,
+  PackagePlus,
+  Plus,
+  Settings2,
+  Trash2,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
+
+type AdminTabId =
+  | 'groups'
+  | 'cars'
+  | 'pricing'
+  | 'locations'
+  | 'features'
+  | 'extras'
+  | 'coupons'
+  | 'payments'
+  | 'booking-settings'
+  | 'site-settings'
+  | 'emails';
+
+type AdminTab = {
+  id: AdminTabId;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+};
+
+type CarStatus = 'Open' | 'On Request' | 'Hidden';
+type LocationType = 'airport' | 'town' | 'hotel' | 'custom';
+type SeasonStatus = 'Active' | 'Inactive';
+type ExtraPricingMode = 'Per Day' | 'Per Booking' | 'Free';
+type CouponDiscountType = 'Percentage' | 'Fixed Amount';
+type PaymentMethodType = 'Pay on Arrival' | 'Bank Transfer' | 'Payment Link' | 'Card' | 'Custom';
+type ReminderTiming =
+  | '96 hours before pickup'
+  | '48 hours before pickup'
+  | '24 hours before pickup'
+  | 'Custom hours before pickup';
+type BookingDefaultLanguage = 'English' | 'Italian' | 'French' | 'German' | 'Czech' | 'Greek';
+type NewReservationStatus = 'Pending' | 'Accepted' | 'On Request';
+
+type BookingGroup = {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+  notes: string;
+};
+
+type BookingLocation = {
+  id: string;
+  name: string;
+  type: LocationType;
+  active: boolean;
+  fee: string;
+};
+
+type BookingFeature = {
+  id: string;
+  name: string;
+};
+
+type BookingEngineCar = {
+  id: string;
+  name: string;
+  groupCode: string;
+  description: string;
+  featureIds: string[];
+  status: CarStatus;
+  locationIds: string[];
+};
+
+type BookingExtra = {
+  id: string;
+  name: string;
+  description: string;
+  pricingMode: ExtraPricingMode;
+  price: string;
+  status: SeasonStatus;
+  maximumQuantity: string;
+};
+
+type PricingTier = {
+  id: string;
+  fromDays: string;
+  toDays: string;
+  pricePerDay: string;
+};
+
+type SeasonPrice = {
+  id: string;
+  groupCode: string;
+  seasonName: string;
+  fromDate: string;
+  toDate: string;
+  tiers: PricingTier[];
+  websiteMode: CarStatus;
+  notes: string;
+};
+
+type BookingCoupon = {
+  id: string;
+  code: string;
+  discountType: CouponDiscountType;
+  discountValue: string;
+  validFrom: string;
+  validTo: string;
+  minimumDays: string;
+  allowedGroupCodes: string[];
+  usageLimit: string;
+  status: SeasonStatus;
+};
+
+type BookingPaymentMethod = {
+  id: string;
+  name: string;
+  type: PaymentMethodType;
+  description: string;
+  depositRequired: boolean;
+  depositAmount: string;
+  status: SeasonStatus;
+};
+
+type BookingEmailSettings = {
+  adminEmail: string;
+  adminNotificationActive: boolean;
+  adminSubject: string;
+  adminMessage: string;
+  customerConfirmationActive: boolean;
+  customerConfirmationSubject: string;
+  customerConfirmationMessage: string;
+  reminderActive: boolean;
+  reminderTiming: ReminderTiming;
+  reminderCustomHours: string;
+  reminderSubject: string;
+  reminderMessage: string;
+};
+
+type BookingEngineSettings = {
+  advanceBookingActive: boolean;
+  advanceBookingHours: string;
+  defaultLanguage: BookingDefaultLanguage;
+  requireRentalTerms: boolean;
+  showMarketingConsent: boolean;
+  termsUrl: string;
+  newReservationStatus: NewReservationStatus;
+};
+
+type SiteSettings = {
+  companyName: string;
+  domain: string;
+  adminEmail: string;
+  bookingNotificationEmail: string;
+  currency: string;
+  timezone: string;
+  defaultLanguage: BookingDefaultLanguage;
+  whatsappNumber: string;
+  termsUrl: string;
+  privacyPolicyUrl: string;
+  status: SeasonStatus;
+  internalNotes: string;
+};
+
+type EmailTemplateFieldKey =
+  | 'adminSubject'
+  | 'adminMessage'
+  | 'customerConfirmationSubject'
+  | 'customerConfirmationMessage'
+  | 'reminderSubject'
+  | 'reminderMessage';
+
+type CarDraft = Omit<BookingEngineCar, 'id'>;
+type GroupDraft = Omit<BookingGroup, 'id'>;
+type LocationDraft = Omit<BookingLocation, 'id'>;
+type FeatureDraft = Omit<BookingFeature, 'id'>;
+type ExtraDraft = Omit<BookingExtra, 'id'>;
+type SeasonPriceDraft = Omit<SeasonPrice, 'id'>;
+type CouponDraft = Omit<BookingCoupon, 'id'>;
+type PaymentMethodDraft = Omit<BookingPaymentMethod, 'id'>;
+
+const adminTabs: AdminTab[] = [
+  { id: 'groups', label: 'Groups', description: 'Vehicle groups shared by cars and category pricing.', icon: Layers3 },
+  { id: 'cars', label: 'Cars', description: 'Website vehicle catalogue and booking visibility.', icon: Car },
+  { id: 'pricing', label: 'Pricing / Seasons', description: 'Season periods, daily rates and pricing rules.', icon: CalendarRange },
+  { id: 'locations', label: 'Locations', description: 'Pickup and return locations for website requests.', icon: MapPin },
+  { id: 'features', label: 'Features', description: 'Reusable features available for website vehicle categories.', icon: ListChecks },
+  { id: 'extras', label: 'Extras', description: 'Optional equipment and customer add-ons.', icon: PackagePlus },
+  { id: 'coupons', label: 'Coupons', description: 'Promotional codes and discount definitions.', icon: Gift },
+  { id: 'payments', label: 'Payment Methods', description: 'Available payment choices and checkout settings.', icon: CreditCard },
+  { id: 'booking-settings', label: 'Booking Settings', description: 'Reservation rules, defaults and customer consent options.', icon: Settings2 },
+  { id: 'site-settings', label: 'Site Settings', description: 'Site identity, regional defaults and contact configuration.', icon: Globe2 },
+  { id: 'emails', label: 'Emails', description: 'Customer email templates and delivery settings.', icon: Mail },
+];
+
+const emptyCarDraft: CarDraft = {
+  name: '',
+  groupCode: '',
+  description: '',
+  featureIds: [],
+  status: 'Open',
+  locationIds: [],
+};
+
+const emptyGroupDraft: GroupDraft = {
+  code: '',
+  name: '',
+  active: true,
+  notes: '',
+};
+
+const emptyLocationDraft: LocationDraft = {
+  name: '',
+  type: 'custom',
+  active: true,
+  fee: '',
+};
+
+const emptyFeatureDraft: FeatureDraft = { name: '' };
+
+const emptyExtraDraft: ExtraDraft = {
+  name: '',
+  description: '',
+  pricingMode: 'Per Day',
+  price: '',
+  status: 'Active',
+  maximumQuantity: '',
+};
+
+const emptySeasonPriceDraft: SeasonPriceDraft = {
+  groupCode: '',
+  seasonName: '',
+  fromDate: '',
+  toDate: '',
+  tiers: [],
+  websiteMode: 'Open',
+  notes: '',
+};
+
+const emptyCouponDraft: CouponDraft = {
+  code: '',
+  discountType: 'Percentage',
+  discountValue: '',
+  validFrom: '',
+  validTo: '',
+  minimumDays: '',
+  allowedGroupCodes: [],
+  usageLimit: '',
+  status: 'Active',
+};
+
+const emptyPaymentMethodDraft: PaymentMethodDraft = {
+  name: '',
+  type: 'Pay on Arrival',
+  description: '',
+  depositRequired: false,
+  depositAmount: '',
+  status: 'Active',
+};
+
+const initialEmailSettings: BookingEmailSettings = {
+  adminEmail: '',
+  adminNotificationActive: true,
+  adminSubject: 'New reservation {reservation_id}',
+  adminMessage:
+    'A new reservation was received from {customer_name} for {car_name}, from {pickup_date} to {return_date}.',
+  customerConfirmationActive: true,
+  customerConfirmationSubject: 'Your reservation {reservation_id} is confirmed',
+  customerConfirmationMessage:
+    'Hello {customer_name}, your reservation for {car_name} is confirmed. Pickup: {pickup_date} at {pickup_time}, {pickup_location}. Total: {total_price}.',
+  reminderActive: true,
+  reminderTiming: '48 hours before pickup',
+  reminderCustomHours: '',
+  reminderSubject: 'Reminder for your upcoming reservation',
+  reminderMessage:
+    'Hello {customer_name}, this is a reminder for your {car_name} pickup on {pickup_date} at {pickup_time}, from {pickup_location}.',
+};
+
+const initialBookingEngineSettings: BookingEngineSettings = {
+  advanceBookingActive: true,
+  advanceBookingHours: '48',
+  defaultLanguage: 'English',
+  requireRentalTerms: true,
+  showMarketingConsent: true,
+  termsUrl: '',
+  newReservationStatus: 'Pending',
+};
+
+const initialSiteSettings: SiteSettings = {
+  companyName: 'AutoClub Rhodes',
+  domain: '',
+  adminEmail: '',
+  bookingNotificationEmail: '',
+  currency: 'EUR',
+  timezone: 'Europe/Athens',
+  defaultLanguage: 'English',
+  whatsappNumber: '',
+  termsUrl: '',
+  privacyPolicyUrl: '',
+  status: 'Active',
+  internalNotes: '',
+};
+
+const emailTemplateVariables = [
+  '{customer_name}',
+  '{reservation_id}',
+  '{car_name}',
+  '{pickup_date}',
+  '{pickup_time}',
+  '{return_date}',
+  '{return_time}',
+  '{pickup_location}',
+  '{return_location}',
+  '{total_price}',
+  '{payment_method}',
+];
+
+const sampleGroups: BookingGroup[] = [
+  { id: 'group-a', code: 'A', name: 'Small Economy', active: true, notes: '' },
+  { id: 'group-b', code: 'B', name: 'Economy', active: true, notes: '' },
+  { id: 'group-c', code: 'C', name: 'Compact', active: true, notes: '' },
+  { id: 'group-d1', code: 'D1', name: 'Compact SUV', active: true, notes: '' },
+];
+
+const sampleLocations: BookingLocation[] = [
+  { id: 'airport', name: 'Airport', type: 'airport', active: true, fee: '0' },
+  { id: 'rhodes-town', name: 'Rhodes Town', type: 'town', active: true, fee: '0' },
+  { id: 'faliraki', name: 'Faliraki', type: 'town', active: true, fee: '12' },
+  { id: 'lindos', name: 'Lindos', type: 'town', active: true, fee: '30' },
+  { id: 'ixia', name: 'Ixia', type: 'town', active: true, fee: '8' },
+  { id: 'kolymbia', name: 'Kolymbia', type: 'town', active: true, fee: '20' },
+  { id: 'afandou', name: 'Afandou', type: 'town', active: true, fee: '18' },
+  { id: 'pefkos', name: 'Pefkos', type: 'town', active: true, fee: '32' },
+];
+
+const sampleFeatures: BookingFeature[] = [
+  { id: 'air-conditioning', name: 'Air conditioning' },
+  { id: 'automatic', name: 'Automatic' },
+  { id: 'manual', name: 'Manual' },
+  { id: 'five-seats', name: '5 seats' },
+  { id: 'four-seats', name: '4 seats' },
+  { id: 'two-bags', name: '2 bags' },
+  { id: 'three-bags', name: '3 bags' },
+];
+
+const sampleExtras: BookingExtra[] = [
+  {
+    id: 'extra-baby-seat',
+    name: 'Baby Seat',
+    description: 'Child safety seat suitable for young children.',
+    pricingMode: 'Per Day',
+    price: '5',
+    status: 'Active',
+    maximumQuantity: '2',
+  },
+  {
+    id: 'extra-booster-seat',
+    name: 'Booster Seat',
+    description: 'Booster seat for older children.',
+    pricingMode: 'Per Day',
+    price: '4',
+    status: 'Active',
+    maximumQuantity: '2',
+  },
+  {
+    id: 'extra-infant-seat',
+    name: 'Infant Seat',
+    description: 'Rear-facing infant safety seat.',
+    pricingMode: 'Per Booking',
+    price: '18',
+    status: 'Active',
+    maximumQuantity: '1',
+  },
+];
+
+const sampleCars: BookingEngineCar[] = [
+  {
+    id: 'demo-city',
+    name: 'Peugeot 108 or similar',
+    groupCode: 'A',
+    description: 'Compact city car for couples and short island trips.',
+    featureIds: ['manual', 'air-conditioning', 'four-seats', 'two-bags'],
+    status: 'Open',
+    locationIds: ['airport', 'rhodes-town', 'faliraki'],
+  },
+  {
+    id: 'demo-family',
+    name: 'Peugeot 2008 or similar',
+    groupCode: 'D1',
+    description: 'Comfortable crossover with additional luggage room.',
+    featureIds: ['automatic', 'air-conditioning', 'five-seats', 'three-bags'],
+    status: 'On Request',
+    locationIds: ['airport', 'rhodes-town', 'lindos', 'pefkos'],
+  },
+];
+
+const sampleSeasonPrices: SeasonPrice[] = [
+  {
+    id: 'season-a-june',
+    groupCode: 'A',
+    seasonName: 'Early Summer',
+    fromDate: '2026-06-01',
+    toDate: '2026-06-30',
+    tiers: [
+      { id: 'season-a-tier-1', fromDays: '1', toDays: '1', pricePerDay: '50' },
+      { id: 'season-a-tier-2', fromDays: '2', toDays: '3', pricePerDay: '40' },
+      { id: 'season-a-tier-3', fromDays: '4', toDays: '7', pricePerDay: '32' },
+      { id: 'season-a-tier-4', fromDays: '8', toDays: '14', pricePerDay: '30' },
+    ],
+    websiteMode: 'Open',
+    notes: 'Local UI sample.',
+  },
+  {
+    id: 'season-d1-peak',
+    groupCode: 'D1',
+    seasonName: 'Peak Season',
+    fromDate: '2026-07-01',
+    toDate: '2026-08-31',
+    tiers: [
+      { id: 'season-d1-tier-1', fromDays: '1', toDays: '1', pricePerDay: '92' },
+      { id: 'season-d1-tier-2', fromDays: '2', toDays: '3', pricePerDay: '84' },
+      { id: 'season-d1-tier-3', fromDays: '4', toDays: '7', pricePerDay: '80' },
+      { id: 'season-d1-tier-4', fromDays: '8', toDays: '14', pricePerDay: '78' },
+    ],
+    websiteMode: 'On Request',
+    notes: '',
+  },
+];
+
+const sampleCoupons: BookingCoupon[] = [
+  {
+    id: 'coupon-summer10',
+    code: 'SUMMER10',
+    discountType: 'Percentage',
+    discountValue: '10',
+    validFrom: '2026-06-01',
+    validTo: '2026-09-30',
+    minimumDays: '',
+    allowedGroupCodes: [],
+    usageLimit: '',
+    status: 'Active',
+  },
+];
+
+const samplePaymentMethods: BookingPaymentMethod[] = [
+  {
+    id: 'payment-arrival',
+    name: 'Pay on Arrival',
+    type: 'Pay on Arrival',
+    description: 'Customer pays when collecting the vehicle.',
+    depositRequired: false,
+    depositAmount: '',
+    status: 'Active',
+  },
+  {
+    id: 'payment-link',
+    name: 'Payment Link',
+    type: 'Payment Link',
+    description: 'A secure payment link is sent to the customer.',
+    depositRequired: false,
+    depositAmount: '',
+    status: 'Active',
+  },
+];
+
+const statusStyles: Record<CarStatus, string> = {
+  Open: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+  'On Request': 'border-amber-300 bg-amber-50 text-amber-800',
+  Hidden: 'border-slate-300 bg-slate-100 text-slate-600',
+};
+
+const locationTypeLabels: Record<LocationType, string> = {
+  airport: 'Airport',
+  town: 'Town',
+  hotel: 'Hotel',
+  custom: 'Custom',
+};
+
+const localId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+const createDefaultPricingTiers = (): PricingTier[] => [
+  { id: localId('pricing-tier'), fromDays: '1', toDays: '1', pricePerDay: '' },
+  { id: localId('pricing-tier'), fromDays: '2', toDays: '3', pricePerDay: '' },
+  { id: localId('pricing-tier'), fromDays: '4', toDays: '7', pricePerDay: '' },
+];
+const formatDateOnly = (value: string) => {
+  const [year, month, day] = value.split('-');
+  return year && month && day ? `${day}/${month}/${year}` : value;
+};
+
+export default function BookingEngineAdmin() {
+  const [activeTab, setActiveTab] = useState<AdminTabId>('groups');
+  const [groups, setGroups] = useState<BookingGroup[]>(sampleGroups);
+  const [cars, setCars] = useState<BookingEngineCar[]>(sampleCars);
+  const [locations, setLocations] = useState<BookingLocation[]>(sampleLocations);
+  const [features, setFeatures] = useState<BookingFeature[]>(sampleFeatures);
+  const [extras, setExtras] = useState<BookingExtra[]>(sampleExtras);
+  const [seasonPrices, setSeasonPrices] = useState<SeasonPrice[]>(sampleSeasonPrices);
+  const [coupons, setCoupons] = useState<BookingCoupon[]>(sampleCoupons);
+  const [paymentMethods, setPaymentMethods] = useState<BookingPaymentMethod[]>(samplePaymentMethods);
+
+  const [carModalOpen, setCarModalOpen] = useState(false);
+  const [editingCarId, setEditingCarId] = useState<string | null>(null);
+  const [carDraft, setCarDraft] = useState<CarDraft>(emptyCarDraft);
+
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [groupDraft, setGroupDraft] = useState<GroupDraft>(emptyGroupDraft);
+
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
+  const [locationDraft, setLocationDraft] = useState<LocationDraft>(emptyLocationDraft);
+
+  const [featureModalOpen, setFeatureModalOpen] = useState(false);
+  const [editingFeatureId, setEditingFeatureId] = useState<string | null>(null);
+  const [featureDraft, setFeatureDraft] = useState<FeatureDraft>(emptyFeatureDraft);
+
+  const [extraModalOpen, setExtraModalOpen] = useState(false);
+  const [editingExtraId, setEditingExtraId] = useState<string | null>(null);
+  const [extraDraft, setExtraDraft] = useState<ExtraDraft>(emptyExtraDraft);
+
+  const [seasonPriceModalOpen, setSeasonPriceModalOpen] = useState(false);
+  const [editingSeasonPriceId, setEditingSeasonPriceId] = useState<string | null>(null);
+  const [seasonPriceDraft, setSeasonPriceDraft] = useState<SeasonPriceDraft>(emptySeasonPriceDraft);
+
+  const [couponModalOpen, setCouponModalOpen] = useState(false);
+  const [editingCouponId, setEditingCouponId] = useState<string | null>(null);
+  const [couponDraft, setCouponDraft] = useState<CouponDraft>(emptyCouponDraft);
+
+  const [paymentMethodModalOpen, setPaymentMethodModalOpen] = useState(false);
+  const [editingPaymentMethodId, setEditingPaymentMethodId] = useState<string | null>(null);
+  const [paymentMethodDraft, setPaymentMethodDraft] =
+    useState<PaymentMethodDraft>(emptyPaymentMethodDraft);
+  const [emailSettings, setEmailSettings] = useState<BookingEmailSettings>(initialEmailSettings);
+  const [emailSettingsMessage, setEmailSettingsMessage] = useState('');
+  const [bookingEngineSettings, setBookingEngineSettings] =
+    useState<BookingEngineSettings>(initialBookingEngineSettings);
+  const [bookingSettingsMessage, setBookingSettingsMessage] = useState('');
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>(initialSiteSettings);
+  const [siteSettingsMessage, setSiteSettingsMessage] = useState('');
+
+  const currentTab = adminTabs.find((tab) => tab.id === activeTab) || adminTabs[0];
+  const CurrentIcon = currentTab.icon;
+  const activeLocations = locations.filter((location) => location.active);
+  const activeGroups = groups
+    .filter((group) => group.active)
+    .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+
+  const openNewCarModal = () => {
+    setEditingCarId(null);
+    setCarDraft(emptyCarDraft);
+    setCarModalOpen(true);
+  };
+
+  const openEditCarModal = (car: BookingEngineCar) => {
+    setEditingCarId(car.id);
+    setCarDraft({
+      name: car.name,
+      groupCode: car.groupCode,
+      description: car.description,
+      featureIds: [...car.featureIds],
+      status: car.status,
+      locationIds: [...car.locationIds],
+    });
+    setCarModalOpen(true);
+  };
+
+  const closeCarModal = () => {
+    setCarModalOpen(false);
+    setEditingCarId(null);
+    setCarDraft(emptyCarDraft);
+  };
+
+  const toggleCarRelation = (field: 'locationIds' | 'featureIds', id: string) => {
+    setCarDraft((current) => ({
+      ...current,
+      [field]: current[field].includes(id)
+        ? current[field].filter((itemId) => itemId !== id)
+        : [...current[field], id],
+    }));
+  };
+
+  const saveCar = () => {
+    const name = carDraft.name.trim();
+    const groupCode = carDraft.groupCode;
+    if (!name || !groupCode) return;
+
+    const nextDraft = { ...carDraft, name, groupCode };
+    setCars((current) =>
+      editingCarId
+        ? current.map((car) => (car.id === editingCarId ? { id: editingCarId, ...nextDraft } : car))
+        : [...current, { id: localId('car'), ...nextDraft }],
+    );
+    closeCarModal();
+  };
+
+  const deleteCar = (carId: string) => {
+    setCars((current) => current.filter((car) => car.id !== carId));
+  };
+
+  const openNewGroupModal = () => {
+    setEditingGroupId(null);
+    setGroupDraft(emptyGroupDraft);
+    setGroupModalOpen(true);
+  };
+
+  const openEditGroupModal = (group: BookingGroup) => {
+    setEditingGroupId(group.id);
+    setGroupDraft({
+      code: group.code,
+      name: group.name,
+      active: group.active,
+      notes: group.notes,
+    });
+    setGroupModalOpen(true);
+  };
+
+  const closeGroupModal = () => {
+    setGroupModalOpen(false);
+    setEditingGroupId(null);
+    setGroupDraft(emptyGroupDraft);
+  };
+
+  const saveGroup = () => {
+    const code = groupDraft.code.trim().toUpperCase();
+    const name = groupDraft.name.trim();
+    if (!code || !name) return;
+
+    const duplicate = groups.some(
+      (group) => group.id !== editingGroupId && group.code.toLowerCase() === code.toLowerCase(),
+    );
+    if (duplicate) return;
+
+    const nextDraft = { ...groupDraft, code, name };
+    setGroups((current) =>
+      editingGroupId
+        ? current.map((group) => (group.id === editingGroupId ? { id: editingGroupId, ...nextDraft } : group))
+        : [...current, { id: localId('group'), ...nextDraft }],
+    );
+
+    if (editingGroupId) {
+      const previousCode = groups.find((group) => group.id === editingGroupId)?.code;
+      if (previousCode && previousCode !== code) {
+        setCars((current) =>
+          current.map((car) => (car.groupCode === previousCode ? { ...car, groupCode: code } : car)),
+        );
+        setSeasonPrices((current) =>
+          current.map((price) => (price.groupCode === previousCode ? { ...price, groupCode: code } : price)),
+        );
+        setCoupons((current) =>
+          current.map((coupon) => ({
+            ...coupon,
+            allowedGroupCodes: coupon.allowedGroupCodes.map((groupCode) =>
+              groupCode === previousCode ? code : groupCode,
+            ),
+          })),
+        );
+      }
+    }
+
+    closeGroupModal();
+  };
+
+  const deleteGroup = (groupId: string) => {
+    const group = groups.find((item) => item.id === groupId);
+    if (!group) return;
+
+    setGroups((current) => current.filter((item) => item.id !== groupId));
+    setCars((current) =>
+      current.map((car) => (car.groupCode === group.code ? { ...car, groupCode: '' } : car)),
+    );
+    setSeasonPrices((current) => current.filter((price) => price.groupCode !== group.code));
+    setCoupons((current) =>
+      current.map((coupon) => ({
+        ...coupon,
+        allowedGroupCodes: coupon.allowedGroupCodes.filter((groupCode) => groupCode !== group.code),
+      })),
+    );
+  };
+
+  const openNewSeasonPriceModal = () => {
+    setEditingSeasonPriceId(null);
+    setSeasonPriceDraft({
+      ...emptySeasonPriceDraft,
+      groupCode: activeGroups[0]?.code || '',
+      tiers: createDefaultPricingTiers(),
+    });
+    setSeasonPriceModalOpen(true);
+  };
+
+  const openEditSeasonPriceModal = (seasonPrice: SeasonPrice) => {
+    setEditingSeasonPriceId(seasonPrice.id);
+    setSeasonPriceDraft({
+      groupCode: seasonPrice.groupCode,
+      seasonName: seasonPrice.seasonName,
+      fromDate: seasonPrice.fromDate,
+      toDate: seasonPrice.toDate,
+      tiers: seasonPrice.tiers.map((tier) => ({ ...tier })),
+      websiteMode: seasonPrice.websiteMode,
+      notes: seasonPrice.notes,
+    });
+    setSeasonPriceModalOpen(true);
+  };
+
+  const closeSeasonPriceModal = () => {
+    setSeasonPriceModalOpen(false);
+    setEditingSeasonPriceId(null);
+    setSeasonPriceDraft(emptySeasonPriceDraft);
+  };
+
+  const saveSeasonPrice = () => {
+    const seasonName = seasonPriceDraft.seasonName.trim();
+    if (
+      !seasonPriceDraft.groupCode ||
+      !seasonName ||
+      !seasonPriceDraft.fromDate ||
+      !seasonPriceDraft.toDate ||
+      seasonPriceDraft.tiers.length === 0 ||
+      seasonPriceDraft.tiers.some(
+        (tier) =>
+          !tier.fromDays ||
+          !tier.toDays ||
+          !tier.pricePerDay ||
+          Number(tier.fromDays) < 1 ||
+          Number(tier.toDays) < Number(tier.fromDays) ||
+          Number(tier.pricePerDay) <= 0,
+      ) ||
+      seasonPriceDraft.toDate < seasonPriceDraft.fromDate
+    ) {
+      return;
+    }
+
+    const nextDraft = {
+      ...seasonPriceDraft,
+      seasonName,
+      tiers: seasonPriceDraft.tiers.map((tier) => ({ ...tier })),
+    };
+    setSeasonPrices((current) =>
+      editingSeasonPriceId
+        ? current.map((seasonPrice) =>
+            seasonPrice.id === editingSeasonPriceId
+              ? { id: editingSeasonPriceId, ...nextDraft }
+              : seasonPrice,
+          )
+        : [...current, { id: localId('season-price'), ...nextDraft }],
+    );
+    closeSeasonPriceModal();
+  };
+
+  const deleteSeasonPrice = (seasonPriceId: string) => {
+    setSeasonPrices((current) => current.filter((seasonPrice) => seasonPrice.id !== seasonPriceId));
+  };
+
+  const openNewLocationModal = () => {
+    setEditingLocationId(null);
+    setLocationDraft(emptyLocationDraft);
+    setLocationModalOpen(true);
+  };
+
+  const openEditLocationModal = (location: BookingLocation) => {
+    setEditingLocationId(location.id);
+    setLocationDraft({
+      name: location.name,
+      type: location.type,
+      active: location.active,
+      fee: location.fee,
+    });
+    setLocationModalOpen(true);
+  };
+
+  const closeLocationModal = () => {
+    setLocationModalOpen(false);
+    setEditingLocationId(null);
+    setLocationDraft(emptyLocationDraft);
+  };
+
+  const saveLocation = () => {
+    const name = locationDraft.name.trim();
+    if (!name) return;
+
+    const nextDraft = { ...locationDraft, name };
+    setLocations((current) =>
+      editingLocationId
+        ? current.map((location) =>
+            location.id === editingLocationId ? { id: editingLocationId, ...nextDraft } : location,
+          )
+        : [...current, { id: localId('location'), ...nextDraft }],
+    );
+    closeLocationModal();
+  };
+
+  const deleteLocation = (locationId: string) => {
+    setLocations((current) => current.filter((location) => location.id !== locationId));
+    setCars((current) =>
+      current.map((car) => ({
+        ...car,
+        locationIds: car.locationIds.filter((id) => id !== locationId),
+      })),
+    );
+  };
+
+  const openNewFeatureModal = () => {
+    setEditingFeatureId(null);
+    setFeatureDraft(emptyFeatureDraft);
+    setFeatureModalOpen(true);
+  };
+
+  const openEditFeatureModal = (feature: BookingFeature) => {
+    setEditingFeatureId(feature.id);
+    setFeatureDraft({ name: feature.name });
+    setFeatureModalOpen(true);
+  };
+
+  const closeFeatureModal = () => {
+    setFeatureModalOpen(false);
+    setEditingFeatureId(null);
+    setFeatureDraft(emptyFeatureDraft);
+  };
+
+  const saveFeature = () => {
+    const name = featureDraft.name.trim();
+    if (!name) return;
+
+    setFeatures((current) =>
+      editingFeatureId
+        ? current.map((feature) => (feature.id === editingFeatureId ? { id: editingFeatureId, name } : feature))
+        : [...current, { id: localId('feature'), name }],
+    );
+    closeFeatureModal();
+  };
+
+  const deleteFeature = (featureId: string) => {
+    setFeatures((current) => current.filter((feature) => feature.id !== featureId));
+    setCars((current) =>
+      current.map((car) => ({
+        ...car,
+        featureIds: car.featureIds.filter((id) => id !== featureId),
+      })),
+    );
+  };
+
+  const openNewExtraModal = () => {
+    setEditingExtraId(null);
+    setExtraDraft(emptyExtraDraft);
+    setExtraModalOpen(true);
+  };
+
+  const openEditExtraModal = (extra: BookingExtra) => {
+    setEditingExtraId(extra.id);
+    setExtraDraft({
+      name: extra.name,
+      description: extra.description,
+      pricingMode: extra.pricingMode,
+      price: extra.price,
+      status: extra.status,
+      maximumQuantity: extra.maximumQuantity,
+    });
+    setExtraModalOpen(true);
+  };
+
+  const closeExtraModal = () => {
+    setExtraModalOpen(false);
+    setEditingExtraId(null);
+    setExtraDraft(emptyExtraDraft);
+  };
+
+  const saveExtra = () => {
+    const name = extraDraft.name.trim();
+    const price = extraDraft.pricingMode === 'Free' ? '0' : extraDraft.price;
+    if (!name || (extraDraft.pricingMode !== 'Free' && !price)) return;
+
+    const nextDraft = {
+      ...extraDraft,
+      name,
+      price,
+      maximumQuantity: extraDraft.maximumQuantity.trim(),
+    };
+    setExtras((current) =>
+      editingExtraId
+        ? current.map((extra) => (extra.id === editingExtraId ? { id: editingExtraId, ...nextDraft } : extra))
+        : [...current, { id: localId('extra'), ...nextDraft }],
+    );
+    closeExtraModal();
+  };
+
+  const deleteExtra = (extraId: string) => {
+    setExtras((current) => current.filter((extra) => extra.id !== extraId));
+  };
+
+  const openNewCouponModal = () => {
+    setEditingCouponId(null);
+    setCouponDraft(emptyCouponDraft);
+    setCouponModalOpen(true);
+  };
+
+  const openEditCouponModal = (coupon: BookingCoupon) => {
+    setEditingCouponId(coupon.id);
+    setCouponDraft({
+      code: coupon.code,
+      discountType: coupon.discountType,
+      discountValue: coupon.discountValue,
+      validFrom: coupon.validFrom,
+      validTo: coupon.validTo,
+      minimumDays: coupon.minimumDays,
+      allowedGroupCodes: [...coupon.allowedGroupCodes],
+      usageLimit: coupon.usageLimit,
+      status: coupon.status,
+    });
+    setCouponModalOpen(true);
+  };
+
+  const closeCouponModal = () => {
+    setCouponModalOpen(false);
+    setEditingCouponId(null);
+    setCouponDraft(emptyCouponDraft);
+  };
+
+  const toggleCouponGroup = (groupCode: string) => {
+    setCouponDraft((current) => ({
+      ...current,
+      allowedGroupCodes: current.allowedGroupCodes.includes(groupCode)
+        ? current.allowedGroupCodes.filter((code) => code !== groupCode)
+        : [...current.allowedGroupCodes, groupCode],
+    }));
+  };
+
+  const saveCoupon = () => {
+    const code = couponDraft.code.trim().toUpperCase();
+    const duplicateCode = coupons.some(
+      (coupon) => coupon.id !== editingCouponId && coupon.code.toLowerCase() === code.toLowerCase(),
+    );
+
+    if (
+      !code ||
+      !couponDraft.discountValue ||
+      !couponDraft.validFrom ||
+      !couponDraft.validTo ||
+      couponDraft.validTo < couponDraft.validFrom ||
+      duplicateCode
+    ) {
+      return;
+    }
+
+    const nextDraft = {
+      ...couponDraft,
+      code,
+      minimumDays: couponDraft.minimumDays.trim(),
+      usageLimit: couponDraft.usageLimit.trim(),
+    };
+
+    setCoupons((current) =>
+      editingCouponId
+        ? current.map((coupon) =>
+            coupon.id === editingCouponId ? { id: editingCouponId, ...nextDraft } : coupon,
+          )
+        : [...current, { id: localId('coupon'), ...nextDraft }],
+    );
+    closeCouponModal();
+  };
+
+  const deleteCoupon = (couponId: string) => {
+    setCoupons((current) => current.filter((coupon) => coupon.id !== couponId));
+  };
+
+  const openNewPaymentMethodModal = () => {
+    setEditingPaymentMethodId(null);
+    setPaymentMethodDraft(emptyPaymentMethodDraft);
+    setPaymentMethodModalOpen(true);
+  };
+
+  const openEditPaymentMethodModal = (paymentMethod: BookingPaymentMethod) => {
+    setEditingPaymentMethodId(paymentMethod.id);
+    setPaymentMethodDraft({
+      name: paymentMethod.name,
+      type: paymentMethod.type,
+      description: paymentMethod.description,
+      depositRequired: paymentMethod.depositRequired,
+      depositAmount: paymentMethod.depositAmount,
+      status: paymentMethod.status,
+    });
+    setPaymentMethodModalOpen(true);
+  };
+
+  const closePaymentMethodModal = () => {
+    setPaymentMethodModalOpen(false);
+    setEditingPaymentMethodId(null);
+    setPaymentMethodDraft(emptyPaymentMethodDraft);
+  };
+
+  const savePaymentMethod = () => {
+    const name = paymentMethodDraft.name.trim();
+    if (!name) return;
+
+    const nextDraft = {
+      ...paymentMethodDraft,
+      name,
+      description: paymentMethodDraft.description.trim(),
+      depositAmount: paymentMethodDraft.depositRequired ? paymentMethodDraft.depositAmount : '',
+    };
+
+    setPaymentMethods((current) =>
+      editingPaymentMethodId
+        ? current.map((paymentMethod) =>
+            paymentMethod.id === editingPaymentMethodId
+              ? { id: editingPaymentMethodId, ...nextDraft }
+              : paymentMethod,
+          )
+        : [...current, { id: localId('payment-method'), ...nextDraft }],
+    );
+    closePaymentMethodModal();
+  };
+
+  const deletePaymentMethod = (paymentMethodId: string) => {
+    setPaymentMethods((current) =>
+      current.filter((paymentMethod) => paymentMethod.id !== paymentMethodId),
+    );
+  };
+
+  const saveEmailSettings = () => {
+    setEmailSettingsMessage('Email settings saved locally.');
+  };
+
+  const saveBookingSettings = () => {
+    setBookingSettingsMessage('Booking settings saved locally.');
+  };
+
+  const saveSiteSettings = () => {
+    setSiteSettingsMessage('Site settings saved locally.');
+  };
+
+  return (
+    <div className="booking-engine-admin-light relative flex h-full min-h-[600px] overflow-hidden bg-slate-100 text-slate-900">
+      <aside className="booking-engine-admin-nav flex w-[250px] flex-shrink-0 flex-col border-r border-slate-200 bg-white p-4">
+        <div className="border-b border-white/[0.06] px-2 pb-3 pt-1">
+          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-cyan-700">
+            <Settings2 className="h-4 w-4 text-cyan-700" />
+            Configuration
+          </div>
+          <p className="mt-1 text-sm leading-5 text-slate-600">Booking engine setup workspace</p>
+        </div>
+
+        <nav className="mt-3 space-y-1">
+          {adminTabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex w-full items-center gap-3 rounded-lg border px-3.5 py-3 text-left text-sm font-bold transition ${
+                  isActive
+                    ? 'border-cyan-300 bg-cyan-50 text-cyan-900 shadow-[inset_4px_0_0_#0891b2]'
+                    : 'border-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-950'
+                }`}
+              >
+                <Icon className={`h-[18px] w-[18px] ${isActive ? 'text-cyan-700' : 'text-slate-500'}`} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="mt-auto rounded-lg border border-amber-200 bg-amber-50 p-3.5">
+          <p className="text-xs font-black uppercase tracking-[0.1em] text-amber-800">Local foundation</p>
+          <p className="mt-1 text-xs leading-5 text-slate-600">Changes reset when the page reloads.</p>
+        </div>
+      </aside>
+
+      <main className="flex min-w-0 flex-1 flex-col">
+        <header className="booking-engine-admin-header flex flex-shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-7 py-5">
+          <div className="flex items-center gap-3">
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-700">
+              <CurrentIcon className="h-6 w-6" />
+            </span>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-700">Booking Engine Admin</p>
+              <h2 className="mt-0.5 text-2xl font-bold text-slate-950">{currentTab.label}</h2>
+            </div>
+          </div>
+          <span className="rounded-full border border-cyan-200 bg-cyan-50 px-3.5 py-1.5 text-xs font-black uppercase tracking-[0.1em] text-cyan-800">
+            Local state
+          </span>
+        </header>
+
+        <div className="booking-engine-admin-content min-h-0 flex-1 overflow-auto bg-slate-100 p-7">
+          {activeTab === 'groups' && (
+            <GroupsPanel
+              groups={groups}
+              cars={cars}
+              seasonPrices={seasonPrices}
+              onAdd={openNewGroupModal}
+              onEdit={openEditGroupModal}
+              onDelete={deleteGroup}
+            />
+          )}
+
+          {activeTab === 'cars' && (
+            <CarsPanel
+              cars={cars}
+              groups={groups}
+              locations={locations}
+              features={features}
+              onAdd={openNewCarModal}
+              onEdit={openEditCarModal}
+              onDelete={deleteCar}
+              onStatusChange={(carIds, status) =>
+                setCars((current) =>
+                  current.map((car) => (carIds.includes(car.id) ? { ...car, status } : car)),
+                )
+              }
+            />
+          )}
+
+          {activeTab === 'pricing' && (
+            <PricingPanel
+              seasonPrices={seasonPrices}
+              onAdd={openNewSeasonPriceModal}
+              onEdit={openEditSeasonPriceModal}
+              onDelete={deleteSeasonPrice}
+            />
+          )}
+
+          {activeTab === 'locations' && (
+            <LocationsPanel
+              locations={locations}
+              onAdd={openNewLocationModal}
+              onEdit={openEditLocationModal}
+              onDelete={deleteLocation}
+            />
+          )}
+
+          {activeTab === 'features' && (
+            <FeaturesPanel
+              features={features}
+              cars={cars}
+              onAdd={openNewFeatureModal}
+              onEdit={openEditFeatureModal}
+              onDelete={deleteFeature}
+            />
+          )}
+
+          {activeTab === 'extras' && (
+            <ExtrasPanel
+              extras={extras}
+              onAdd={openNewExtraModal}
+              onEdit={openEditExtraModal}
+              onDelete={deleteExtra}
+            />
+          )}
+
+          {activeTab === 'coupons' && (
+            <CouponsPanel
+              coupons={coupons}
+              onAdd={openNewCouponModal}
+              onEdit={openEditCouponModal}
+              onDelete={deleteCoupon}
+            />
+          )}
+
+          {activeTab === 'payments' && (
+            <PaymentMethodsPanel
+              paymentMethods={paymentMethods}
+              onAdd={openNewPaymentMethodModal}
+              onEdit={openEditPaymentMethodModal}
+              onDelete={deletePaymentMethod}
+            />
+          )}
+
+          {activeTab === 'booking-settings' && (
+            <BookingSettingsPanel
+              settings={bookingEngineSettings}
+              adminEmail={emailSettings.adminEmail}
+              sendAdminCopy={emailSettings.adminNotificationActive}
+              savedMessage={bookingSettingsMessage}
+              onSettingsChange={(nextSettings) => {
+                setBookingEngineSettings(nextSettings);
+                setBookingSettingsMessage('');
+              }}
+              onAdminEmailChange={(adminEmail) => {
+                setEmailSettings((current) => ({ ...current, adminEmail }));
+                setEmailSettingsMessage('');
+                setBookingSettingsMessage('');
+              }}
+              onSendAdminCopyChange={(adminNotificationActive) => {
+                setEmailSettings((current) => ({ ...current, adminNotificationActive }));
+                setEmailSettingsMessage('');
+                setBookingSettingsMessage('');
+              }}
+              onSave={saveBookingSettings}
+            />
+          )}
+
+          {activeTab === 'site-settings' && (
+            <SiteSettingsPanel
+              settings={siteSettings}
+              savedMessage={siteSettingsMessage}
+              onSettingsChange={(nextSettings) => {
+                setSiteSettings(nextSettings);
+                setSiteSettingsMessage('');
+              }}
+              onSave={saveSiteSettings}
+            />
+          )}
+
+          {activeTab === 'emails' && (
+            <EmailsPanel
+              settings={emailSettings}
+              savedMessage={emailSettingsMessage}
+              onSettingsChange={(nextSettings) => {
+                setEmailSettings(nextSettings);
+                setEmailSettingsMessage('');
+              }}
+              onSave={saveEmailSettings}
+            />
+          )}
+
+          {!['groups', 'cars', 'pricing', 'locations', 'features', 'extras', 'coupons', 'payments', 'booking-settings', 'site-settings', 'emails'].includes(activeTab) && (
+            <EmptyAdminPanel tab={currentTab} icon={CurrentIcon} />
+          )}
+        </div>
+      </main>
+
+      {carModalOpen && (
+        <CarModal
+          draft={carDraft}
+          editing={Boolean(editingCarId)}
+          activeGroups={activeGroups}
+          activeLocations={activeLocations}
+          features={features}
+          onDraftChange={setCarDraft}
+          onToggleLocation={(id) => toggleCarRelation('locationIds', id)}
+          onToggleFeature={(id) => toggleCarRelation('featureIds', id)}
+          onClose={closeCarModal}
+          onSave={saveCar}
+        />
+      )}
+
+      {groupModalOpen && (
+        <GroupModal
+          draft={groupDraft}
+          editing={Boolean(editingGroupId)}
+          groups={groups}
+          editingGroupId={editingGroupId}
+          onDraftChange={setGroupDraft}
+          onClose={closeGroupModal}
+          onSave={saveGroup}
+        />
+      )}
+
+      {locationModalOpen && (
+        <LocationModal
+          draft={locationDraft}
+          editing={Boolean(editingLocationId)}
+          onDraftChange={setLocationDraft}
+          onClose={closeLocationModal}
+          onSave={saveLocation}
+        />
+      )}
+
+      {seasonPriceModalOpen && (
+        <SeasonPriceModal
+          draft={seasonPriceDraft}
+          editing={Boolean(editingSeasonPriceId)}
+          activeGroups={activeGroups}
+          onDraftChange={setSeasonPriceDraft}
+          onClose={closeSeasonPriceModal}
+          onSave={saveSeasonPrice}
+        />
+      )}
+
+      {featureModalOpen && (
+        <FeatureModal
+          draft={featureDraft}
+          editing={Boolean(editingFeatureId)}
+          onDraftChange={setFeatureDraft}
+          onClose={closeFeatureModal}
+          onSave={saveFeature}
+        />
+      )}
+
+      {extraModalOpen && (
+        <ExtraModal
+          draft={extraDraft}
+          editing={Boolean(editingExtraId)}
+          onDraftChange={setExtraDraft}
+          onClose={closeExtraModal}
+          onSave={saveExtra}
+        />
+      )}
+
+      {couponModalOpen && (
+        <CouponModal
+          draft={couponDraft}
+          editing={Boolean(editingCouponId)}
+          coupons={coupons}
+          editingCouponId={editingCouponId}
+          activeGroups={activeGroups}
+          onDraftChange={setCouponDraft}
+          onToggleGroup={toggleCouponGroup}
+          onClose={closeCouponModal}
+          onSave={saveCoupon}
+        />
+      )}
+
+      {paymentMethodModalOpen && (
+        <PaymentMethodModal
+          draft={paymentMethodDraft}
+          editing={Boolean(editingPaymentMethodId)}
+          onDraftChange={setPaymentMethodDraft}
+          onClose={closePaymentMethodModal}
+          onSave={savePaymentMethod}
+        />
+      )}
+      <style jsx global>{`
+        .booking-engine-admin-light {
+          color: #172033;
+          font-size: 15px;
+        }
+
+        .booking-engine-admin-light .booking-engine-admin-nav {
+          box-shadow: 8px 0 28px rgba(15, 23, 42, 0.04);
+        }
+
+        .booking-engine-admin-light .booking-engine-admin-nav button {
+          min-height: 46px;
+          font-size: 15px;
+        }
+
+        .booking-engine-admin-light [class*='bg-[#0a111b]'],
+        .booking-engine-admin-light [class*='bg-[#090f18]'],
+        .booking-engine-admin-light [class*='bg-black/25'],
+        .booking-engine-admin-light [class*='bg-black/15'] {
+          background: #ffffff !important;
+        }
+
+        .booking-engine-admin-light [class*='bg-white/[0.035]'],
+        .booking-engine-admin-light [class*='bg-white/[0.025]'],
+        .booking-engine-admin-light [class*='bg-white/[0.018]'],
+        .booking-engine-admin-light [class*='bg-white/[0.015]'] {
+          background: #f8fafc !important;
+        }
+
+        .booking-engine-admin-light [class*='border-white/'],
+        .booking-engine-admin-light [class*='border-zinc-'] {
+          border-color: #dbe3ed !important;
+        }
+
+        .booking-engine-admin-light [class*='text-zinc-100'],
+        .booking-engine-admin-light [class*='text-zinc-200'] {
+          color: #172033 !important;
+        }
+
+        .booking-engine-admin-light [class*='text-cyan-200'],
+        .booking-engine-admin-light [class*='text-cyan-300'],
+        .booking-engine-admin-light [class*='text-sky-100'] {
+          color: #0e7490 !important;
+        }
+
+        .booking-engine-admin-light [class*='text-zinc-300'],
+        .booking-engine-admin-light [class*='text-zinc-400'] {
+          color: #475569 !important;
+        }
+
+        .booking-engine-admin-light [class*='text-zinc-500'] {
+          color: #64748b !important;
+        }
+
+        .booking-engine-admin-light [class*='text-zinc-600'],
+        .booking-engine-admin-light [class*='text-zinc-700'] {
+          color: #78879a !important;
+        }
+
+        .booking-engine-admin-light input,
+        .booking-engine-admin-light select,
+        .booking-engine-admin-light textarea {
+          min-height: 46px;
+          border-color: #cbd5e1 !important;
+          background: #ffffff !important;
+          color: #172033 !important;
+          font-size: 15px !important;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+
+        .booking-engine-admin-light input::placeholder,
+        .booking-engine-admin-light textarea::placeholder {
+          color: #94a3b8 !important;
+        }
+
+        .booking-engine-admin-light [role='dialog'] {
+          border-color: #cbd5e1 !important;
+          background: #ffffff !important;
+          color: #172033 !important;
+          box-shadow: 0 28px 90px rgba(15, 23, 42, 0.28) !important;
+        }
+
+        .booking-engine-admin-light [role='dialog'] > header,
+        .booking-engine-admin-light [role='dialog'] > footer {
+          border-color: #e2e8f0 !important;
+          background: #f8fafc !important;
+        }
+
+        .booking-engine-admin-light [role='dialog'] > header {
+          padding: 20px 24px !important;
+        }
+
+        .booking-engine-admin-light [role='dialog'] > div {
+          padding: 24px !important;
+        }
+
+        .booking-engine-admin-light [role='dialog'] > footer {
+          padding: 16px 24px !important;
+        }
+
+        .booking-engine-admin-light [class*='grid-cols-'][class*='border-b'] {
+          min-height: 52px;
+          border-color: #e2e8f0 !important;
+          font-size: 14px !important;
+        }
+
+        .booking-engine-admin-light .booking-engine-admin-content h3 {
+          font-size: 18px !important;
+        }
+
+        .booking-engine-admin-light .booking-engine-admin-content [class*='uppercase'] {
+          font-size: 12px !important;
+          letter-spacing: 0.06em !important;
+        }
+
+        .booking-engine-admin-light [class*='grid-cols-'][class*='hover:bg'] {
+          min-height: 68px;
+          font-size: 14px !important;
+        }
+
+        .booking-engine-admin-light .booking-engine-admin-content button[title='Edit'],
+        .booking-engine-admin-light .booking-engine-admin-content button[title='Delete local record'] {
+          width: 40px !important;
+          height: 40px !important;
+          background: #ffffff !important;
+        }
+
+        .booking-engine-admin-light label > span:first-child {
+          font-size: 12px !important;
+          color: #475569 !important;
+        }
+
+        .booking-engine-admin-light .booking-engine-admin-header > div:first-child > div p {
+          color: #0e7490 !important;
+        }
+
+        .booking-engine-admin-light .booking-engine-admin-header > div:first-child > div h2 {
+          color: #0f172a !important;
+          font-size: 26px !important;
+        }
+
+        .booking-engine-admin-light button {
+          font-size: 14px;
+        }
+
+        .booking-engine-admin-light [class*='hover:bg-white']:hover {
+          background: #f1f5f9 !important;
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function GroupsPanel({
+  groups,
+  cars,
+  seasonPrices,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  groups: BookingGroup[];
+  cars: BookingEngineCar[];
+  seasonPrices: SeasonPrice[];
+  onAdd: () => void;
+  onEdit: (group: BookingGroup) => void;
+  onDelete: (groupId: string) => void;
+}) {
+  return (
+    <section className="min-w-[760px]">
+      <PanelHeading
+        title="Vehicle groups"
+        description="The shared category source for Cars and Pricing / Seasons."
+        buttonLabel="Add Group"
+        onAdd={onAdd}
+      />
+      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
+        <div className="grid grid-cols-[110px_minmax(220px,1fr)_120px_110px_120px_100px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
+          <span>Code</span>
+          <span>Group Name</span>
+          <span>Website Mode</span>
+          <span>Cars</span>
+          <span>Season Prices</span>
+          <span className="text-right">Actions</span>
+        </div>
+        {groups.length > 0 ? (
+          groups
+            .slice()
+            .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }))
+            .map((group) => (
+              <div
+                key={group.id}
+                className="grid grid-cols-[110px_minmax(220px,1fr)_120px_110px_120px_100px] items-center border-b border-white/[0.055] px-4 py-3 text-xs last:border-b-0 hover:bg-white/[0.02]"
+              >
+                <span className="w-fit rounded-md border border-cyan-300 bg-cyan-50 px-2.5 py-1 font-black text-cyan-900">
+                  {group.code}
+                </span>
+                <div className="min-w-0 pr-4">
+                  <p className="truncate font-bold text-zinc-100">{group.name}</p>
+                  {group.notes && <p className="mt-1 truncate text-[10px] text-zinc-600">{group.notes}</p>}
+                </div>
+                <span className={`w-fit rounded-full border px-2 py-1 text-[10px] font-black ${group.active ? statusStyles.Open : statusStyles.Hidden}`}>
+                  {group.active ? 'Active' : 'Inactive'}
+                </span>
+                <span className="text-zinc-400">{cars.filter((car) => car.groupCode === group.code).length}</span>
+                <span className="text-zinc-400">
+                  {seasonPrices.filter((price) => price.groupCode === group.code).length}
+                </span>
+                <ActionButtons onEdit={() => onEdit(group)} onDelete={() => onDelete(group.id)} />
+              </div>
+            ))
+        ) : (
+          <TableEmpty icon={Layers3} title="No groups yet" description="Add a group before creating cars or season prices." />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function CarsPanel({
+  cars,
+  groups,
+  locations,
+  features,
+  onAdd,
+  onEdit,
+  onDelete,
+  onStatusChange,
+}: {
+  cars: BookingEngineCar[];
+  groups: BookingGroup[];
+  locations: BookingLocation[];
+  features: BookingFeature[];
+  onAdd: () => void;
+  onEdit: (car: BookingEngineCar) => void;
+  onDelete: (carId: string) => void;
+  onStatusChange: (carIds: string[], status: CarStatus) => void;
+}) {
+  const [selectedCarIds, setSelectedCarIds] = useState<string[]>([]);
+  const locationName = (id: string) => locations.find((location) => location.id === id)?.name;
+  const featureName = (id: string) => features.find((feature) => feature.id === id)?.name;
+  const selectedExistingCarIds = selectedCarIds.filter((selectedId) =>
+    cars.some((car) => car.id === selectedId),
+  );
+  const allCarsSelected = cars.length > 0 && cars.every((car) => selectedCarIds.includes(car.id));
+
+  const toggleCarSelection = (carId: string) => {
+    setSelectedCarIds((current) =>
+      current.includes(carId)
+        ? current.filter((selectedId) => selectedId !== carId)
+        : [...current, carId],
+    );
+  };
+
+  const toggleAllCars = () => {
+    setSelectedCarIds(allCarsSelected ? [] : cars.map((car) => car.id));
+  };
+
+  const applyBulkStatus = (status: CarStatus) => {
+    if (selectedExistingCarIds.length === 0) return;
+    onStatusChange(selectedExistingCarIds, status);
+  };
+
+  return (
+    <section className="min-w-[1060px]">
+      <PanelHeading
+        title="Website car catalogue"
+        description="Cars use active locations and reusable features managed in this admin window."
+        buttonLabel="Add Car / Category"
+        onAdd={onAdd}
+      />
+
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-black text-slate-800">
+              {selectedExistingCarIds.length} selected
+            </span>
+            <button
+              type="button"
+              onClick={() => applyBulkStatus('Open')}
+              disabled={selectedExistingCarIds.length === 0}
+              className="h-9 rounded-lg border border-emerald-600 bg-emerald-600 px-3 text-xs font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500"
+            >
+              Set selected to Open
+            </button>
+            <button
+              type="button"
+              onClick={() => applyBulkStatus('On Request')}
+              disabled={selectedExistingCarIds.length === 0}
+              className="h-9 rounded-lg border border-amber-500 bg-amber-500 px-3 text-xs font-black text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500"
+            >
+              Set selected to On Request
+            </button>
+            <button
+              type="button"
+              onClick={() => applyBulkStatus('Hidden')}
+              disabled={selectedExistingCarIds.length === 0}
+              className="h-9 rounded-lg border border-slate-700 bg-slate-700 px-3 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500"
+            >
+              Set selected to Hidden
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Use On Request when you want customers to send a request instead of instant booking.
+          </p>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
+        <div className="grid grid-cols-[42px_70px_minmax(180px,1.1fr)_125px_150px_minmax(180px,1fr)_minmax(180px,1fr)_90px] items-center border-b border-white/[0.08] bg-white/[0.035] px-3 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              checked={allCarsSelected}
+              onChange={toggleAllCars}
+              aria-label="Select all cars"
+              className="h-4 w-4 rounded border-slate-300 text-cyan-700 accent-cyan-700"
+            />
+          </label>
+          <span>Photo</span>
+          <span>Name</span>
+          <span>Group</span>
+          <span>Status</span>
+          <span>Display Locations</span>
+          <span>Included Features</span>
+          <span className="text-right">Actions</span>
+        </div>
+
+        {cars.length > 0 ? (
+          cars.map((car) => {
+            const carLocations = car.locationIds.map(locationName).filter(Boolean) as string[];
+            const carFeatures = car.featureIds.map(featureName).filter(Boolean) as string[];
+            const group = groups.find((item) => item.code === car.groupCode);
+
+            return (
+              <div
+                key={car.id}
+                className={`grid grid-cols-[42px_70px_minmax(180px,1.1fr)_125px_150px_minmax(180px,1fr)_minmax(180px,1fr)_90px] items-center border-b border-white/[0.055] px-3 py-3 text-xs last:border-b-0 hover:bg-white/[0.02] ${
+                  selectedCarIds.includes(car.id) ? 'bg-cyan-50' : ''
+                }`}
+              >
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedCarIds.includes(car.id)}
+                    onChange={() => toggleCarSelection(car.id)}
+                    aria-label={`Select ${car.name}`}
+                    className="h-4 w-4 rounded border-slate-300 text-cyan-700 accent-cyan-700"
+                  />
+                </label>
+                <div className="flex h-11 w-14 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.025] text-zinc-600">
+                  <Car className="h-5 w-5" strokeWidth={1.5} />
+                </div>
+                <div className="min-w-0 pr-4">
+                  <p className="truncate font-bold text-zinc-100">{car.name}</p>
+                  <p className="mt-1 truncate text-[11px] text-zinc-600">{car.description || 'No description'}</p>
+                </div>
+                <div>
+                  <span className="w-fit rounded-md border border-cyan-300 bg-cyan-50 px-2.5 py-1 font-black text-cyan-900">
+                    {car.groupCode || '—'}
+                  </span>
+                  {group && <p className="mt-1 truncate text-[10px] text-zinc-600">{group.name}</p>}
+                </div>
+                <select
+                  value={car.status}
+                  onChange={(event) =>
+                    onStatusChange([car.id], event.target.value as CarStatus)
+                  }
+                  aria-label={`Status for ${car.name}`}
+                  className={`h-9 w-[136px] rounded-lg border px-2.5 text-xs font-black outline-none transition focus:ring-2 focus:ring-cyan-100 ${statusStyles[car.status]}`}
+                >
+                  <option value="Open">Open</option>
+                  <option value="On Request">On Request</option>
+                  <option value="Hidden">Hidden</option>
+                </select>
+                <PillList values={carLocations} emptyLabel="No locations" />
+                <PillList values={carFeatures} emptyLabel="No features" tone="cyan" />
+                <ActionButtons onEdit={() => onEdit(car)} onDelete={() => onDelete(car.id)} />
+              </div>
+            );
+          })
+        ) : (
+          <TableEmpty icon={Car} title="No cars or categories yet" description="Add a local record to preview the booking catalogue." />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function PricingPanel({
+  seasonPrices,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  seasonPrices: SeasonPrice[];
+  onAdd: () => void;
+  onEdit: (seasonPrice: SeasonPrice) => void;
+  onDelete: (seasonPriceId: string) => void;
+}) {
+  return (
+    <section className="min-w-[760px]">
+      <PanelHeading
+        title="Category season pricing"
+        description="Local duration-tier pricing by vehicle group and season. No booking calculations are connected."
+        buttonLabel="Add Season Price"
+        onAdd={onAdd}
+      />
+      <div className="mb-3 grid gap-2 sm:grid-cols-3">
+        <ModeMeaning
+          mode="Open"
+          description="Show the group and price with a Book Now button."
+        />
+        <ModeMeaning
+          mode="On Request"
+          description="Show the group and price with an On Request button."
+        />
+        <ModeMeaning
+          mode="Hidden"
+          description="Do not show the group for this date range."
+        />
+      </div>
+      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
+        <div className="grid grid-cols-[140px_minmax(220px,1fr)_125px_125px_120px_90px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
+          <span>Category / Group</span>
+          <span>Season Name</span>
+          <span>From Date</span>
+          <span>To Date</span>
+          <span>Status</span>
+          <span className="text-right">Actions</span>
+        </div>
+        {seasonPrices.length > 0 ? (
+          seasonPrices.map((seasonPrice) => (
+            <div
+              key={seasonPrice.id}
+              className="grid grid-cols-[140px_minmax(220px,1fr)_125px_125px_120px_90px] items-center border-b border-white/[0.055] px-4 py-3 text-xs last:border-b-0 hover:bg-white/[0.02]"
+            >
+              <span className="w-fit rounded-md border border-cyan-300 bg-cyan-50 px-2.5 py-1 font-black text-cyan-900">
+                {seasonPrice.groupCode}
+              </span>
+              <div className="min-w-0 pr-4">
+                <p className="truncate font-bold text-zinc-100">{seasonPrice.seasonName}</p>
+                <p className="mt-1 text-[10px] font-bold text-cyan-700">
+                  View pricing tiers · {seasonPrice.tiers.length}
+                </p>
+              </div>
+              <span className="text-zinc-400">{formatDateOnly(seasonPrice.fromDate)}</span>
+              <span className="text-zinc-400">{formatDateOnly(seasonPrice.toDate)}</span>
+              <span
+                className={`w-fit rounded-full border px-2 py-1 text-[10px] font-black ${statusStyles[seasonPrice.websiteMode]}`}
+              >
+                {seasonPrice.websiteMode}
+              </span>
+              <ActionButtons onEdit={() => onEdit(seasonPrice)} onDelete={() => onDelete(seasonPrice.id)} />
+            </div>
+          ))
+        ) : (
+          <TableEmpty
+            icon={CalendarRange}
+            title="No season prices yet"
+            description="Add a category-level season price to preview the future booking engine setup."
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ModeMeaning({
+  mode,
+  description,
+}: {
+  mode: CarStatus;
+  description: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+      <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-black ${statusStyles[mode]}`}>
+        {mode}
+      </span>
+      <p className="text-xs leading-5 text-slate-600">{description}</p>
+    </div>
+  );
+}
+
+function LocationsPanel({
+  locations,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  locations: BookingLocation[];
+  onAdd: () => void;
+  onEdit: (location: BookingLocation) => void;
+  onDelete: (locationId: string) => void;
+}) {
+  return (
+    <section className="min-w-[760px]">
+      <PanelHeading
+        title="Display locations"
+        description="Active locations become selectable immediately in the Cars editor."
+        buttonLabel="Add Location"
+        onAdd={onAdd}
+      />
+      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
+        <div className="grid grid-cols-[minmax(220px,1fr)_150px_120px_140px_100px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
+          <span>Location Name</span>
+          <span>Type</span>
+          <span>Status</span>
+          <span>Optional Fee</span>
+          <span className="text-right">Actions</span>
+        </div>
+        {locations.map((location) => (
+          <div
+            key={location.id}
+            className="grid grid-cols-[minmax(220px,1fr)_150px_120px_140px_100px] items-center border-b border-white/[0.055] px-4 py-3 text-xs last:border-b-0"
+          >
+            <span className="font-bold text-zinc-100">{location.name}</span>
+            <span className="capitalize text-zinc-400">{locationTypeLabels[location.type]}</span>
+            <span className={`w-fit rounded-full border px-2 py-1 text-[10px] font-black ${location.active ? statusStyles.Open : statusStyles.Hidden}`}>
+              {location.active ? 'Active' : 'Inactive'}
+            </span>
+            <span className="font-bold text-zinc-300">{location.fee ? `€${Number(location.fee).toFixed(2)}` : 'No fee'}</span>
+            <ActionButtons onEdit={() => onEdit(location)} onDelete={() => onDelete(location.id)} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function FeaturesPanel({
+  features,
+  cars,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  features: BookingFeature[];
+  cars: BookingEngineCar[];
+  onAdd: () => void;
+  onEdit: (feature: BookingFeature) => void;
+  onDelete: (featureId: string) => void;
+}) {
+  return (
+    <section className="min-w-[620px]">
+      <PanelHeading
+        title="Included features"
+        description="Reusable checkbox options shown in the Cars add/edit modal."
+        buttonLabel="Add Feature"
+        onAdd={onAdd}
+      />
+      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
+        <div className="grid grid-cols-[minmax(260px,1fr)_150px_100px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
+          <span>Feature</span>
+          <span>Used By</span>
+          <span className="text-right">Actions</span>
+        </div>
+        {features.length > 0 ? (
+          features.map((feature) => (
+            <div
+              key={feature.id}
+              className="grid grid-cols-[minmax(260px,1fr)_150px_100px] items-center border-b border-white/[0.055] px-4 py-3 text-xs last:border-b-0"
+            >
+              <span className="font-bold text-zinc-100">{feature.name}</span>
+              <span className="text-zinc-500">{cars.filter((car) => car.featureIds.includes(feature.id)).length} cars</span>
+              <ActionButtons onEdit={() => onEdit(feature)} onDelete={() => onDelete(feature.id)} />
+            </div>
+          ))
+        ) : (
+          <TableEmpty icon={ListChecks} title="No features yet" description="Add reusable features for the Cars catalogue." />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ExtrasPanel({
+  extras,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  extras: BookingExtra[];
+  onAdd: () => void;
+  onEdit: (extra: BookingExtra) => void;
+  onDelete: (extraId: string) => void;
+}) {
+  return (
+    <section className="min-w-[760px]">
+      <PanelHeading
+        title="Booking extras"
+        description="Optional products and services for the future website booking flow."
+        buttonLabel="Add Extra"
+        onAdd={onAdd}
+      />
+      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
+        <div className="grid grid-cols-[minmax(220px,1fr)_150px_160px_130px_120px_100px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
+          <span>Name</span>
+          <span>Type</span>
+          <span>Pricing Mode</span>
+          <span>Price</span>
+          <span>Status</span>
+          <span className="text-right">Actions</span>
+        </div>
+        {extras.length > 0 ? (
+          extras.map((extra) => (
+            <div
+              key={extra.id}
+              className="grid grid-cols-[minmax(220px,1fr)_150px_160px_130px_120px_100px] items-center border-b border-white/[0.055] px-4 py-3 text-xs last:border-b-0 hover:bg-white/[0.02]"
+            >
+              <div className="min-w-0 pr-4">
+                <p className="truncate font-bold text-zinc-100">{extra.name}</p>
+                {extra.description && <p className="mt-1 truncate text-[10px] text-zinc-600">{extra.description}</p>}
+              </div>
+              <span className="text-zinc-400">Extra</span>
+              <span className="w-fit rounded-md border border-cyan-200 bg-cyan-50 px-2.5 py-1 font-bold text-cyan-800">
+                {extra.pricingMode}
+              </span>
+              <div>
+                <span className="font-black text-zinc-100">
+                  {extra.pricingMode === 'Free' ? 'Free' : `€${Number(extra.price).toFixed(2)}`}
+                </span>
+                {extra.pricingMode !== 'Free' && (
+                  <p className="mt-0.5 text-[9px] text-zinc-600">
+                    {extra.pricingMode === 'Per Day' ? '/ day' : '/ booking'}
+                  </p>
+                )}
+              </div>
+              <span
+                className={`w-fit rounded-full border px-2 py-1 text-[10px] font-black ${
+                  extra.status === 'Active' ? statusStyles.Open : statusStyles.Hidden
+                }`}
+              >
+                {extra.status}
+              </span>
+              <ActionButtons onEdit={() => onEdit(extra)} onDelete={() => onDelete(extra.id)} />
+            </div>
+          ))
+        ) : (
+          <TableEmpty icon={PackagePlus} title="No extras yet" description="Add an extra for the future booking flow." />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function CouponsPanel({
+  coupons,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  coupons: BookingCoupon[];
+  onAdd: () => void;
+  onEdit: (coupon: BookingCoupon) => void;
+  onDelete: (couponId: string) => void;
+}) {
+  return (
+    <section className="min-w-[1180px]">
+      <PanelHeading
+        title="Promotional coupons"
+        description="Local discount code definitions for the future website booking flow."
+        buttonLabel="Add Coupon"
+        onAdd={onAdd}
+      />
+      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
+        <div className="grid grid-cols-[145px_140px_110px_115px_115px_95px_minmax(180px,1fr)_105px_100px_90px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
+          <span>Coupon Code</span>
+          <span>Type</span>
+          <span>Value</span>
+          <span>Valid From</span>
+          <span>Valid To</span>
+          <span>Min Days</span>
+          <span>Allowed Groups</span>
+          <span>Usage Limit</span>
+          <span>Status</span>
+          <span className="text-right">Actions</span>
+        </div>
+        {coupons.length > 0 ? (
+          coupons.map((coupon) => (
+            <div
+              key={coupon.id}
+              className="grid grid-cols-[145px_140px_110px_115px_115px_95px_minmax(180px,1fr)_105px_100px_90px] items-center border-b border-white/[0.055] px-4 py-3 text-xs last:border-b-0 hover:bg-white/[0.02]"
+            >
+              <span className="w-fit rounded-md border border-cyan-300 bg-cyan-50 px-2.5 py-1 font-black text-cyan-900">
+                {coupon.code}
+              </span>
+              <span className="font-bold text-zinc-300">{coupon.discountType}</span>
+              <span className="font-black text-zinc-100">
+                {coupon.discountType === 'Percentage'
+                  ? `${Number(coupon.discountValue)}%`
+                  : `€${Number(coupon.discountValue).toFixed(2)}`}
+              </span>
+              <span className="text-zinc-400">{formatDateOnly(coupon.validFrom)}</span>
+              <span className="text-zinc-400">{formatDateOnly(coupon.validTo)}</span>
+              <span className="text-zinc-400">{coupon.minimumDays || '—'}</span>
+              <PillList
+                values={coupon.allowedGroupCodes.length > 0 ? coupon.allowedGroupCodes : ['All groups']}
+                emptyLabel="All groups"
+                tone="cyan"
+              />
+              <span className="text-zinc-400">{coupon.usageLimit || 'Unlimited'}</span>
+              <span
+                className={`w-fit rounded-full border px-2 py-1 text-[10px] font-black ${
+                  coupon.status === 'Active' ? statusStyles.Open : statusStyles.Hidden
+                }`}
+              >
+                {coupon.status}
+              </span>
+              <ActionButtons onEdit={() => onEdit(coupon)} onDelete={() => onDelete(coupon.id)} />
+            </div>
+          ))
+        ) : (
+          <TableEmpty icon={Gift} title="No coupons yet" description="Add a coupon to prepare future promotions." />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function PaymentMethodsPanel({
+  paymentMethods,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  paymentMethods: BookingPaymentMethod[];
+  onAdd: () => void;
+  onEdit: (paymentMethod: BookingPaymentMethod) => void;
+  onDelete: (paymentMethodId: string) => void;
+}) {
+  return (
+    <section className="min-w-[880px]">
+      <PanelHeading
+        title="Payment methods"
+        description="Local checkout payment choices for the future booking engine."
+        buttonLabel="Add Payment Method"
+        onAdd={onAdd}
+      />
+      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
+        <div className="grid grid-cols-[minmax(180px,1fr)_170px_minmax(260px,1.4fr)_180px_110px_90px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
+          <span>Name</span>
+          <span>Type</span>
+          <span>Description</span>
+          <span>Deposit Required</span>
+          <span>Status</span>
+          <span className="text-right">Actions</span>
+        </div>
+        {paymentMethods.length > 0 ? (
+          paymentMethods.map((paymentMethod) => (
+            <div
+              key={paymentMethod.id}
+              className="grid grid-cols-[minmax(180px,1fr)_170px_minmax(260px,1.4fr)_180px_110px_90px] items-center border-b border-white/[0.055] px-4 py-3 text-xs last:border-b-0 hover:bg-white/[0.02]"
+            >
+              <span className="font-black text-zinc-100">{paymentMethod.name}</span>
+              <span className="w-fit rounded-md border border-cyan-200 bg-cyan-50 px-2.5 py-1 font-bold text-cyan-800">
+                {paymentMethod.type}
+              </span>
+              <span className="truncate pr-4 text-zinc-400">
+                {paymentMethod.description || 'No description'}
+              </span>
+              <div>
+                <span
+                  className={`w-fit rounded-full border px-2 py-1 text-[10px] font-black ${
+                    paymentMethod.depositRequired
+                      ? 'border-amber-300 bg-amber-50 text-amber-800'
+                      : 'border-slate-300 bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {paymentMethod.depositRequired ? 'Yes' : 'No'}
+                </span>
+                {paymentMethod.depositRequired && paymentMethod.depositAmount && (
+                  <p className="mt-1 text-[10px] font-bold text-slate-600">
+                    €{Number(paymentMethod.depositAmount).toFixed(2)}
+                  </p>
+                )}
+              </div>
+              <span
+                className={`w-fit rounded-full border px-2 py-1 text-[10px] font-black ${
+                  paymentMethod.status === 'Active' ? statusStyles.Open : statusStyles.Hidden
+                }`}
+              >
+                {paymentMethod.status}
+              </span>
+              <ActionButtons
+                onEdit={() => onEdit(paymentMethod)}
+                onDelete={() => onDelete(paymentMethod.id)}
+              />
+            </div>
+          ))
+        ) : (
+          <TableEmpty
+            icon={CreditCard}
+            title="No payment methods yet"
+            description="Add a local payment method for the future checkout flow."
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function BookingSettingsPanel({
+  settings,
+  adminEmail,
+  sendAdminCopy,
+  savedMessage,
+  onSettingsChange,
+  onAdminEmailChange,
+  onSendAdminCopyChange,
+  onSave,
+}: {
+  settings: BookingEngineSettings;
+  adminEmail: string;
+  sendAdminCopy: boolean;
+  savedMessage: string;
+  onSettingsChange: (settings: BookingEngineSettings) => void;
+  onAdminEmailChange: (email: string) => void;
+  onSendAdminCopyChange: (active: boolean) => void;
+  onSave: () => void;
+}) {
+  const updateSettings = (patch: Partial<BookingEngineSettings>) => {
+    onSettingsChange({ ...settings, ...patch });
+  };
+
+  return (
+    <section className="min-w-[820px]">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-black text-slate-950">Booking settings</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Local reservation defaults and customer-facing booking rules.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onSave}
+          className="inline-flex h-10 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-4 text-sm font-black text-white shadow-sm transition hover:border-cyan-800 hover:bg-cyan-800"
+        >
+          <Check className="h-4 w-4" />
+          Save settings
+        </button>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <BookingSettingCard
+          title="Minimum Advance Booking Rule"
+          description="Define how close to pickup a customer may create a reservation."
+        >
+          <BookingSettingToggle
+            label="Advance booking restriction"
+            description={settings.advanceBookingActive ? 'Active' : 'Inactive'}
+            active={settings.advanceBookingActive}
+            onToggle={(advanceBookingActive) => updateSettings({ advanceBookingActive })}
+          />
+          <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <TextField
+              label="Hours before pickup"
+              value={settings.advanceBookingHours}
+              placeholder="48"
+              type="number"
+              disabled={!settings.advanceBookingActive}
+              onChange={(advanceBookingHours) => updateSettings({ advanceBookingHours })}
+            />
+            <div>
+              <FieldLabel>Quick options</FieldLabel>
+              <div className="mt-2 flex gap-1.5">
+                {['24', '48', '72', '96'].map((hours) => (
+                  <button
+                    key={hours}
+                    type="button"
+                    disabled={!settings.advanceBookingActive}
+                    onClick={() => updateSettings({ advanceBookingHours: hours })}
+                    className={`h-10 rounded-lg border px-3 text-xs font-black transition ${
+                      settings.advanceBookingHours === hours
+                        ? 'border-cyan-700 bg-cyan-700 text-white'
+                        : 'border-slate-300 bg-white text-slate-700 hover:border-cyan-400 hover:text-cyan-800'
+                    } disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400`}
+                  >
+                    {hours}h
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </BookingSettingCard>
+
+        <BookingSettingCard
+          title="Default Language"
+          description="Initial language used by the future public booking experience."
+        >
+          <label className="block">
+            <FieldLabel>Language</FieldLabel>
+            <select
+              value={settings.defaultLanguage}
+              onChange={(event) =>
+                updateSettings({ defaultLanguage: event.target.value as BookingDefaultLanguage })
+              }
+              className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+            >
+              {['English', 'Italian', 'French', 'German', 'Czech', 'Greek'].map((language) => (
+                <option key={language} value={language}>
+                  {language}
+                </option>
+              ))}
+            </select>
+          </label>
+        </BookingSettingCard>
+
+        <BookingSettingCard
+          title="Reservation Status Defaults"
+          description="Default operational status assigned to a newly received reservation."
+        >
+          <label className="block">
+            <FieldLabel>New reservation default status</FieldLabel>
+            <select
+              value={settings.newReservationStatus}
+              onChange={(event) =>
+                updateSettings({
+                  newReservationStatus: event.target.value as NewReservationStatus,
+                })
+              }
+              className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+            >
+              <option value="Pending">Pending</option>
+              <option value="Accepted">Accepted</option>
+              <option value="On Request">On Request</option>
+            </select>
+          </label>
+        </BookingSettingCard>
+
+        <BookingSettingCard
+          title="Terms / Consent"
+          description="Customer acknowledgements displayed in the future booking form."
+        >
+          <div className="space-y-2.5">
+            <BookingSettingToggle
+              label="Rental terms"
+              description="Customer must accept rental terms"
+              active={settings.requireRentalTerms}
+              onToggle={(requireRentalTerms) => updateSettings({ requireRentalTerms })}
+            />
+            <BookingSettingToggle
+              label="Marketing consent"
+              description="Show optional marketing consent checkbox"
+              active={settings.showMarketingConsent}
+              onToggle={(showMarketingConsent) => updateSettings({ showMarketingConsent })}
+            />
+          </div>
+          <div className="mt-3">
+            <TextField
+              label="Terms URL"
+              value={settings.termsUrl}
+              placeholder="https://..."
+              onChange={(termsUrl) => updateSettings({ termsUrl })}
+            />
+          </div>
+        </BookingSettingCard>
+
+        <BookingSettingCard
+          title="Admin Email Copy"
+          description="Uses the same local admin email settings shown in the Emails tab."
+        >
+          <BookingSettingToggle
+            label="Admin reservation copy"
+            description="Send admin email for every reservation"
+            active={sendAdminCopy}
+            onToggle={onSendAdminCopyChange}
+          />
+          <div className="mt-3">
+            <TextField
+              label="Admin email address"
+              value={adminEmail}
+              placeholder="reservations@autoclub-rhodes.com"
+              onChange={onAdminEmailChange}
+            />
+          </div>
+        </BookingSettingCard>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <p className="text-xs text-slate-500">Local state only. No website or reservation workflow is connected.</p>
+        {savedMessage && (
+          <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">
+            {savedMessage}
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SiteSettingsPanel({
+  settings,
+  savedMessage,
+  onSettingsChange,
+  onSave,
+}: {
+  settings: SiteSettings;
+  savedMessage: string;
+  onSettingsChange: (settings: SiteSettings) => void;
+  onSave: () => void;
+}) {
+  const updateSettings = (patch: Partial<SiteSettings>) => {
+    onSettingsChange({ ...settings, ...patch });
+  };
+
+  return (
+    <section className="min-w-[820px]">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-black text-slate-950">Site settings</h3>
+          <p className="mt-1 max-w-3xl text-sm text-slate-600">
+            Local identity and configuration for future multi-site booking engine deployments.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onSave}
+          className="inline-flex h-10 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-4 text-sm font-black text-white shadow-sm transition hover:border-cyan-800 hover:bg-cyan-800"
+        >
+          <Check className="h-4 w-4" />
+          Save settings
+        </button>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <BookingSettingCard
+          title="Site Identity"
+          description="Company identity and the domain assigned to this booking engine instance."
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextField
+              label="Site / Company Name"
+              value={settings.companyName}
+              placeholder="AutoClub Rhodes"
+              onChange={(companyName) => updateSettings({ companyName })}
+            />
+            <TextField
+              label="Domain"
+              value={settings.domain}
+              placeholder="https://example.com"
+              onChange={(domain) => updateSettings({ domain })}
+            />
+          </div>
+          <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-cyan-700">
+                <ImagePlus className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-black text-slate-900">Logo upload</p>
+                <p className="mt-0.5 text-xs text-slate-500">Placeholder only. No file is uploaded yet.</p>
+              </div>
+              <button
+                type="button"
+                className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:border-cyan-500 hover:text-cyan-800"
+              >
+                Choose logo
+              </button>
+            </div>
+          </div>
+        </BookingSettingCard>
+
+        <BookingSettingCard
+          title="Contact & Notifications"
+          description="Administrative contacts used by the future site and reservation workflow."
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextField
+              label="Admin Email"
+              value={settings.adminEmail}
+              placeholder="admin@example.com"
+              onChange={(adminEmail) => updateSettings({ adminEmail })}
+            />
+            <TextField
+              label="Booking Notification Email"
+              value={settings.bookingNotificationEmail}
+              placeholder="reservations@example.com"
+              onChange={(bookingNotificationEmail) => updateSettings({ bookingNotificationEmail })}
+            />
+            <TextField
+              label="WhatsApp Number"
+              value={settings.whatsappNumber}
+              placeholder="+30..."
+              onChange={(whatsappNumber) => updateSettings({ whatsappNumber })}
+              className="sm:col-span-2"
+            />
+          </div>
+        </BookingSettingCard>
+
+        <BookingSettingCard
+          title="Regional Defaults"
+          description="Currency, timezone and language defaults for this site."
+        >
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="block">
+              <FieldLabel>Currency</FieldLabel>
+              <select
+                value={settings.currency}
+                onChange={(event) => updateSettings({ currency: event.target.value })}
+                className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              >
+                <option value="EUR">EUR - Euro</option>
+                <option value="GBP">GBP - Pound</option>
+                <option value="USD">USD - Dollar</option>
+              </select>
+            </label>
+            <label className="block">
+              <FieldLabel>Timezone</FieldLabel>
+              <select
+                value={settings.timezone}
+                onChange={(event) => updateSettings({ timezone: event.target.value })}
+                className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              >
+                <option value="Europe/Athens">Europe/Athens</option>
+                <option value="Europe/Rome">Europe/Rome</option>
+                <option value="Europe/Paris">Europe/Paris</option>
+                <option value="Europe/Berlin">Europe/Berlin</option>
+                <option value="Europe/Prague">Europe/Prague</option>
+                <option value="UTC">UTC</option>
+              </select>
+            </label>
+            <label className="block">
+              <FieldLabel>Default Language</FieldLabel>
+              <select
+                value={settings.defaultLanguage}
+                onChange={(event) =>
+                  updateSettings({ defaultLanguage: event.target.value as BookingDefaultLanguage })
+                }
+                className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              >
+                {['English', 'Italian', 'French', 'German', 'Czech', 'Greek'].map((language) => (
+                  <option key={language} value={language}>
+                    {language}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </BookingSettingCard>
+
+        <BookingSettingCard
+          title="Legal & Site Status"
+          description="Public policy links and internal activation state for this site."
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextField
+              label="Terms URL"
+              value={settings.termsUrl}
+              placeholder="https://example.com/terms"
+              onChange={(termsUrl) => updateSettings({ termsUrl })}
+            />
+            <TextField
+              label="Privacy Policy URL"
+              value={settings.privacyPolicyUrl}
+              placeholder="https://example.com/privacy"
+              onChange={(privacyPolicyUrl) => updateSettings({ privacyPolicyUrl })}
+            />
+            <label className="block sm:col-span-2">
+              <FieldLabel>Site Status</FieldLabel>
+              <select
+                value={settings.status}
+                onChange={(event) => updateSettings({ status: event.target.value as SeasonStatus })}
+                className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </label>
+          </div>
+        </BookingSettingCard>
+
+        <BookingSettingCard
+          title="Internal Notes"
+          description="Private context for staff managing this future site connection."
+        >
+          <label className="block">
+            <FieldLabel>Notes</FieldLabel>
+            <textarea
+              value={settings.internalNotes}
+              onChange={(event) => updateSettings({ internalNotes: event.target.value })}
+              rows={4}
+              placeholder="Internal setup notes, rollout details or domain-specific requirements..."
+              className="mt-2 w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+            />
+          </label>
+        </BookingSettingCard>
+
+        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm xl:col-span-2">
+          <p className="text-xs text-slate-500">
+            Local state only. No domain, website, storage or notification service is connected.
+          </p>
+          {savedMessage && (
+            <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">
+              {savedMessage}
+            </span>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EmailsPanel({
+  settings,
+  savedMessage,
+  onSettingsChange,
+  onSave,
+}: {
+  settings: BookingEmailSettings;
+  savedMessage: string;
+  onSettingsChange: (settings: BookingEmailSettings) => void;
+  onSave: () => void;
+}) {
+  const updateSettings = (patch: Partial<BookingEmailSettings>) => {
+    onSettingsChange({ ...settings, ...patch });
+  };
+  const templateElementsRef = useRef<
+    Partial<Record<EmailTemplateFieldKey, HTMLInputElement | HTMLTextAreaElement>>
+  >({});
+  const focusedTemplateFieldRef = useRef<EmailTemplateFieldKey | null>(null);
+  const activeMessageFieldRef = useRef<EmailTemplateFieldKey>('adminMessage');
+  const [manualPreviewMessage, setManualPreviewMessage] = useState('');
+
+  const handleTemplateFocus = (
+    field: EmailTemplateFieldKey,
+    element: HTMLInputElement | HTMLTextAreaElement,
+  ) => {
+    focusedTemplateFieldRef.current = field;
+    templateElementsRef.current[field] = element;
+    if (field.endsWith('Message')) activeMessageFieldRef.current = field;
+  };
+
+  const insertTemplateVariable = (variable: string) => {
+    const field = focusedTemplateFieldRef.current || activeMessageFieldRef.current;
+    const element = templateElementsRef.current[field];
+    const currentValue = settings[field];
+    const selectionStart = element?.selectionStart ?? currentValue.length;
+    const selectionEnd = element?.selectionEnd ?? selectionStart;
+    const nextValue =
+      currentValue.slice(0, selectionStart) + variable + currentValue.slice(selectionEnd);
+    const nextCaretPosition = selectionStart + variable.length;
+
+    updateSettings({ [field]: nextValue });
+    requestAnimationFrame(() => {
+      const target = templateElementsRef.current[field];
+      target?.focus();
+      target?.setSelectionRange(nextCaretPosition, nextCaretPosition);
+    });
+  };
+
+  const showManualPreview = (label: string) => {
+    setManualPreviewMessage(`${label}: manual preview only — email provider not connected yet.`);
+  };
+
+  return (
+    <section className="min-w-[820px]">
+      <div className="mb-3 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-black text-slate-950">Email settings</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Local notification and customer template setup. No email provider is connected.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onSave}
+          className="inline-flex h-10 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-4 text-sm font-black text-white shadow-sm transition hover:border-cyan-800 hover:bg-cyan-800"
+        >
+          <Check className="h-4 w-4" />
+          Save settings
+        </button>
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_270px]">
+        <div className="space-y-3">
+          <EmailSettingsCard
+            icon={Mail}
+            title="Admin Notification"
+            description="Notify the administration team whenever a new reservation arrives."
+            active={settings.adminNotificationActive}
+            toggleLabel="Send admin email for every new reservation"
+            onToggle={(adminNotificationActive) => updateSettings({ adminNotificationActive })}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TextField
+                label="Admin email address"
+                value={settings.adminEmail}
+                placeholder="reservations@autoclub-rhodes.com"
+                className="sm:col-span-2"
+                onChange={(adminEmail) => updateSettings({ adminEmail })}
+              />
+              <EmailTemplateField
+                fieldKey="adminSubject"
+                label="Subject template"
+                value={settings.adminSubject}
+                onElement={(element) => {
+                  templateElementsRef.current.adminSubject = element;
+                }}
+                onFocus={handleTemplateFocus}
+                onChange={(adminSubject) => updateSettings({ adminSubject })}
+              />
+              <EmailTemplateField
+                fieldKey="adminMessage"
+                label="Message template"
+                value={settings.adminMessage}
+                multiline
+                onElement={(element) => {
+                  templateElementsRef.current.adminMessage = element;
+                }}
+                onFocus={handleTemplateFocus}
+                onChange={(adminMessage) => updateSettings({ adminMessage })}
+              />
+            </div>
+            <ManualEmailButton
+              label="Send admin notification manually"
+              onClick={() => showManualPreview('Admin notification')}
+            />
+          </EmailSettingsCard>
+
+          <EmailSettingsCard
+            icon={Check}
+            title="Customer Confirmation Email"
+            description="Confirmation sent to the customer after a reservation is accepted."
+            active={settings.customerConfirmationActive}
+            toggleLabel={settings.customerConfirmationActive ? 'Active' : 'Inactive'}
+            onToggle={(customerConfirmationActive) => updateSettings({ customerConfirmationActive })}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <EmailTemplateField
+                fieldKey="customerConfirmationSubject"
+                label="Subject template"
+                value={settings.customerConfirmationSubject}
+                onElement={(element) => {
+                  templateElementsRef.current.customerConfirmationSubject = element;
+                }}
+                onFocus={handleTemplateFocus}
+                onChange={(customerConfirmationSubject) =>
+                  updateSettings({ customerConfirmationSubject })
+                }
+              />
+              <EmailTemplateField
+                fieldKey="customerConfirmationMessage"
+                label="Message template"
+                value={settings.customerConfirmationMessage}
+                multiline
+                onElement={(element) => {
+                  templateElementsRef.current.customerConfirmationMessage = element;
+                }}
+                onFocus={handleTemplateFocus}
+                onChange={(customerConfirmationMessage) =>
+                  updateSettings({ customerConfirmationMessage })
+                }
+              />
+            </div>
+            <ManualEmailButton
+              label="Send customer confirmation manually"
+              onClick={() => showManualPreview('Customer confirmation')}
+            />
+          </EmailSettingsCard>
+
+          <EmailSettingsCard
+            icon={CalendarRange}
+            title="Reminder Email"
+            description="Prepare an automatic reminder before the scheduled vehicle pickup."
+            active={settings.reminderActive}
+            toggleLabel={settings.reminderActive ? 'Active' : 'Inactive'}
+            onToggle={(reminderActive) => updateSettings({ reminderActive })}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <FieldLabel>Reminder timing</FieldLabel>
+                <select
+                  value={settings.reminderTiming}
+                  onChange={(event) =>
+                    updateSettings({ reminderTiming: event.target.value as ReminderTiming })
+                  }
+                  className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+                >
+                  <option value="96 hours before pickup">96 hours before pickup</option>
+                  <option value="48 hours before pickup">48 hours before pickup</option>
+                  <option value="24 hours before pickup">24 hours before pickup</option>
+                  <option value="Custom hours before pickup">Custom hours before pickup</option>
+                </select>
+              </label>
+              {settings.reminderTiming === 'Custom hours before pickup' && (
+                <TextField
+                  label="Custom hours before pickup"
+                  value={settings.reminderCustomHours}
+                  placeholder="e.g. 36"
+                  type="number"
+                  onChange={(reminderCustomHours) => updateSettings({ reminderCustomHours })}
+                />
+              )}
+              <EmailTemplateField
+                fieldKey="reminderSubject"
+                label="Subject template"
+                value={settings.reminderSubject}
+                onElement={(element) => {
+                  templateElementsRef.current.reminderSubject = element;
+                }}
+                onFocus={handleTemplateFocus}
+                onChange={(reminderSubject) => updateSettings({ reminderSubject })}
+              />
+              <EmailTemplateField
+                fieldKey="reminderMessage"
+                label="Message template"
+                value={settings.reminderMessage}
+                multiline
+                onElement={(element) => {
+                  templateElementsRef.current.reminderMessage = element;
+                }}
+                onFocus={handleTemplateFocus}
+                onChange={(reminderMessage) => updateSettings({ reminderMessage })}
+              />
+            </div>
+            <ManualEmailButton
+              label="Send reminder manually"
+              onClick={() => showManualPreview('Reminder email')}
+            />
+          </EmailSettingsCard>
+        </div>
+
+        <aside className="h-fit rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm xl:sticky xl:top-0">
+          <div className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700">
+              <Settings2 className="h-4 w-4" />
+            </span>
+            <div>
+              <h4 className="text-sm font-black text-slate-950">Template variables</h4>
+              <p className="mt-0.5 text-xs text-slate-500">Available in subjects and messages.</p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {emailTemplateVariables.map((variable) => (
+              <button
+                key={variable}
+                type="button"
+                onClick={() => insertTemplateVariable(variable)}
+                title={`Insert ${variable}`}
+                className="rounded-md border border-cyan-300 bg-cyan-50 px-2 py-1 font-mono text-[11px] font-bold text-cyan-800 transition hover:border-cyan-500 hover:bg-cyan-100 focus:outline-none focus:ring-2 focus:ring-cyan-200"
+              >
+                {variable}
+              </button>
+            ))}
+          </div>
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+            <p className="text-xs font-bold text-amber-900">Local preview only</p>
+            <p className="mt-1 text-[11px] leading-5 text-slate-600">
+              Saving keeps these values in component state until the page reloads.
+            </p>
+          </div>
+          {savedMessage && (
+            <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-bold text-emerald-800">
+              {savedMessage}
+            </p>
+          )}
+          {manualPreviewMessage && (
+            <p className="mt-3 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2.5 text-xs font-bold leading-5 text-cyan-800">
+              {manualPreviewMessage}
+            </p>
+          )}
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function GroupModal({
+  draft,
+  editing,
+  groups,
+  editingGroupId,
+  onDraftChange,
+  onClose,
+  onSave,
+}: {
+  draft: GroupDraft;
+  editing: boolean;
+  groups: BookingGroup[];
+  editingGroupId: string | null;
+  onDraftChange: (draft: GroupDraft | ((current: GroupDraft) => GroupDraft)) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const normalizedCode = draft.code.trim().toLowerCase();
+  const duplicateCode = Boolean(
+    normalizedCode &&
+      groups.some((group) => group.id !== editingGroupId && group.code.toLowerCase() === normalizedCode),
+  );
+
+  return (
+    <ModalShell
+      eyebrow="Vehicle groups"
+      title={editing ? 'Edit Group' : 'Add Group'}
+      onClose={onClose}
+      maxWidth="max-w-xl"
+      footer={
+        <ModalActions
+          note="Active groups feed Cars and Pricing / Seasons immediately."
+          onClose={onClose}
+          onSave={onSave}
+          saveLabel={editing ? 'Save changes' : 'Add group'}
+          disabled={!draft.code.trim() || !draft.name.trim() || duplicateCode}
+        />
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextField
+          label="Group code"
+          value={draft.code}
+          placeholder="A, B, C, D1..."
+          onChange={(code) => onDraftChange((current) => ({ ...current, code }))}
+        />
+        <TextField
+          label="Group name"
+          value={draft.name}
+          placeholder="e.g. Small Economy"
+          onChange={(name) => onDraftChange((current) => ({ ...current, name }))}
+        />
+        <label className="flex items-center gap-3 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-3 sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={draft.active}
+            onChange={(event) => onDraftChange((current) => ({ ...current, active: event.target.checked }))}
+            className="h-4 w-4 accent-cyan-400"
+          />
+          <span>
+            <span className="block text-xs font-bold text-zinc-200">Active group</span>
+            <span className="mt-0.5 block text-[11px] text-zinc-600">
+              Available in Cars and Pricing / Seasons selectors.
+            </span>
+          </span>
+        </label>
+        <label className="block sm:col-span-2">
+          <FieldLabel>Notes optional</FieldLabel>
+          <textarea
+            value={draft.notes}
+            onChange={(event) => onDraftChange((current) => ({ ...current, notes: event.target.value }))}
+            rows={3}
+            placeholder="Internal group note"
+            className="mt-2 w-full resize-none rounded-lg border border-white/[0.1] bg-black/25 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-cyan-300/35"
+          />
+        </label>
+        {duplicateCode && (
+          <p className="sm:col-span-2 rounded-lg border border-rose-300/20 bg-rose-300/[0.06] px-3 py-2 text-xs font-bold text-rose-200">
+            This group code already exists.
+          </p>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+function CarModal({
+  draft,
+  editing,
+  activeGroups,
+  activeLocations,
+  features,
+  onDraftChange,
+  onToggleLocation,
+  onToggleFeature,
+  onClose,
+  onSave,
+}: {
+  draft: CarDraft;
+  editing: boolean;
+  activeGroups: BookingGroup[];
+  activeLocations: BookingLocation[];
+  features: BookingFeature[];
+  onDraftChange: (draft: CarDraft | ((current: CarDraft) => CarDraft)) => void;
+  onToggleLocation: (id: string) => void;
+  onToggleFeature: (id: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <ModalShell
+      eyebrow="Cars catalogue"
+      title={editing ? 'Edit Car / Category' : 'Add Car / Category'}
+      onClose={onClose}
+      footer={
+        <ModalActions
+          note="Local preview only. Nothing is uploaded or saved remotely."
+          onClose={onClose}
+          onSave={onSave}
+          saveLabel={editing ? 'Save changes' : 'Add record'}
+          disabled={!draft.name.trim() || !draft.groupCode.trim()}
+        />
+      }
+    >
+      <div className="grid gap-5 md:grid-cols-[190px_1fr]">
+        <div>
+          <FieldLabel>Photo</FieldLabel>
+          <button
+            type="button"
+            className="mt-2 flex aspect-[4/3] w-full flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.14] bg-white/[0.025] text-zinc-500 transition hover:border-cyan-300/25 hover:text-cyan-200"
+          >
+            <ImagePlus className="h-7 w-7" strokeWidth={1.5} />
+            <span className="mt-2 text-xs font-bold">Upload placeholder</span>
+            <span className="mt-1 text-[10px] text-zinc-600">No file is stored</span>
+          </button>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            label="Car/category name"
+            value={draft.name}
+            placeholder="e.g. Peugeot 108 or similar"
+            className="sm:col-span-2"
+            onChange={(name) => onDraftChange((current) => ({ ...current, name }))}
+          />
+          <label className="block">
+            <FieldLabel>Category / Group</FieldLabel>
+            <select
+              value={draft.groupCode}
+              onChange={(event) => onDraftChange((current) => ({ ...current, groupCode: event.target.value }))}
+              className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+            >
+              <option value="">Select active group</option>
+              {activeGroups.map((group) => (
+                <option key={group.id} value={group.code}>
+                  {group.code} - {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <FieldLabel>Status</FieldLabel>
+            <select
+              value={draft.status}
+              onChange={(event) => onDraftChange((current) => ({ ...current, status: event.target.value as CarStatus }))}
+              className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+            >
+              <option value="Open">Open</option>
+              <option value="On Request">On Request</option>
+              <option value="Hidden">Hidden</option>
+            </select>
+          </label>
+          <label className="block sm:col-span-2">
+            <FieldLabel>Description</FieldLabel>
+            <textarea
+              value={draft.description}
+              onChange={(event) => onDraftChange((current) => ({ ...current, description: event.target.value }))}
+              rows={3}
+              placeholder="Short website description"
+              className="mt-2 w-full resize-none rounded-lg border border-white/[0.1] bg-black/25 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-cyan-300/35"
+            />
+          </label>
+        </div>
+      </div>
+
+      <CheckboxSection
+        title="Included features"
+        description="Managed from the Features tab."
+        items={features}
+        selectedIds={draft.featureIds}
+        emptyLabel="Add features in the Features tab first."
+        onToggle={onToggleFeature}
+      />
+
+      <CheckboxSection
+        title="Display locations"
+        description="Only active locations from the Locations tab are available."
+        items={activeLocations}
+        selectedIds={draft.locationIds}
+        emptyLabel="No active locations. Add or activate one in the Locations tab."
+        onToggle={onToggleLocation}
+      />
+    </ModalShell>
+  );
+}
+
+function SeasonPriceModal({
+  draft,
+  editing,
+  activeGroups,
+  onDraftChange,
+  onClose,
+  onSave,
+}: {
+  draft: SeasonPriceDraft;
+  editing: boolean;
+  activeGroups: BookingGroup[];
+  onDraftChange: (draft: SeasonPriceDraft | ((current: SeasonPriceDraft) => SeasonPriceDraft)) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const invalidDateRange = Boolean(draft.fromDate && draft.toDate && draft.toDate < draft.fromDate);
+  const invalidTiers = draft.tiers.some(
+    (tier) =>
+      !tier.fromDays ||
+      !tier.toDays ||
+      !tier.pricePerDay ||
+      Number(tier.fromDays) < 1 ||
+      Number(tier.toDays) < Number(tier.fromDays) ||
+      Number(tier.pricePerDay) <= 0,
+  );
+  const saveDisabled =
+    !draft.groupCode ||
+    !draft.seasonName.trim() ||
+    !draft.fromDate ||
+    !draft.toDate ||
+    draft.tiers.length === 0 ||
+    invalidTiers ||
+    invalidDateRange;
+
+  const updateTier = (tierId: string, patch: Partial<PricingTier>) => {
+    onDraftChange((current) => ({
+      ...current,
+      tiers: current.tiers.map((tier) => (tier.id === tierId ? { ...tier, ...patch } : tier)),
+    }));
+  };
+
+  const addTier = () => {
+    onDraftChange((current) => ({
+      ...current,
+      tiers: [
+        ...current.tiers,
+        { id: localId('pricing-tier'), fromDays: '', toDays: '', pricePerDay: '' },
+      ],
+    }));
+  };
+
+  const deleteTier = (tierId: string) => {
+    onDraftChange((current) => ({
+      ...current,
+      tiers: current.tiers.filter((tier) => tier.id !== tierId),
+    }));
+  };
+
+  return (
+    <ModalShell
+      eyebrow="Pricing / Seasons"
+      title={editing ? 'Edit Season Price' : 'Add Season Price'}
+      onClose={onClose}
+      maxWidth="max-w-3xl"
+      footer={
+        <ModalActions
+          note="Local category pricing only. No availability or booking calculation is connected."
+          onClose={onClose}
+          onSave={onSave}
+          saveLabel={editing ? 'Save changes' : 'Add season price'}
+          disabled={saveDisabled}
+        />
+      }
+    >
+      {activeGroups.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <FieldLabel>Category / Group</FieldLabel>
+            <select
+              value={draft.groupCode}
+              onChange={(event) => onDraftChange((current) => ({ ...current, groupCode: event.target.value }))}
+              className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+            >
+              <option value="">Select group</option>
+              {activeGroups.map((group) => (
+                <option key={group.id} value={group.code}>
+                  {group.code} - {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <TextField
+            label="Season name"
+            value={draft.seasonName}
+            placeholder="e.g. Peak Season"
+            onChange={(seasonName) => onDraftChange((current) => ({ ...current, seasonName }))}
+          />
+          <TextField
+            label="From date"
+            value={draft.fromDate}
+            placeholder=""
+            type="date"
+            onChange={(fromDate) => onDraftChange((current) => ({ ...current, fromDate }))}
+          />
+          <TextField
+            label="To date"
+            value={draft.toDate}
+            placeholder=""
+            type="date"
+            onChange={(toDate) => onDraftChange((current) => ({ ...current, toDate }))}
+          />
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.018] p-4 sm:col-span-2">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <FieldLabel>Pricing tiers</FieldLabel>
+                <p className="mt-1 text-[11px] text-zinc-600">
+                  Define each rental-day range and its price per day.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={addTier}
+                className="inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-lg border border-cyan-700 bg-cyan-700 px-3 text-xs font-black text-white transition hover:border-cyan-800 hover:bg-cyan-800"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add pricing tier
+              </button>
+            </div>
+            <div className="mt-3 space-y-2">
+              <div className="grid grid-cols-[1fr_1fr_1.2fr_40px] gap-2 px-1 text-[10px] font-black uppercase tracking-[0.06em] text-slate-500">
+                <span>From rental days</span>
+                <span>To rental days</span>
+                <span>Price per day</span>
+                <span />
+              </div>
+              {draft.tiers.map((tier) => (
+                <div
+                  key={tier.id}
+                  className="grid grid-cols-[1fr_1fr_1.2fr_40px] items-center gap-2 rounded-lg border border-slate-200 bg-white p-2"
+                >
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={tier.fromDays}
+                    onChange={(event) => updateTier(tier.id, { fromDays: event.target.value })}
+                    placeholder="1"
+                    aria-label="From rental days"
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={tier.toDays}
+                    onChange={(event) => updateTier(tier.id, { toDays: event.target.value })}
+                    placeholder="7"
+                    aria-label="To rental days"
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500"
+                  />
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-500">
+                      €
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={tier.pricePerDay}
+                      onChange={(event) => updateTier(tier.id, { pricePerDay: event.target.value })}
+                      placeholder="0.00"
+                      aria-label="Price per day"
+                      className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-7 pr-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => deleteTier(tier.id)}
+                    title="Delete pricing tier"
+                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-600 transition hover:border-rose-300 hover:bg-rose-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              {draft.tiers.length === 0 && (
+                <p className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-500">
+                  Add at least one pricing tier.
+                </p>
+              )}
+            </div>
+          </div>
+          <label className="block">
+            <FieldLabel>Website Booking Mode</FieldLabel>
+            <select
+              value={draft.websiteMode}
+              onChange={(event) =>
+                onDraftChange((current) => ({
+                  ...current,
+                  websiteMode: event.target.value as CarStatus,
+                }))
+              }
+              className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+            >
+              <option value="Open">Open</option>
+              <option value="On Request">On Request</option>
+              <option value="Hidden">Hidden</option>
+            </select>
+            <p className="mt-2 text-[11px] leading-5 text-slate-500">
+              Controls how this group appears on the website for this date range.
+            </p>
+          </label>
+          <label className="block sm:col-span-2">
+            <FieldLabel>Notes optional</FieldLabel>
+            <textarea
+              value={draft.notes}
+              onChange={(event) => onDraftChange((current) => ({ ...current, notes: event.target.value }))}
+              rows={3}
+              placeholder="Internal pricing note"
+              className="mt-2 w-full resize-none rounded-lg border border-white/[0.1] bg-black/25 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-cyan-300/35"
+            />
+          </label>
+          {invalidDateRange && (
+            <p className="sm:col-span-2 rounded-lg border border-rose-300/20 bg-rose-300/[0.06] px-3 py-2 text-xs font-bold text-rose-200">
+              To Date cannot be before From Date.
+            </p>
+          )}
+          {invalidTiers && draft.tiers.length > 0 && (
+            <p className="sm:col-span-2 rounded-lg border border-rose-300/20 bg-rose-300/[0.06] px-3 py-2 text-xs font-bold text-rose-700">
+              Each tier needs a valid day range and a price greater than zero.
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-amber-300/20 bg-amber-300/[0.055] p-4">
+          <p className="text-sm font-bold text-amber-100">No car groups are available.</p>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">Add a car/category in the Cars tab before creating season pricing.</p>
+        </div>
+      )}
+    </ModalShell>
+  );
+}
+
+function LocationModal({
+  draft,
+  editing,
+  onDraftChange,
+  onClose,
+  onSave,
+}: {
+  draft: LocationDraft;
+  editing: boolean;
+  onDraftChange: (draft: LocationDraft | ((current: LocationDraft) => LocationDraft)) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <ModalShell
+      eyebrow="Locations"
+      title={editing ? 'Edit Location' : 'Add Location'}
+      onClose={onClose}
+      maxWidth="max-w-xl"
+      footer={
+        <ModalActions
+          note="Active locations feed the Cars tab immediately."
+          onClose={onClose}
+          onSave={onSave}
+          saveLabel={editing ? 'Save changes' : 'Add location'}
+          disabled={!draft.name.trim()}
+        />
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextField
+          label="Location name"
+          value={draft.name}
+          placeholder="e.g. Rhodes Port"
+          className="sm:col-span-2"
+          onChange={(name) => onDraftChange((current) => ({ ...current, name }))}
+        />
+        <label className="block">
+          <FieldLabel>Type</FieldLabel>
+          <select
+            value={draft.type}
+            onChange={(event) => onDraftChange((current) => ({ ...current, type: event.target.value as LocationType }))}
+            className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+          >
+            <option value="airport">Airport</option>
+            <option value="town">Town</option>
+            <option value="hotel">Hotel</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <TextField
+          label="Optional fee"
+          value={draft.fee}
+          placeholder="0.00"
+          type="number"
+          onChange={(fee) => onDraftChange((current) => ({ ...current, fee }))}
+        />
+        <label className="flex items-center gap-3 rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-3 sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={draft.active}
+            onChange={(event) => onDraftChange((current) => ({ ...current, active: event.target.checked }))}
+            className="h-4 w-4 accent-cyan-400"
+          />
+          <span>
+            <span className="block text-xs font-bold text-zinc-200">Active location</span>
+            <span className="mt-0.5 block text-[11px] text-zinc-600">Available as a checkbox in the Cars editor.</span>
+          </span>
+        </label>
+      </div>
+    </ModalShell>
+  );
+}
+
+function FeatureModal({
+  draft,
+  editing,
+  onDraftChange,
+  onClose,
+  onSave,
+}: {
+  draft: FeatureDraft;
+  editing: boolean;
+  onDraftChange: (draft: FeatureDraft) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <ModalShell
+      eyebrow="Included features"
+      title={editing ? 'Edit Feature' : 'Add Feature'}
+      onClose={onClose}
+      maxWidth="max-w-lg"
+      footer={
+        <ModalActions
+          note="Feature options feed the Cars editor immediately."
+          onClose={onClose}
+          onSave={onSave}
+          saveLabel={editing ? 'Save changes' : 'Add feature'}
+          disabled={!draft.name.trim()}
+        />
+      }
+    >
+      <TextField
+        label="Feature name"
+        value={draft.name}
+        placeholder="e.g. Bluetooth"
+        onChange={(name) => onDraftChange({ name })}
+      />
+    </ModalShell>
+  );
+}
+
+function ExtraModal({
+  draft,
+  editing,
+  onDraftChange,
+  onClose,
+  onSave,
+}: {
+  draft: ExtraDraft;
+  editing: boolean;
+  onDraftChange: (draft: ExtraDraft | ((current: ExtraDraft) => ExtraDraft)) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const priceRequired = draft.pricingMode !== 'Free';
+
+  return (
+    <ModalShell
+      eyebrow="Booking extras"
+      title={editing ? 'Edit Extra' : 'Add Extra'}
+      onClose={onClose}
+      maxWidth="max-w-2xl"
+      footer={
+        <ModalActions
+          note="Local UI only. No booking calculation or website connection is active."
+          onClose={onClose}
+          onSave={onSave}
+          saveLabel={editing ? 'Save changes' : 'Add extra'}
+          disabled={!draft.name.trim() || (priceRequired && !draft.price)}
+        />
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextField
+          label="Name"
+          value={draft.name}
+          placeholder="e.g. Baby Seat"
+          className="sm:col-span-2"
+          onChange={(name) => onDraftChange((current) => ({ ...current, name }))}
+        />
+        <label className="block sm:col-span-2">
+          <FieldLabel>Description</FieldLabel>
+          <textarea
+            value={draft.description}
+            onChange={(event) => onDraftChange((current) => ({ ...current, description: event.target.value }))}
+            rows={3}
+            placeholder="Short customer-facing description"
+            className="mt-2 w-full resize-none rounded-lg border border-white/[0.1] bg-black/25 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-cyan-300/35"
+          />
+        </label>
+        <label className="block">
+          <FieldLabel>Pricing Mode</FieldLabel>
+          <select
+            value={draft.pricingMode}
+            onChange={(event) => {
+              const pricingMode = event.target.value as ExtraPricingMode;
+              onDraftChange((current) => ({
+                ...current,
+                pricingMode,
+                price: pricingMode === 'Free' ? '0' : current.price === '0' ? '' : current.price,
+              }));
+            }}
+            className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+          >
+            <option value="Per Day">Per Day</option>
+            <option value="Per Booking">Per Booking</option>
+            <option value="Free">Free</option>
+          </select>
+        </label>
+        <TextField
+          label="Price"
+          value={draft.pricingMode === 'Free' ? '0' : draft.price}
+          placeholder="0.00"
+          type="number"
+          onChange={(price) => onDraftChange((current) => ({ ...current, price }))}
+          disabled={draft.pricingMode === 'Free'}
+        />
+        <label className="block">
+          <FieldLabel>Status</FieldLabel>
+          <select
+            value={draft.status}
+            onChange={(event) =>
+              onDraftChange((current) => ({ ...current, status: event.target.value as SeasonStatus }))
+            }
+            className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+          >
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </label>
+        <TextField
+          label="Maximum quantity optional"
+          value={draft.maximumQuantity}
+          placeholder="No limit"
+          type="number"
+          onChange={(maximumQuantity) => onDraftChange((current) => ({ ...current, maximumQuantity }))}
+        />
+      </div>
+    </ModalShell>
+  );
+}
+
+function CouponModal({
+  draft,
+  editing,
+  coupons,
+  editingCouponId,
+  activeGroups,
+  onDraftChange,
+  onToggleGroup,
+  onClose,
+  onSave,
+}: {
+  draft: CouponDraft;
+  editing: boolean;
+  coupons: BookingCoupon[];
+  editingCouponId: string | null;
+  activeGroups: BookingGroup[];
+  onDraftChange: (draft: CouponDraft | ((current: CouponDraft) => CouponDraft)) => void;
+  onToggleGroup: (groupCode: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const normalizedCode = draft.code.trim().toLowerCase();
+  const duplicateCode = Boolean(
+    normalizedCode &&
+      coupons.some(
+        (coupon) => coupon.id !== editingCouponId && coupon.code.toLowerCase() === normalizedCode,
+      ),
+  );
+  const invalidDateRange = Boolean(draft.validFrom && draft.validTo && draft.validTo < draft.validFrom);
+  const invalidValue = !draft.discountValue || Number(draft.discountValue) <= 0;
+  const saveDisabled =
+    !draft.code.trim() ||
+    invalidValue ||
+    !draft.validFrom ||
+    !draft.validTo ||
+    invalidDateRange ||
+    duplicateCode;
+
+  return (
+    <ModalShell
+      eyebrow="Coupons"
+      title={editing ? 'Edit Coupon' : 'Add Coupon'}
+      onClose={onClose}
+      maxWidth="max-w-3xl"
+      footer={
+        <ModalActions
+          note="Local UI only. No price calculation or website integration is connected."
+          onClose={onClose}
+          onSave={onSave}
+          saveLabel={editing ? 'Save changes' : 'Add coupon'}
+          disabled={saveDisabled}
+        />
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextField
+          label="Coupon code"
+          value={draft.code}
+          placeholder="e.g. SUMMER10"
+          onChange={(code) => onDraftChange((current) => ({ ...current, code: code.toUpperCase() }))}
+        />
+        <label className="block">
+          <FieldLabel>Discount type</FieldLabel>
+          <select
+            value={draft.discountType}
+            onChange={(event) =>
+              onDraftChange((current) => ({
+                ...current,
+                discountType: event.target.value as CouponDiscountType,
+              }))
+            }
+            className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+          >
+            <option value="Percentage">Percentage</option>
+            <option value="Fixed Amount">Fixed Amount</option>
+          </select>
+        </label>
+        <TextField
+          label={draft.discountType === 'Percentage' ? 'Discount value (%)' : 'Discount value (€)'}
+          value={draft.discountValue}
+          placeholder="0.00"
+          type="number"
+          onChange={(discountValue) => onDraftChange((current) => ({ ...current, discountValue }))}
+        />
+        <label className="block">
+          <FieldLabel>Status</FieldLabel>
+          <select
+            value={draft.status}
+            onChange={(event) =>
+              onDraftChange((current) => ({ ...current, status: event.target.value as SeasonStatus }))
+            }
+            className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+          >
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </label>
+        <TextField
+          label="Valid from"
+          value={draft.validFrom}
+          placeholder=""
+          type="date"
+          onChange={(validFrom) => onDraftChange((current) => ({ ...current, validFrom }))}
+        />
+        <TextField
+          label="Valid to"
+          value={draft.validTo}
+          placeholder=""
+          type="date"
+          onChange={(validTo) => onDraftChange((current) => ({ ...current, validTo }))}
+        />
+        <label className="block">
+          <FieldLabel>Minimum rental days optional</FieldLabel>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={draft.minimumDays}
+            onChange={(event) =>
+              onDraftChange((current) => ({ ...current, minimumDays: event.target.value }))
+            }
+            placeholder="No minimum"
+            className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-black/25 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-cyan-300/35"
+          />
+        </label>
+        <label className="block">
+          <FieldLabel>Usage limit optional</FieldLabel>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={draft.usageLimit}
+            onChange={(event) =>
+              onDraftChange((current) => ({ ...current, usageLimit: event.target.value }))
+            }
+            placeholder="Unlimited"
+            className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-black/25 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-cyan-300/35"
+          />
+        </label>
+      </div>
+
+      <div className="mt-5 border-t border-white/[0.07] pt-4">
+        <FieldLabel>Allowed groups</FieldLabel>
+        <p className="mt-1 text-[11px] text-zinc-600">
+          Leave every group unchecked to allow this coupon for all active groups.
+        </p>
+        {activeGroups.length > 0 ? (
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {activeGroups.map((group) => {
+              const selected = draft.allowedGroupCodes.includes(group.code);
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => onToggleGroup(group.code)}
+                  className={`flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-bold transition ${
+                    selected
+                      ? 'border-cyan-300 bg-cyan-50 text-cyan-900'
+                      : 'border-white/[0.08] bg-white/[0.025] text-zinc-500 hover:text-zinc-200'
+                  }`}
+                >
+                  <span
+                    className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${
+                      selected ? 'border-cyan-500 bg-cyan-100 text-cyan-800' : 'border-slate-400'
+                    }`}
+                  >
+                    {selected && <Check className="h-3 w-3" />}
+                  </span>
+                  <span>
+                    <span className="block">{group.code}</span>
+                    <span className="mt-0.5 block font-medium text-slate-500">{group.name}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="mt-3 rounded-lg border border-dashed border-white/[0.08] px-3 py-4 text-xs text-zinc-600">
+            No active groups are available. The coupon will apply to all groups.
+          </p>
+        )}
+      </div>
+
+      {(duplicateCode || invalidDateRange) && (
+        <div className="mt-4 space-y-2">
+          {duplicateCode && (
+            <p className="rounded-lg border border-rose-300/20 bg-rose-300/[0.06] px-3 py-2 text-xs font-bold text-rose-200">
+              This coupon code already exists.
+            </p>
+          )}
+          {invalidDateRange && (
+            <p className="rounded-lg border border-rose-300/20 bg-rose-300/[0.06] px-3 py-2 text-xs font-bold text-rose-200">
+              Valid To cannot be before Valid From.
+            </p>
+          )}
+        </div>
+      )}
+    </ModalShell>
+  );
+}
+
+function PaymentMethodModal({
+  draft,
+  editing,
+  onDraftChange,
+  onClose,
+  onSave,
+}: {
+  draft: PaymentMethodDraft;
+  editing: boolean;
+  onDraftChange: (
+    draft: PaymentMethodDraft | ((current: PaymentMethodDraft) => PaymentMethodDraft)
+  ) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const saveDisabled = !draft.name.trim();
+
+  return (
+    <ModalShell
+      eyebrow="Payment Methods"
+      title={editing ? 'Edit Payment Method' : 'Add Payment Method'}
+      onClose={onClose}
+      maxWidth="max-w-2xl"
+      footer={
+        <ModalActions
+          note="Local UI only. No payment provider or website checkout is connected."
+          onClose={onClose}
+          onSave={onSave}
+          saveLabel={editing ? 'Save changes' : 'Add payment method'}
+          disabled={saveDisabled}
+        />
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextField
+          label="Name"
+          value={draft.name}
+          placeholder="e.g. Pay on Arrival"
+          onChange={(name) => onDraftChange((current) => ({ ...current, name }))}
+        />
+        <label className="block">
+          <FieldLabel>Type</FieldLabel>
+          <select
+            value={draft.type}
+            onChange={(event) =>
+              onDraftChange((current) => ({
+                ...current,
+                type: event.target.value as PaymentMethodType,
+              }))
+            }
+            className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+          >
+            <option value="Pay on Arrival">Pay on Arrival</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+            <option value="Payment Link">Payment Link</option>
+            <option value="Card">Card</option>
+            <option value="Custom">Custom</option>
+          </select>
+        </label>
+
+        <label className="block sm:col-span-2">
+          <FieldLabel>Description</FieldLabel>
+          <textarea
+            value={draft.description}
+            onChange={(event) =>
+              onDraftChange((current) => ({ ...current, description: event.target.value }))
+            }
+            rows={3}
+            placeholder="Short customer-facing payment description"
+            className="mt-2 w-full resize-none rounded-lg border border-white/[0.1] bg-black/25 px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-cyan-300/35"
+          />
+        </label>
+
+        <label className="block">
+          <FieldLabel>Deposit required</FieldLabel>
+          <select
+            value={draft.depositRequired ? 'yes' : 'no'}
+            onChange={(event) => {
+              const depositRequired = event.target.value === 'yes';
+              onDraftChange((current) => ({
+                ...current,
+                depositRequired,
+                depositAmount: depositRequired ? current.depositAmount : '',
+              }));
+            }}
+            className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </label>
+
+        <TextField
+          label="Deposit amount optional"
+          value={draft.depositAmount}
+          placeholder={draft.depositRequired ? '0.00' : 'No deposit'}
+          type="number"
+          disabled={!draft.depositRequired}
+          onChange={(depositAmount) =>
+            onDraftChange((current) => ({ ...current, depositAmount }))
+          }
+        />
+
+        <label className="block">
+          <FieldLabel>Status</FieldLabel>
+          <select
+            value={draft.status}
+            onChange={(event) =>
+              onDraftChange((current) => ({
+                ...current,
+                status: event.target.value as SeasonStatus,
+              }))
+            }
+            className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+          >
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </label>
+      </div>
+    </ModalShell>
+  );
+}
+
+function BookingSettingCard({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 border-b border-slate-200 pb-3">
+        <h4 className="text-base font-black text-slate-950">{title}</h4>
+        <p className="mt-1 text-sm leading-5 text-slate-600">{description}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function BookingSettingToggle({
+  label,
+  description,
+  active,
+  onToggle,
+}: {
+  label: string;
+  description: string;
+  active: boolean;
+  onToggle: (active: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      onClick={() => onToggle(!active)}
+      className="flex w-full items-center justify-between gap-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-slate-300 hover:bg-slate-100"
+    >
+      <span>
+        <span className="block text-sm font-bold text-slate-900">{label}</span>
+        <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
+      </span>
+      <span
+        className={`relative h-6 w-11 flex-shrink-0 rounded-full transition ${
+          active ? 'bg-emerald-600' : 'bg-slate-300'
+        }`}
+      >
+        <span
+          className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${
+            active ? 'left-6' : 'left-1'
+          }`}
+        />
+      </span>
+    </button>
+  );
+}
+
+function EmailSettingsCard({
+  icon: Icon,
+  title,
+  description,
+  active,
+  toggleLabel,
+  onToggle,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  active: boolean;
+  toggleLabel: string;
+  onToggle: (active: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700">
+            <Icon className="h-4 w-4" />
+          </span>
+          <div>
+            <h4 className="text-base font-black text-slate-950">{title}</h4>
+            <p className="mt-1 text-sm leading-5 text-slate-600">{description}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={active}
+          onClick={() => onToggle(!active)}
+          className={`flex min-h-10 flex-shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-black transition ${
+            active
+              ? 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
+              : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-50'
+          }`}
+        >
+          <span
+            className={`relative h-5 w-9 rounded-full transition ${
+              active ? 'bg-white/30' : 'bg-slate-200'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition ${
+                active ? 'left-[18px]' : 'left-0.5'
+              }`}
+            />
+          </span>
+          {toggleLabel}
+        </button>
+      </div>
+      <div className="pt-3">{children}</div>
+    </section>
+  );
+}
+
+function ManualEmailButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3">
+      <button
+        type="button"
+        onClick={onClick}
+        className="inline-flex h-9 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-3.5 text-xs font-black text-white shadow-sm transition hover:border-cyan-800 hover:bg-cyan-800"
+      >
+        <Mail className="h-3.5 w-3.5" />
+        {label}
+      </button>
+      <span className="text-[11px] font-semibold text-slate-500">Manual preview only · not connected yet</span>
+    </div>
+  );
+}
+
+function EmailTemplateField({
+  fieldKey,
+  label,
+  value,
+  onChange,
+  onElement,
+  onFocus,
+  multiline = false,
+  disabled = false,
+}: {
+  fieldKey: EmailTemplateFieldKey;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onElement: (element: HTMLInputElement | HTMLTextAreaElement) => void;
+  onFocus: (
+    field: EmailTemplateFieldKey,
+    element: HTMLInputElement | HTMLTextAreaElement,
+  ) => void;
+  multiline?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <label className={`block ${multiline ? 'sm:col-span-2' : ''}`}>
+      <FieldLabel>{label}</FieldLabel>
+      {multiline ? (
+        <textarea
+          ref={(element) => {
+            if (element) onElement(element);
+          }}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onFocus={(event) => onFocus(fieldKey, event.currentTarget)}
+          disabled={disabled}
+          rows={4}
+          className="mt-1.5 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm leading-5 text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+        />
+      ) : (
+        <input
+          ref={(element) => {
+            if (element) onElement(element);
+          }}
+          type="text"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onFocus={(event) => onFocus(fieldKey, event.currentTarget)}
+          disabled={disabled}
+          className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+        />
+      )}
+    </label>
+  );
+}
+
+function ModalShell({
+  eyebrow,
+  title,
+  children,
+  footer,
+  onClose,
+  maxWidth = 'max-w-3xl',
+}: {
+  eyebrow: string;
+  title: string;
+  children: React.ReactNode;
+  footer: React.ReactNode;
+  onClose: () => void;
+  maxWidth?: string;
+}) {
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 p-5 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className={`flex max-h-[calc(100%-40px)] w-full ${maxWidth} flex-col overflow-hidden rounded-2xl border border-white/[0.11] bg-[#0a111b] shadow-2xl shadow-black/60`}
+      >
+        <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.12em] text-cyan-700">{eyebrow}</p>
+            <h3 className="mt-1 text-xl font-black text-slate-950">{title}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            title="Close"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.08] text-zinc-400 transition hover:bg-white/[0.05] hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <footer className="border-t border-white/[0.08] bg-black/15 px-5 py-4">{footer}</footer>
+      </div>
+    </div>
+  );
+}
+
+function ModalActions({
+  note,
+  onClose,
+  onSave,
+  saveLabel,
+  disabled,
+}: {
+  note: string;
+  onClose: () => void;
+  onSave: () => void;
+  saveLabel: string;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-xs text-slate-600">{note}</p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-11 rounded-lg border border-slate-300 bg-white px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={disabled}
+          className="h-11 rounded-lg border border-cyan-700 bg-cyan-700 px-5 text-sm font-black text-white transition hover:border-cyan-800 hover:bg-cyan-800 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500"
+        >
+          {saveLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CheckboxSection<T extends { id: string; name: string }>({
+  title,
+  description,
+  items,
+  selectedIds,
+  emptyLabel,
+  onToggle,
+}: {
+  title: string;
+  description: string;
+  items: T[];
+  selectedIds: string[];
+  emptyLabel: string;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div className="mt-5 border-t border-white/[0.07] pt-4">
+      <FieldLabel>{title}</FieldLabel>
+      <p className="mt-1 text-[11px] text-zinc-600">{description}</p>
+      {items.length > 0 ? (
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {items.map((item) => {
+            const selected = selectedIds.includes(item.id);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onToggle(item.id)}
+                className={`flex min-h-9 items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-bold transition ${
+                  selected
+                    ? 'border-cyan-300 bg-cyan-50 text-cyan-900'
+                    : 'border-white/[0.08] bg-white/[0.025] text-zinc-500 hover:text-zinc-200'
+                }`}
+              >
+                <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${selected ? 'border-cyan-500 bg-cyan-100 text-cyan-800' : 'border-slate-400'}`}>
+                  {selected && <Check className="h-3 w-3" />}
+                </span>
+                {item.name}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-3 rounded-lg border border-dashed border-white/[0.08] px-3 py-4 text-xs text-zinc-600">{emptyLabel}</p>
+      )}
+    </div>
+  );
+}
+
+function PanelHeading({
+  title,
+  description,
+  buttonLabel,
+  onAdd,
+}: {
+  title: string;
+  description: string;
+  buttonLabel: string;
+  onAdd: () => void;
+}) {
+  return (
+    <div className="mb-4 flex items-center justify-between gap-4">
+      <div>
+        <h3 className="text-lg font-black text-slate-950">{title}</h3>
+        <p className="mt-1 text-sm text-slate-600">{description}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onAdd}
+        className="inline-flex h-11 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-5 text-sm font-black text-white shadow-sm transition hover:border-cyan-800 hover:bg-cyan-800"
+      >
+        <Plus className="h-4 w-4" />
+        {buttonLabel}
+      </button>
+    </div>
+  );
+}
+
+function TextField({
+  label,
+  value,
+  placeholder,
+  onChange,
+  className = '',
+  type = 'text',
+  disabled = false,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+  className?: string;
+  type?: 'text' | 'number' | 'date';
+  disabled?: boolean;
+}) {
+  return (
+    <label className={`block ${className}`}>
+      <FieldLabel>{label}</FieldLabel>
+      <input
+        type={type}
+        min={type === 'number' ? '0' : undefined}
+        step={type === 'number' ? '0.01' : undefined}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-black/25 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-cyan-300/35 disabled:cursor-not-allowed disabled:bg-zinc-900 disabled:text-zinc-600"
+      />
+    </label>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <span className="text-xs font-black uppercase tracking-[0.07em] text-slate-600">{children}</span>;
+}
+
+function TierPrice({ days, price }: { days: string; price: string }) {
+  return (
+    <span className="font-black text-zinc-100">
+      <span className="text-xs text-cyan-700">{days}</span> €{Number(price).toFixed(2)}
+      <span className="ml-0.5 text-[11px] font-medium text-slate-500">/day</span>
+    </span>
+  );
+}
+
+function PillList({ values, emptyLabel, tone = 'zinc' }: { values: string[]; emptyLabel: string; tone?: 'zinc' | 'cyan' }) {
+  return (
+    <div className="flex flex-wrap gap-1 pr-3">
+      {values.length > 0 ? (
+        <>
+          {values.slice(0, 3).map((value) => (
+            <span
+              key={value}
+              className={`rounded-md border px-1.5 py-0.5 text-[10px] ${
+                tone === 'cyan'
+                  ? 'border-cyan-200 bg-cyan-50 text-cyan-800'
+                  : 'border-slate-200 bg-slate-50 text-slate-700'
+              }`}
+            >
+              {value}
+            </span>
+          ))}
+          {values.length > 3 && <span className="px-1 py-0.5 text-[10px] font-bold text-zinc-600">+{values.length - 3}</span>}
+        </>
+      ) : (
+        <span className="text-[11px] text-zinc-600">{emptyLabel}</span>
+      )}
+    </div>
+  );
+}
+
+function ActionButtons({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+  return (
+    <div className="flex justify-end gap-1">
+      <button
+        type="button"
+        onClick={onEdit}
+        title="Edit"
+        className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-zinc-400 transition hover:border-cyan-300/25 hover:text-cyan-200"
+      >
+        <Edit3 className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        title="Delete local record"
+        className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-zinc-500 transition hover:border-rose-300/25 hover:text-rose-300"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function EmptyAdminPanel({ tab, icon: Icon }: { tab: AdminTab; icon: LucideIcon }) {
+  return (
+    <section className="flex min-h-[430px] items-center justify-center rounded-2xl border border-dashed border-white/[0.1] bg-white/[0.015]">
+      <div className="max-w-md px-6 text-center">
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.035] text-zinc-500">
+          <Icon className="h-6 w-6" strokeWidth={1.5} />
+        </span>
+        <h3 className="mt-4 text-base font-black text-zinc-200">{tab.label}</h3>
+        <p className="mt-2 text-sm leading-6 text-zinc-500">{tab.description}</p>
+        <p className="mt-3 text-xs text-zinc-600">Configuration controls will be added here in a future implementation.</p>
+      </div>
+    </section>
+  );
+}
+
+function TableEmpty({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex min-h-64 items-center justify-center px-6 text-center">
+      <div>
+        <Icon className="mx-auto h-8 w-8 text-zinc-700" strokeWidth={1.5} />
+        <p className="mt-3 text-sm font-bold text-zinc-400">{title}</p>
+        <p className="mt-1 text-xs text-zinc-600">{description}</p>
+      </div>
+    </div>
+  );
+}

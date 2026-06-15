@@ -33,6 +33,8 @@ import { DEFAULT_VEHICLE_GROUP_CODES, fetchVehicleGroups } from '@/lib/vehicleGr
 // Paste the real Make webhook URL here for both Send reminder buttons.
 const SEND_REMINDER_WEBHOOK_URL = 'https://hook.eu1.make.com/8hq66ccdrcx0aa56ui43o6ylpgq8bff5';
 const WHATSAPP_SEND_WEBHOOK_URL = 'https://hook.eu1.make.com/d2vag9sqf3q6akb9iwk4jx8rbuo84tx2';
+const REMINDER_SEND_DELAY_MS = 5000;
+const BULK_REMINDER_DELAY_MS = 10000;
 
 type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'RETURN';
 type LicenceState = 'uploaded' | 'empty';
@@ -335,6 +337,9 @@ const tomorrowDateValue = () => {
 };
 
 const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+const isReminderSuccessFeedback = (feedback: string) =>
+  feedback === 'Reminder sent.' || /^Sent \d+ reminders\. Failed 0\.$/.test(feedback);
+const isReminderPendingFeedback = (feedback: string) => feedback.startsWith('Sending ');
 
 const reservationSortValue = (reservation: Reservation) => {
   const lastModifiedAt = reservation.lastModifiedAt ? new Date(reservation.lastModifiedAt).getTime() : Number.NaN;
@@ -661,6 +666,9 @@ export default function BookingsManager({
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [showAvailabilityTestModal, setShowAvailabilityTestModal] = useState(false);
   const [sendingReminderIds, setSendingReminderIds] = useState<Set<string>>(new Set());
+  const pendingReminderIdsRef = useRef<Set<string>>(new Set());
+  const rateLimitedReminderIdsRef = useRef<Set<string>>(new Set());
+  const isBulkSendingRemindersRef = useRef(false);
   const [isBulkSendingReminders, setIsBulkSendingReminders] = useState(false);
   const [reminderFeedback, setReminderFeedback] = useState('');
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
@@ -1272,18 +1280,24 @@ export default function BookingsManager({
   };
 
   const sendReminder = async (reservation: Reservation) => {
-    if (sendingReminderIds.has(reservation.id)) {
+    if (pendingReminderIdsRef.current.has(reservation.id)) {
       return false;
     }
 
+    pendingReminderIdsRef.current.add(reservation.id);
     setReminderFeedback('');
     setSendingReminderIds((currentIds) => new Set(currentIds).add(reservation.id));
 
     try {
+      await wait(REMINDER_SEND_DELAY_MS);
       await postReturnReminderWebhook(reservation);
     } catch (error) {
       console.error('Send reminder webhook failed:', error);
-      const message = error instanceof Error && error.message.includes('429')
+      const isRateLimited = error instanceof Error && error.message.includes('429');
+      if (isRateLimited) {
+        rateLimitedReminderIdsRef.current.add(reservation.id);
+      }
+      const message = isRateLimited
         ? 'Too many requests from Make. Please wait a little and try again.'
         : 'Reminder was not sent. Please try again.';
       setReminderFeedback(message);
@@ -1292,6 +1306,7 @@ export default function BookingsManager({
         nextIds.delete(reservation.id);
         return nextIds;
       });
+      pendingReminderIdsRef.current.delete(reservation.id);
       return false;
     }
 
@@ -1309,6 +1324,7 @@ export default function BookingsManager({
         nextIds.delete(reservation.id);
         return nextIds;
       });
+      pendingReminderIdsRef.current.delete(reservation.id);
       return false;
     }
 
@@ -1338,11 +1354,12 @@ export default function BookingsManager({
       nextIds.delete(reservation.id);
       return nextIds;
     });
+    pendingReminderIdsRef.current.delete(reservation.id);
     return updatedReservation;
   };
 
   const sendAllTodayReturnReminders = async () => {
-    if (isBulkSendingReminders || quickFilter !== 'returnsToday') return;
+    if (isBulkSendingRemindersRef.current || quickFilter !== 'returnsToday') return;
 
     const processedReservationIds = new Set<string>();
     const targetReservations = todayReturnReminderTargets.filter((reservation) => {
@@ -1356,29 +1373,54 @@ export default function BookingsManager({
       return;
     }
 
+    isBulkSendingRemindersRef.current = true;
     setIsBulkSendingReminders(true);
     setReminderFeedback(`Sending 1/${targetReservations.length}...`);
 
     let sentCount = 0;
     let failedCount = 0;
+    let rateLimitedCount = 0;
 
-    for (let index = 0; index < targetReservations.length; index += 1) {
-      setReminderFeedback(`Sending ${index + 1}/${targetReservations.length}...`);
-      const result = await sendReminder(targetReservations[index]);
+    try {
+      for (let index = 0; index < targetReservations.length; index += 1) {
+        const reservation = targetReservations[index];
+        rateLimitedReminderIdsRef.current.delete(reservation.id);
+        setReminderFeedback(`Sending ${index + 1}/${targetReservations.length}...`);
 
-      if (result) {
-        sentCount += 1;
-      } else {
-        failedCount += 1;
+        try {
+          const result = await sendReminder(reservation);
+
+          if (result) {
+            sentCount += 1;
+          } else {
+            failedCount += 1;
+            if (rateLimitedReminderIdsRef.current.has(reservation.id)) {
+              rateLimitedCount += 1;
+              console.warn('Make rate limit for this reservation, skipped', {
+                reservation_id: reservation.id,
+              });
+              setReminderFeedback('Make rate limit for this reservation, skipped');
+            }
+          }
+        } catch (error) {
+          failedCount += 1;
+          console.error('Bulk return reminder failed for reservation:', reservation.id, error);
+        }
+
+        if (index < targetReservations.length - 1) {
+          await wait(BULK_REMINDER_DELAY_MS);
+        }
       }
-
-      if (index < targetReservations.length - 1) {
-        await wait(1200);
-      }
+    } finally {
+      isBulkSendingRemindersRef.current = false;
+      setIsBulkSendingReminders(false);
     }
 
-    setReminderFeedback(`Sent ${sentCount} reminders. Failed ${failedCount}.`);
-    setIsBulkSendingReminders(false);
+    setReminderFeedback(
+      rateLimitedCount > 0
+        ? 'Make rate limit. Some reminders were skipped. Try again later.'
+        : `Sent ${sentCount} reminders. Failed ${failedCount}.`,
+    );
   };
 
   const saveReservation = async () => {
@@ -1680,7 +1722,19 @@ export default function BookingsManager({
             >
               {isBulkSendingReminders ? 'Sending...' : "Send all today's return reminders"}
             </button>
-            {reminderFeedback && <p className="px-1 text-[11px] font-bold text-zinc-300">{reminderFeedback}</p>}
+            {reminderFeedback && (
+              <p
+                className={`rounded-lg border px-2 py-1 text-[11px] font-bold ${
+                  isReminderSuccessFeedback(reminderFeedback)
+                    ? 'border-emerald-300/30 bg-emerald-300/10 text-emerald-100'
+                    : isReminderPendingFeedback(reminderFeedback)
+                      ? 'border-white/[0.08] bg-white/[0.035] text-zinc-300'
+                      : 'border-rose-300/25 bg-rose-300/10 text-rose-100'
+                }`}
+              >
+                {reminderFeedback}
+              </p>
+            )}
           </div>
         )}
 
@@ -1949,7 +2003,15 @@ export default function BookingsManager({
         {quickFilter === 'returnsToday' && (
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {reminderFeedback && (
-              <span className="rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-700">
+              <span
+                className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold ${
+                  isReminderSuccessFeedback(reminderFeedback)
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                    : isReminderPendingFeedback(reminderFeedback)
+                      ? 'border-slate-300 bg-slate-50 text-slate-700'
+                      : 'border-rose-300 bg-rose-50 text-rose-800'
+                }`}
+              >
                 {reminderFeedback}
               </span>
             )}
@@ -2416,7 +2478,15 @@ function ReservationInspector({
                 ))}
               </div>
               {reminderFeedback && (
-                <p className="mt-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10.5px] font-bold text-slate-700">
+                <p
+                  className={`mt-1 rounded-md border px-2 py-1 text-[10.5px] font-bold ${
+                    isReminderSuccessFeedback(reminderFeedback)
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                      : isReminderPendingFeedback(reminderFeedback)
+                        ? 'border-slate-300 bg-slate-50 text-slate-700'
+                        : 'border-rose-300 bg-rose-50 text-rose-800'
+                  }`}
+                >
                   {reminderFeedback}
                 </p>
               )}
@@ -3035,7 +3105,15 @@ function MobileReservationModal({
       </div>
 
       {reminderFeedback && (
-        <p className="mx-3 mb-2 rounded-2xl border border-white/[0.07] bg-black/30 px-3 py-2 text-xs font-bold text-zinc-300">
+        <p
+          className={`mx-3 mb-2 rounded-2xl border px-3 py-2 text-xs font-bold ${
+            isReminderSuccessFeedback(reminderFeedback)
+              ? 'border-emerald-300/30 bg-emerald-300/10 text-emerald-100'
+              : isReminderPendingFeedback(reminderFeedback)
+                ? 'border-white/[0.08] bg-black/30 text-zinc-300'
+                : 'border-rose-300/25 bg-rose-300/10 text-rose-100'
+          }`}
+        >
           {reminderFeedback}
         </p>
       )}
@@ -3480,7 +3558,15 @@ function ReturnsModal({
           </div>
         </div>
         {reminderFeedback && (
-          <div className="border-b border-white/[0.06] bg-black/20 px-4 py-2 text-xs font-bold text-zinc-300">
+          <div
+            className={`border-b px-4 py-2 text-xs font-bold ${
+              isReminderSuccessFeedback(reminderFeedback)
+                ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100'
+                : isReminderPendingFeedback(reminderFeedback)
+                  ? 'border-white/[0.06] bg-black/20 text-zinc-300'
+                  : 'border-rose-300/20 bg-rose-300/10 text-rose-100'
+            }`}
+          >
             {reminderFeedback}
           </div>
         )}

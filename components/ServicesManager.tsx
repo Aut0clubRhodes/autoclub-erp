@@ -1558,7 +1558,7 @@ export default function ServicesManager() {
         <button
           type="button"
           onClick={openAddServiceModal}
-          className="rounded-2xl border border-orange-400/30 bg-orange-400/10 px-4 py-3 text-sm font-semibold text-orange-100 shadow-[0_0_22px_rgba(249,115,22,0.08)] transition duration-200 hover:-translate-y-px hover:border-orange-300/45 hover:bg-orange-400/16 hover:shadow-[0_0_28px_rgba(249,115,22,0.13)]"
+          className="erp-action-primary rounded-2xl border border-orange-400/30 bg-orange-400/10 px-4 py-3 text-sm font-semibold text-orange-100 shadow-[0_0_22px_rgba(249,115,22,0.08)] transition duration-200 hover:-translate-y-px hover:border-orange-300/45 hover:bg-orange-400/16 hover:shadow-[0_0_28px_rgba(249,115,22,0.13)]"
         >
           + Καταχώρηση Service
         </button>
@@ -1722,7 +1722,7 @@ export default function ServicesManager() {
                       <button
                         type="button"
                         onClick={() => setSelectedCarId(car.id)}
-                        className="rounded-2xl border border-orange-400/24 bg-orange-400/10 px-3 py-2 text-xs font-medium text-orange-200 transition duration-200 hover:-translate-y-px hover:border-orange-300/38 hover:bg-orange-400/18"
+                        className="erp-action-primary rounded-2xl border border-orange-400/24 bg-orange-400/10 px-3 py-2 text-xs font-medium text-orange-200 transition duration-200 hover:-translate-y-px hover:border-orange-300/38 hover:bg-orange-400/18"
                       >
                         Ιστορικό Service
                       </button>

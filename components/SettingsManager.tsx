@@ -108,7 +108,7 @@ export default function SettingsManager({ onSuppliersChange }: SettingsManagerPr
               onClick={() => setActiveSection(section.id)}
               className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition ${
                 active
-                  ? 'border-sky-300/25 bg-sky-300/[0.09] text-white'
+                  ? 'erp-active-nav border-sky-300/25 bg-sky-300/[0.09] text-white'
                   : 'border-transparent text-zinc-400 hover:border-white/[0.07] hover:bg-white/[0.035] hover:text-white'
               }`}
             >
@@ -136,7 +136,7 @@ export default function SettingsManager({ onSuppliersChange }: SettingsManagerPr
               type="button"
               onClick={handleDownloadBackup}
               disabled={loading}
-              className="mt-5 rounded-xl border border-sky-300/25 bg-sky-300/[0.1] px-5 py-3 text-sm font-semibold text-sky-100 transition hover:bg-sky-300/[0.16] disabled:cursor-not-allowed disabled:opacity-55"
+              className="erp-action-primary mt-5 rounded-xl border border-sky-300/25 bg-sky-300/[0.1] px-5 py-3 text-sm font-semibold text-sky-100 transition hover:bg-sky-300/[0.16] disabled:cursor-not-allowed disabled:opacity-55"
             >
               {loading ? 'Δημιουργία Backup...' : 'Λήψη Backup'}
             </button>

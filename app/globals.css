@@ -120,3 +120,503 @@ body {
 .input:focus {
   border-color: #f97316;
 }
+
+/* Shared light treatment for module content. The app shell, sidebar, tabs and
+   homepage sit outside this wrapper and intentionally retain their dark theme. */
+.erp-module-light-content {
+  color-scheme: light;
+  background: #eef2f7;
+  color: #1e293b;
+  font-size: 15px;
+}
+
+.erp-module-light-content :is(section, article, form, table) {
+  color: #172033;
+}
+
+.erp-module-light-content p {
+  line-height: 1.5;
+}
+
+.erp-module-light-content :is(h1, h2, h3, h4, h5, h6) {
+  color: #0f172a;
+  letter-spacing: 0;
+}
+
+.erp-module-light-content :is(h1, h2) {
+  font-weight: 750;
+}
+
+.erp-module-light-content :is(h3, h4, h5, h6) {
+  font-weight: 700;
+}
+
+.erp-module-light-content :is(
+  [class*="bg-zinc-950"],
+  [class*="bg-zinc-900"],
+  [class*="bg-zinc-800"],
+  [class*="bg-slate-950"],
+  [class*="bg-slate-900"],
+  [class*="bg-slate-800"],
+  [class*="bg-neutral-950"],
+  [class*="bg-neutral-900"],
+  [class*="bg-gray-950"],
+  [class*="bg-gray-900"],
+  [class*="bg-black/"],
+  [class*="bg-[#0"],
+  [class*="bg-[linear-gradient"]
+):not(.fixed) {
+  background-color: #ffffff;
+  background-image: none;
+}
+
+.erp-module-light-content :is(
+  [class*="border-white/"],
+  [class*="border-zinc-"],
+  [class*="border-slate-"],
+  [class*="border-neutral-"],
+  [class*="border-gray-"]
+) {
+  border-color: #d7e0ea;
+}
+
+.erp-module-light-content :is(
+  [class*="divide-white/"],
+  [class*="divide-zinc-"],
+  [class*="divide-slate-"]
+) > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e2e8f0;
+}
+
+.erp-module-light-content :is(
+  [class*="text-white"],
+  [class*="text-zinc-100"],
+  [class*="text-zinc-200"],
+  [class*="text-slate-100"],
+  [class*="text-slate-200"]
+):not(button):not(a) {
+  color: #172033;
+}
+
+.erp-module-light-content :is(
+  [class*="text-zinc-300"],
+  [class*="text-zinc-400"],
+  [class*="text-slate-300"],
+  [class*="text-slate-400"],
+  [class*="text-neutral-300"],
+  [class*="text-neutral-400"]
+) {
+  color: #475569;
+}
+
+.erp-module-light-content :is(
+  [class*="text-zinc-500"],
+  [class*="text-zinc-600"],
+  [class*="text-slate-500"],
+  [class*="text-slate-600"]
+) {
+  color: #64748b;
+}
+
+.erp-module-light-content :is([class*="text-cyan-100"], [class*="text-cyan-200"], [class*="text-sky-100"], [class*="text-sky-200"]) {
+  color: #0e7490;
+}
+
+.erp-module-light-content :is([class*="text-emerald-100"], [class*="text-emerald-200"], [class*="text-green-100"], [class*="text-green-200"]) {
+  color: #047857;
+}
+
+.erp-module-light-content :is([class*="text-amber-100"], [class*="text-amber-200"], [class*="text-yellow-100"], [class*="text-yellow-200"]) {
+  color: #a16207;
+}
+
+.erp-module-light-content :is([class*="text-rose-100"], [class*="text-rose-200"], [class*="text-red-100"], [class*="text-red-200"]) {
+  color: #be123c;
+}
+
+.erp-module-light-content :is([class*="text-violet-100"], [class*="text-violet-200"], [class*="text-purple-100"], [class*="text-purple-200"]) {
+  color: #6d28d9;
+}
+
+.erp-module-light-content :is(
+  [class*="bg-cyan-300/"],
+  [class*="bg-cyan-400/"],
+  [class*="bg-sky-300/"],
+  [class*="bg-sky-400/"]
+) {
+  background-color: #ecfeff;
+}
+
+.erp-module-light-content :is(
+  [class*="bg-emerald-300/"],
+  [class*="bg-emerald-400/"],
+  [class*="bg-green-300/"],
+  [class*="bg-green-400/"]
+) {
+  background-color: #ecfdf5;
+}
+
+.erp-module-light-content :is(
+  [class*="bg-amber-300/"],
+  [class*="bg-amber-400/"],
+  [class*="bg-yellow-300/"],
+  [class*="bg-yellow-400/"]
+) {
+  background-color: #fffbeb;
+}
+
+.erp-module-light-content :is(
+  [class*="bg-rose-300/"],
+  [class*="bg-rose-400/"],
+  [class*="bg-red-300/"],
+  [class*="bg-red-400/"]
+) {
+  background-color: #fff1f2;
+}
+
+.erp-module-light-content :is(
+  .rounded-lg,
+  .rounded-xl,
+  .rounded-2xl,
+  .rounded-3xl
+)[class*="border"] {
+  border-color: #d7e0ea;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.erp-module-light-content table {
+  background: #ffffff;
+  color: #27364a;
+}
+
+.erp-module-light-content thead {
+  background: #e8eef5;
+}
+
+.erp-module-light-content th {
+  border-color: #cbd5e1;
+  color: #27364a;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.erp-module-light-content td {
+  border-color: #e2e8f0;
+  color: #334155;
+  font-size: 14px;
+}
+
+.erp-module-light-content tbody tr {
+  border-color: #e2e8f0;
+}
+
+.erp-module-light-content tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+.erp-module-light-content :is(input, select, textarea, .input) {
+  border-color: #c4cfdd;
+  background: #ffffff;
+  color: #172033;
+  font-size: 15px;
+}
+
+.erp-module-light-content :is(input, textarea, .input)::placeholder {
+  color: #7c8ba1;
+  opacity: 1;
+}
+
+.erp-module-light-content :is(input, select, textarea, .input):focus {
+  border-color: #0891b2;
+  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.14);
+}
+
+.erp-module-light-content :is(button, [role="button"]) {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.erp-module-light-content :is(
+  button[class*="bg-zinc-"],
+  button[class*="bg-slate-"],
+  button[class*="bg-neutral-"],
+  button[class*="bg-black/"],
+  [role="button"][class*="bg-zinc-"],
+  [role="button"][class*="bg-slate-"]
+) {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+}
+
+.erp-module-light-content :is(
+  button[class*="bg-zinc-"],
+  button[class*="bg-slate-"],
+  button[class*="bg-neutral-"],
+  [role="button"][class*="bg-zinc-"],
+  [role="button"][class*="bg-slate-"]
+):hover {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.erp-module-light-content :is(
+  button[class*="bg-cyan-"],
+  button[class*="bg-sky-"],
+  button[class*="bg-blue-"],
+  [role="button"][class*="bg-cyan-"],
+  [role="button"][class*="bg-sky-"],
+  [role="button"][class*="bg-blue-"]
+),
+.erp-module-light-content .erp-action-primary,
+.erp-module-light-content .erp-active-nav {
+  border-color: #0e7490;
+  background: #0891b2;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(8, 145, 178, 0.2);
+}
+
+.erp-module-light-content :is(
+  button[class*="bg-cyan-"],
+  button[class*="bg-sky-"],
+  button[class*="bg-blue-"],
+  [role="button"][class*="bg-cyan-"],
+  [role="button"][class*="bg-sky-"],
+  [role="button"][class*="bg-blue-"]
+):hover,
+.erp-module-light-content .erp-action-primary:hover,
+.erp-module-light-content .erp-active-nav:hover {
+  border-color: #155e75;
+  background: #0e7490;
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(8, 145, 178, 0.26);
+}
+
+.erp-module-light-content :is(
+  button[class*="bg-emerald-"],
+  button[class*="bg-green-"],
+  [role="button"][class*="bg-emerald-"],
+  [role="button"][class*="bg-green-"]
+),
+.erp-module-light-content .erp-action-success {
+  border-color: #047857;
+  background: #059669;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.2);
+}
+
+.erp-module-light-content :is(
+  button[class*="bg-emerald-"],
+  button[class*="bg-green-"],
+  [role="button"][class*="bg-emerald-"],
+  [role="button"][class*="bg-green-"]
+):hover,
+.erp-module-light-content .erp-action-success:hover {
+  border-color: #065f46;
+  background: #047857;
+  color: #ffffff;
+}
+
+.erp-module-light-content :is(
+  button[class*="bg-amber-"],
+  button[class*="bg-yellow-"],
+  button[class*="bg-orange-"],
+  [role="button"][class*="bg-amber-"],
+  [role="button"][class*="bg-yellow-"],
+  [role="button"][class*="bg-orange-"]
+),
+.erp-module-light-content .erp-action-warning {
+  border-color: #b45309;
+  background: #d97706;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.2);
+}
+
+.erp-module-light-content :is(
+  button[class*="bg-amber-"],
+  button[class*="bg-yellow-"],
+  button[class*="bg-orange-"],
+  [role="button"][class*="bg-amber-"],
+  [role="button"][class*="bg-yellow-"],
+  [role="button"][class*="bg-orange-"]
+):hover,
+.erp-module-light-content .erp-action-warning:hover {
+  border-color: #92400e;
+  background: #b45309;
+  color: #ffffff;
+}
+
+.erp-module-light-content :is(
+  button[class*="bg-rose-"],
+  button[class*="bg-red-"],
+  [role="button"][class*="bg-rose-"],
+  [role="button"][class*="bg-red-"]
+),
+.erp-module-light-content .erp-action-danger {
+  border-color: #be123c;
+  background: #e11d48;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(225, 29, 72, 0.18);
+}
+
+.erp-module-light-content :is(
+  button[class*="bg-rose-"],
+  button[class*="bg-red-"],
+  [role="button"][class*="bg-rose-"],
+  [role="button"][class*="bg-red-"]
+):hover,
+.erp-module-light-content .erp-action-danger:hover {
+  border-color: #9f1239;
+  background: #be123c;
+  color: #ffffff;
+}
+
+.erp-module-light-content :is(
+  button[class*="bg-violet-"],
+  button[class*="bg-purple-"],
+  button[class*="bg-fuchsia-"],
+  [role="button"][class*="bg-violet-"],
+  [role="button"][class*="bg-purple-"],
+  [role="button"][class*="bg-fuchsia-"]
+) {
+  border-color: #0e7490;
+  background: #0891b2;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(8, 145, 178, 0.2);
+}
+
+.erp-module-light-content :is(
+  button[class*="bg-violet-"],
+  button[class*="bg-purple-"],
+  button[class*="bg-fuchsia-"],
+  [role="button"][class*="bg-violet-"],
+  [role="button"][class*="bg-purple-"],
+  [role="button"][class*="bg-fuchsia-"]
+):hover {
+  border-color: #155e75;
+  background: #0e7490;
+  color: #ffffff;
+}
+
+.erp-module-light-content .erp-action-secondary,
+.erp-module-light-content button[class*="bg-white/"] {
+  border-color: #94a3b8;
+  background: #ffffff;
+  color: #334155;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.erp-module-light-content .erp-action-secondary:hover,
+.erp-module-light-content button[class*="bg-white/"]:hover {
+  border-color: #64748b;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.erp-module-light-content button.erp-action-primary,
+.erp-module-light-content [role="button"].erp-action-primary,
+.erp-module-light-content button.erp-active-nav,
+.erp-module-light-content [role="button"].erp-active-nav {
+  border-color: #0e7490;
+  background: #0891b2;
+  color: #ffffff;
+}
+
+.erp-module-light-content button.erp-action-success,
+.erp-module-light-content [role="button"].erp-action-success {
+  border-color: #047857;
+  background: #059669;
+  color: #ffffff;
+}
+
+.erp-module-light-content button.erp-action-warning,
+.erp-module-light-content [role="button"].erp-action-warning {
+  border-color: #b45309;
+  background: #d97706;
+  color: #ffffff;
+}
+
+.erp-module-light-content button.erp-action-danger,
+.erp-module-light-content [role="button"].erp-action-danger {
+  border-color: #be123c;
+  background: #e11d48;
+  color: #ffffff;
+}
+
+.erp-module-light-content button.erp-action-primary:hover,
+.erp-module-light-content button.erp-active-nav:hover {
+  border-color: #155e75;
+  background: #0e7490;
+}
+
+.erp-module-light-content button.erp-action-success:hover {
+  border-color: #065f46;
+  background: #047857;
+}
+
+.erp-module-light-content button.erp-action-warning:hover {
+  border-color: #92400e;
+  background: #b45309;
+}
+
+.erp-module-light-content button.erp-action-danger:hover {
+  border-color: #9f1239;
+  background: #be123c;
+}
+
+.erp-module-light-content :is(
+  button.erp-action-primary,
+  button.erp-action-success,
+  button.erp-action-warning,
+  button.erp-action-danger,
+  button.erp-active-nav,
+  button[class*="bg-cyan-"],
+  button[class*="bg-sky-"],
+  button[class*="bg-blue-"],
+  button[class*="bg-emerald-"],
+  button[class*="bg-green-"],
+  button[class*="bg-amber-"],
+  button[class*="bg-yellow-"],
+  button[class*="bg-orange-"],
+  button[class*="bg-rose-"],
+  button[class*="bg-red-"],
+  button[class*="bg-violet-"],
+  button[class*="bg-purple-"],
+  button[class*="bg-fuchsia-"]
+) :is(span, p, svg) {
+  color: inherit;
+}
+
+.erp-module-light-content :is(
+  [class*="bg-cyan-300/"],
+  [class*="bg-sky-300/"],
+  [class*="bg-amber-300/"],
+  [class*="bg-rose-300/"],
+  [class*="bg-emerald-300/"]
+):not(button):not([role="button"]) {
+  border-color: #94a3b8;
+}
+
+.erp-module-light-content :is(button, [role="button"]):disabled,
+.erp-module-light-content :is(button, [role="button"])[aria-disabled="true"] {
+  border-color: #cbd5e1;
+  background: #e2e8f0;
+  color: #64748b;
+  cursor: not-allowed;
+  filter: none;
+  opacity: 0.75;
+}
+
+.erp-module-light-content .service-history-btn {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+}
+
+.erp-module-light-content .service-history-btn:hover {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+  color: #0f172a;
+}

@@ -13,6 +13,7 @@ import {
   ChevronRight,
   FileText,
   FolderArchive,
+  Gauge,
   LayoutDashboard,
   Megaphone,
   ReceiptText,
@@ -62,11 +63,25 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'ΛΕΙΤΟΥΡΓΙΑ',
     items: [
-      { label: 'Πίνακας', href: '/dashboard', icon: LayoutDashboard, tone: 'text-sky-300', chip: 'border-sky-400/25 bg-sky-400/10' },
       { label: 'Κρατήσεις', href: '/bookings', icon: CalendarDays, tone: 'text-violet-300', chip: 'border-violet-400/25 bg-violet-400/10' },
       { label: 'Αυτοκίνητα', href: '/cars', icon: Car, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
       { label: 'Service', href: '/services', icon: Wrench, tone: 'text-orange-300', chip: 'border-orange-400/25 bg-orange-400/10' },
       { label: 'Leasing', href: '/leasing', icon: FileText, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
+    ],
+  },
+  {
+    title: 'AUTOCLUB-RHODES',
+    collapsible: true,
+    items: [
+      {
+        label: 'Πίνακας',
+        displayLabel: 'ΚΡΑΤΗΣΕΙΣ AUTOCLUB-RHODES',
+        href: '/dashboard',
+        icon: LayoutDashboard,
+        tone: 'text-sky-300',
+        chip: 'border-sky-400/25 bg-sky-400/10',
+      },
+      { label: 'Booking Engine Admin', href: '/booking-engine-admin', icon: Gauge, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
     ],
   },
   {
@@ -117,12 +132,14 @@ const WINDOW_ITEMS = [
   'Έγγραφα',
   'Κατηγορίες Εξόδων',
   'Marketing',
+  'Booking Engine Admin',
   'Ρυθμίσεις',
 ];
 
 export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRole, onLogout, onCollapsedChange, onNavigate, forceExpanded }: SidebarProps) {
   const pathname = usePathname();
   const [systemOpen, setSystemOpen] = useState(true);
+  const [autoClubRhodesOpen, setAutoClubRhodesOpen] = useState(true);
   const [financeOpen, setFinanceOpen] = useState(true);
   const [showVehicleGroupsPanel, setShowVehicleGroupsPanel] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -319,19 +336,27 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
 
       <nav className={`autoclub-sidebar-scroll flex-1 overflow-y-auto ${displayCollapsed ? 'space-y-1 px-2 py-2' : 'space-y-2 px-2.5 py-2.5 sm:px-3'}`}>
         {visibleNavSections.map((section) => {
-          const isSystem = section.collapsible;
-          const isOpen = !isSystem || systemOpen;
+          const isCollapsible = section.collapsible;
+          const isAutoClubRhodes = section.title === 'AUTOCLUB-RHODES';
+          const isOpen = !isCollapsible || (isAutoClubRhodes ? autoClubRhodesOpen : systemOpen);
+          const toggleSection = () => {
+            if (isAutoClubRhodes) {
+              setAutoClubRhodesOpen((current) => !current);
+              return;
+            }
+            setSystemOpen((current) => !current);
+          };
 
           return (
             <div key={section.title} className="space-y-0.5">
-              {displayCollapsed ? null : isSystem ? (
+              {displayCollapsed ? null : isCollapsible ? (
                 <button
                   type="button"
-                  onClick={() => setSystemOpen((current) => !current)}
+                  onClick={toggleSection}
                   className="flex w-full items-center justify-between px-2 text-[8.5px] font-semibold uppercase tracking-[0.15em] text-[#8e99a8] transition hover:text-zinc-200"
                 >
                   <span>{section.title}</span>
-                  <span className={`text-xs transition ${systemOpen ? 'rotate-180' : ''}`}>⌄</span>
+                  <span className={`text-xs transition ${isOpen ? 'rotate-180' : ''}`}>⌄</span>
                 </button>
               ) : (
                 <div className="px-2 text-[8.5px] font-semibold uppercase tracking-[0.15em] text-[#8e99a8]">

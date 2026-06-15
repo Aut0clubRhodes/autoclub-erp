@@ -28,9 +28,10 @@ import SuppliersManager from '@/components/SuppliersManager';
 import ExpenseCategoriesManager from '@/components/ExpenseCategoriesManager';
 import SettingsManager from '@/components/SettingsManager';
 import MarketingManager from '@/components/MarketingManager';
+import BookingEngineAdmin from '@/components/BookingEngineAdmin';
 import ServicesManager from '@/components/ServicesManager';
 import VehicleDocumentsManager from '@/components/VehicleDocumentsManager';
-import FleetCalendarPrototype from '@/components/FleetCalendarPrototype';
+import AutoClubRhodesReservationsBoard from '@/components/AutoClubRhodesReservationsBoard';
 import { supabase } from '@/lib/supabaseClient';
 import {
   addIncomeEntry,
@@ -77,6 +78,7 @@ type WindowType =
   | 'Αναφορές'
   | 'Πρακτορεία'
   | 'Marketing'
+  | 'Booking Engine Admin'
   | 'Ρυθμίσεις'
   | null;
 
@@ -1088,7 +1090,7 @@ const handleSaveSupplierPayment = async () => {
   const getWindowTitleForId = (windowId: WindowId) => {
     switch (windowId) {
       case 'Πίνακας':
-        return 'Πλάνο Στόλου';
+        return 'ΚΡΑΤΗΣΕΙΣ AUTOCLUB-RHODES';
       case 'Αυτοκίνητα':
         return 'Διαχείριση Αυτοκινήτων';
       case 'Κρατήσεις':
@@ -1119,6 +1121,8 @@ const handleSaveSupplierPayment = async () => {
         return 'Πρακτορεία';
       case 'Marketing':
         return 'Marketing';
+      case 'Booking Engine Admin':
+        return 'Booking Engine Admin';
       case 'Ρυθμίσεις':
         return 'Ρυθμίσεις';
       default:
@@ -1733,6 +1737,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       'Αναφορές',
       'Πρακτορεία',
       'Marketing',
+      'Booking Engine Admin',
       'Ρυθμίσεις',
     ];
 
@@ -1742,7 +1747,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const renderWindowContent = (windowId: WindowId) => {
     switch (resolveWindowId(windowId)) {
   case 'Πίνακας':
-    return <FleetCalendarPrototype />;
+    return <AutoClubRhodesReservationsBoard />;
 
   case 'Πρακτορεία':
     return (
@@ -1828,6 +1833,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return <ExpenseCategoriesManager />;
       case 'Marketing':
         return <MarketingManager />;
+      case 'Booking Engine Admin':
+        return <BookingEngineAdmin />;
       case 'Ρυθμίσεις':
         return <SettingsManager onSuppliersChange={setSuppliers} />;
       case 'Αναφορές':
@@ -1858,7 +1865,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   const getWindowTitle = (windowId: WindowId) => {
     switch (windowId) {
       case 'Πίνακας':
-        return 'Πλάνο Στόλου';
+        return 'ΚΡΑΤΗΣΕΙΣ AUTOCLUB-RHODES';
       case 'Αυτοκίνητα':
         return 'Διαχείριση Αυτοκινήτων';
       case 'Κρατήσεις':
@@ -1889,6 +1896,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   return 'Πρακτορεία';
       case 'Marketing':
         return 'Marketing / Promotions';
+      case 'Booking Engine Admin':
+        return 'Booking Engine Admin';
       case 'Ρυθμίσεις':
         return 'Ρυθμίσεις';
       default:
@@ -2102,20 +2111,25 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               {openWindows.map((windowItem) => {
                 const isActiveTab = activeWindow === windowItem.id;
                 const isMinimizedTab = Boolean(windowItem.isMinimized);
+                const isBookingEngineAdminTab = windowItem.id === 'Booking Engine Admin';
 
                 return (
                   <button
                     key={windowItem.id}
                     type="button"
                     onClick={() => focusWindow(windowItem.id)}
-                    className={`group flex max-w-[190px] items-center gap-2 rounded-t-xl border px-3 py-2 text-left text-xs font-semibold transition duration-200 ${
+                    className={`group flex items-center rounded-t-xl border py-2 text-left text-xs font-semibold transition duration-200 ${
+                      isBookingEngineAdminTab ? 'w-auto max-w-none flex-none gap-1 px-2' : 'max-w-[190px] gap-2 px-3'
+                    } ${
                       isActiveTab
                         ? 'border-sky-300/25 border-b-transparent bg-[#08111a] text-white shadow-[0_-2px_18px_rgba(56,189,248,0.12)]'
                         : 'border-white/[0.045] bg-white/[0.025] text-zinc-500 hover:border-sky-300/16 hover:bg-white/[0.045] hover:text-zinc-200'
                     } ${isMinimizedTab ? 'opacity-55' : 'opacity-100'}`}
                   >
                     {isMinimizedTab && <span className="h-1.5 w-1.5 rounded-full bg-zinc-500" />}
-                    <span className="min-w-0 flex-1 truncate">{windowItem.title || getWindowTitle(windowItem.id)}</span>
+                    <span className={isBookingEngineAdminTab ? 'whitespace-nowrap' : 'min-w-0 flex-1 truncate'}>
+                      {windowItem.title || getWindowTitle(windowItem.id)}
+                    </span>
                     <span
                       role="button"
                       tabIndex={0}
@@ -2312,11 +2326,12 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               onMinimize={() => minimizeWindow(windowItem.id)}
               zIndex={windowItem.zIndex}
               titleActions={getWindowActions(windowItem.id)}
-              fullscreen={windowItem.id === 'Κρατήσεις'}
+              fullscreen={windowItem.id === 'Κρατήσεις' || windowItem.id === 'Booking Engine Admin'}
+              compactHeader={windowItem.id === 'Κρατήσεις'}
               initialWidth={windowItem.id === 'Αναφορές' ? 1320 : undefined}
               initialHeight={windowItem.id === 'Αναφορές' ? 792 : windowItem.id === 'Πίνακας' ? 760 : undefined}
               financeDashboard={windowItem.id === 'Ταμείο'}
-              wide={windowItem.id === 'Πίνακας' || windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Γραμμάτια' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα' || windowItem.id === 'Marketing' || windowItem.id === 'Ρυθμίσεις'}
+              wide={windowItem.id === 'Πίνακας' || windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Γραμμάτια' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα' || windowItem.id === 'Marketing' || windowItem.id === 'Booking Engine Admin' || windowItem.id === 'Ρυθμίσεις'}
             >
               {renderWindowContent(windowItem.id)}
             </Window>

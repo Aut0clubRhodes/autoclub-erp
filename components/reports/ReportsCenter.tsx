@@ -212,7 +212,7 @@ export default function ReportsCenter({
                     startsNewGroup ? 'ml-3 border-l border-white/[0.08] pl-5 lg:ml-0 lg:mt-3 lg:border-l-0 lg:border-t lg:pt-5' : ''
                   } ${
                     activeSection === section.id
-                      ? 'border border-sky-400/20 bg-sky-400/10 text-white'
+                      ? 'erp-active-nav border border-sky-400/20 bg-sky-400/10 text-white'
                       : 'border border-transparent text-zinc-400 hover:border-white/[0.06] hover:bg-white/[0.03] hover:text-zinc-200'
                   }`}
                 >

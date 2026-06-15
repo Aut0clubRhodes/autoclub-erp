@@ -274,7 +274,7 @@ export default function MarketingManager() {
                 }}
                 className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left transition ${
                   selectedLanguage === language
-                    ? 'border-rose-300/28 bg-rose-300/[0.09] text-white'
+                    ? 'erp-active-nav border-rose-300/28 bg-rose-300/[0.09] text-white'
                     : 'border-transparent text-zinc-400 hover:border-white/[0.07] hover:bg-white/[0.035] hover:text-white'
                 }`}
               >
@@ -300,7 +300,7 @@ export default function MarketingManager() {
                 <button
                   type="button"
                   onClick={handleCopyEmails}
-                  className="inline-flex items-center gap-2 rounded-xl border border-sky-300/20 bg-sky-300/[0.08] px-3 py-2 text-xs font-semibold text-sky-100 transition hover:bg-sky-300/[0.14]"
+                  className="erp-action-primary inline-flex items-center gap-2 rounded-xl border border-sky-300/20 bg-sky-300/[0.08] px-3 py-2 text-xs font-semibold text-sky-100 transition hover:bg-sky-300/[0.14]"
                 >
                   <Copy className="h-3.5 w-3.5" />
                   Copy all emails
@@ -308,7 +308,7 @@ export default function MarketingManager() {
                 <button
                   type="button"
                   onClick={handleExportCsv}
-                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.08] px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-300/[0.14]"
+                  className="erp-action-success inline-flex items-center gap-2 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.08] px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-300/[0.14]"
                 >
                   <Download className="h-3.5 w-3.5" />
                   Export CSV
@@ -417,7 +417,7 @@ export default function MarketingManager() {
                 <button
                   type="button"
                   onClick={handleSaveDraft}
-                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.08] px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-300/[0.14]"
+                  className="erp-action-success inline-flex items-center gap-2 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.08] px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-300/[0.14]"
                 >
                   <Save className="h-4 w-4" />
                   Save draft locally
@@ -425,7 +425,7 @@ export default function MarketingManager() {
                 <button
                   type="button"
                   onClick={() => setShowPreview(true)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-sky-300/20 bg-sky-300/[0.08] px-4 py-2.5 text-sm font-semibold text-sky-100 transition hover:bg-sky-300/[0.14]"
+                  className="erp-action-primary inline-flex items-center gap-2 rounded-xl border border-sky-300/20 bg-sky-300/[0.08] px-4 py-2.5 text-sm font-semibold text-sky-100 transition hover:bg-sky-300/[0.14]"
                 >
                   <Eye className="h-4 w-4" />
                   Preview email

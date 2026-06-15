@@ -155,14 +155,14 @@ export default function FinanceIncome({
                     <button
                       type="button"
                       onClick={() => onEditIncome(transaction)}
-                      className="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] text-zinc-200 hover:bg-zinc-900"
+                      className="erp-action-primary rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] text-zinc-200 hover:bg-zinc-900"
                     >
                       Επεξεργασία
                     </button>
                     <button
                       type="button"
                       onClick={() => onDeleteIncome(transaction)}
-                      className="rounded-lg border border-red-700 px-2.5 py-1.5 text-[11px] text-red-300 hover:bg-red-950/40"
+                      className="erp-action-danger rounded-lg border border-red-700 px-2.5 py-1.5 text-[11px] text-red-300 hover:bg-red-950/40"
                     >
                       Διαγραφή
                     </button>

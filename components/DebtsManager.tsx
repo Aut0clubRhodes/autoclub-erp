@@ -374,22 +374,22 @@ const handleDeleteDebt = async (debtId: number) => {
         <button
           type="button"
           onClick={() => setShowImportModal(true)}
-          className="rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm font-semibold text-sky-200 transition hover:bg-sky-400/20"
+          className="erp-action-primary rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm font-semibold text-sky-200 transition hover:bg-sky-400/20"
         >
           Import Δοσολογίου
         </button>
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="rounded-2xl border border-fuchsia-400/30 bg-fuchsia-400/10 px-4 py-3 text-sm font-semibold text-fuchsia-200 transition hover:bg-fuchsia-400/20"
+          className="erp-action-primary rounded-2xl border border-fuchsia-400/30 bg-fuchsia-400/10 px-4 py-3 text-sm font-semibold text-fuchsia-200 transition hover:bg-fuchsia-400/20"
         >
           + Νέο Γραμμάτιο
         </button>
       </div>
 
-      <div className="flex items-center justify-between rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] px-5 py-4">
-        <span className="text-sm font-semibold text-amber-100">Σύνολο Υπολοίπων</span>
-        <strong className="text-lg font-extrabold text-white">{money(visibleOutstandingTotal)}</strong>
+      <div className="flex items-center justify-between rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 shadow-sm">
+        <span className="text-sm font-semibold text-amber-900">Σύνολο Υπολοίπων</span>
+        <strong className="text-lg font-extrabold text-amber-950">{money(visibleOutstandingTotal)}</strong>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-zinc-800">
@@ -448,7 +448,7 @@ const handleDeleteDebt = async (debtId: number) => {
                     <button
                       type="button"
                       onClick={() => setPaymentDebt(debt)}
-                      className="rounded-xl border border-fuchsia-400/25 bg-fuchsia-400/10 px-3 py-2 text-xs text-fuchsia-200 transition hover:bg-fuchsia-400/20"
+                      className="erp-action-success rounded-xl border border-fuchsia-400/25 bg-fuchsia-400/10 px-3 py-2 text-xs text-fuchsia-200 transition hover:bg-fuchsia-400/20"
                     >
                       Πληρωμή
                     </button>
@@ -478,7 +478,9 @@ const handleDeleteDebt = async (debtId: number) => {
     setShowModal(true);
   }
 }}
-                        className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-zinc-200 transition hover:bg-white/[0.07]"
+                        className={`rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-zinc-200 transition hover:bg-white/[0.07] ${
+                          label === 'Διαγραφή' ? 'erp-action-danger' : 'erp-action-primary'
+                        }`}
                       >
                         {label}
                       </button>

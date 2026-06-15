@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Minus, X } from 'lucide-react';
 
 type ResizeDirection =
   | 'right'
@@ -20,6 +21,7 @@ interface WindowProps {
   fullscreen?: boolean;
   wide?: boolean;
   financeDashboard?: boolean;
+  compactHeader?: boolean;
   initialWidth?: number;
   initialHeight?: number;
   zIndex?: number;
@@ -35,12 +37,14 @@ export default function Window({
   fullscreen = false,
   wide = false,
   financeDashboard = false,
+  compactHeader = false,
   initialWidth,
   initialHeight,
   zIndex,
   onFocus,
   onMinimize,
 }: WindowProps) {
+  const isAutoClubRhodesReservations = title.includes('AUTOCLUB-RHODES');
   const [isMaximized, setIsMaximized] = useState(fullscreen);
   const [isMobileWindow, setIsMobileWindow] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -73,6 +77,22 @@ export default function Window({
   useEffect(() => {
     setIsMaximized(fullscreen);
   }, [fullscreen]);
+
+  useEffect(() => {
+    if (!isAutoClubRhodesReservations || isMobileWindow || fullscreen) return;
+
+    const sidebarWidth = 250;
+    const availableWidth = Math.max(620, window.innerWidth - sidebarWidth - 32);
+    const availableHeight = Math.max(420, window.innerHeight - 84);
+    const nextWidth = Math.min(1600, availableWidth);
+    const nextHeight = Math.min(940, availableHeight);
+
+    setWindowSize({ width: nextWidth, height: nextHeight });
+    setPosition({
+      x: sidebarWidth + Math.max(16, Math.round((availableWidth - nextWidth) / 2)),
+      y: 60 + Math.max(12, Math.round((availableHeight - nextHeight) / 2)),
+    });
+  }, [fullscreen, isAutoClubRhodesReservations, isMobileWindow]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 768px)');
@@ -222,7 +242,9 @@ export default function Window({
             ? 'rounded-2xl'
             : 'rounded-3xl'
         } ${
-          !isMaximized && financeDashboard
+          !isMaximized && isAutoClubRhodesReservations
+            ? ''
+            : !isMaximized && financeDashboard
               ? 'max-w-[min(1450px,96vw)] max-h-[92vh]'
             : !isMaximized && wide
               ? 'max-w-[min(1450px,96vw)] max-h-[88vh]'
@@ -241,9 +263,23 @@ export default function Window({
         {/* Title Bar */}
         <div
           onMouseDown={startDrag}
-          className={`flex ${isMobileWindow ? 'cursor-default px-3 py-3' : 'cursor-move px-6'} items-center justify-between border-b border-sky-100/[0.08] ${financeDashboard && !isMobileWindow ? 'py-3' : !isMobileWindow ? 'py-4' : ''}`}
+          className={`flex ${
+            isMobileWindow
+              ? 'cursor-default px-3 py-3'
+              : compactHeader
+                ? 'cursor-move px-4'
+                : 'cursor-move px-6'
+          } items-center justify-between border-b border-sky-100/[0.08] ${
+            compactHeader && !isMobileWindow
+              ? 'py-1.5'
+              : financeDashboard && !isMobileWindow
+                ? 'py-3'
+                : !isMobileWindow
+                  ? 'py-4'
+                  : ''
+          }`}
         >
-          <h2 className="min-w-0 truncate text-base font-semibold tracking-tight text-[#f4f7fb]">{title}</h2>
+          <h2 className={`min-w-0 truncate font-semibold tracking-tight text-[#f4f7fb] ${compactHeader ? 'text-sm' : 'text-base'}`}>{title}</h2>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             {titleActions}
             <button
@@ -251,9 +287,10 @@ export default function Window({
                 event.stopPropagation();
                 onMinimize?.();
               }}
-              className="hidden rounded-xl border border-transparent px-3 py-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white sm:block"
+              className={`hidden rounded-xl border border-transparent text-[0px] text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white sm:block ${compactHeader ? 'px-2.5 py-1' : 'px-3 py-2'}`}
               aria-label="Minimize window"
             >
+              <Minus className="h-4 w-4" />
               −
             </button>
             <button
@@ -262,16 +299,17 @@ export default function Window({
                 onFocus?.();
                 setIsMaximized((current) => !current);
               }}
-              className="hidden rounded-xl border border-transparent px-3 py-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white sm:block"
+              className={`hidden rounded-xl border border-transparent text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white sm:block ${compactHeader ? 'px-2.5 py-1' : 'px-3 py-2'}`}
               aria-label={isMaximized ? 'Restore window' : 'Maximize window'}
             >
               {isMaximized ? '\u2750' : '\u25A1'}
             </button>
             <button
               onClick={onClose}
-              className="rounded-xl border border-transparent p-2 text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white"
+              className={`rounded-xl border border-transparent text-[0px] text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white ${compactHeader ? 'p-1.5' : 'p-2'}`}
               aria-label="Close window"
             >
+              <X className="h-4 w-4" />
               ✕
             </button>
           </div>
@@ -279,7 +317,7 @@ export default function Window({
 
         {/* Content */}
         <div
-          className={`min-h-0 flex-1 overflow-auto ${
+          className={`erp-module-light-content min-h-0 flex-1 overflow-auto ${
             isMobileWindow ? 'p-3' : isMaximized ? 'p-0' : financeDashboard ? 'p-5' : 'p-7'
           }`}
         >
