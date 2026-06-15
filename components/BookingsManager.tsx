@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabaseClient';
 import {
@@ -665,6 +665,9 @@ export default function BookingsManager({
   const [reminderFeedback, setReminderFeedback] = useState('');
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
   const [mobileReservationId, setMobileReservationId] = useState('');
+  const [detailPanelHeight, setDetailPanelHeight] = useState(330);
+  const [isResizingDetails, setIsResizingDetails] = useState(false);
+  const desktopSplitRef = useRef<HTMLDivElement | null>(null);
   const [form, setForm] = useState<ReservationForm>(initialForm);
   const [agencyRows, setAgencyRows] = useState<AgencyRow[]>([]);
   const [representativeRows, setRepresentativeRows] = useState<RepresentativeRow[]>([]);
@@ -686,6 +689,36 @@ export default function BookingsManager({
       window.removeEventListener('orientationchange', updatePhoneViewport);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isResizingDetails) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const splitContainer = desktopSplitRef.current;
+      if (!splitContainer) return;
+
+      const bounds = splitContainer.getBoundingClientRect();
+      const maximumDetailHeight = Math.max(220, bounds.height - 180 - 8);
+      const nextHeight = Math.min(Math.max(bounds.bottom - event.clientY, 220), maximumDetailHeight);
+      setDetailPanelHeight(nextHeight);
+    };
+
+    const stopResizing = () => setIsResizingDetails(false);
+
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', stopResizing);
+    window.addEventListener('pointercancel', stopResizing);
+
+    return () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', stopResizing);
+      window.removeEventListener('pointercancel', stopResizing);
+    };
+  }, [isResizingDetails]);
 
   const notifyBookingEventOnce = async (
     reservation: Pick<Reservation, 'id' | 'hotelRoom' | 'name'>,
@@ -1751,8 +1784,8 @@ export default function BookingsManager({
   }
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col gap-1 overflow-hidden rounded-xl bg-slate-100 p-1.5 text-slate-900">
-      <div className="flex flex-shrink-0 flex-col gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 shadow-sm md:flex-row md:items-center">
+    <div className="relative flex h-full min-h-0 w-full flex-col gap-0.5 overflow-hidden rounded-xl bg-slate-100 p-1 text-slate-900">
+      <div className="flex flex-shrink-0 flex-col gap-1 rounded-lg border border-slate-200 bg-white px-1.5 py-0.5 shadow-sm md:flex-row md:items-center">
         <input
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
@@ -1932,7 +1965,8 @@ export default function BookingsManager({
         )}
       </div>
 
-      <section className="h-[38%] min-h-[230px] flex-shrink-0 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
+      <div ref={desktopSplitRef} className="flex min-h-0 flex-1 flex-col">
+      <section className="min-h-[180px] flex-1 overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
         <div className="h-full overflow-auto">
           <table className="w-full min-w-[1430px] text-left text-[13px]">
             <thead className="sticky top-0 z-10 bg-slate-200 text-xs font-bold text-slate-800 shadow-[0_1px_0_rgba(15,23,42,0.15)]">
@@ -2047,6 +2081,28 @@ export default function BookingsManager({
         </div>
       </section>
 
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize reservation details"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          setIsResizingDetails(true);
+        }}
+        className={`group flex h-2 flex-shrink-0 cursor-ns-resize touch-none items-center justify-center ${
+          isResizingDetails ? 'bg-sky-100' : 'bg-transparent'
+        }`}
+      >
+        <span
+          className={`h-1 w-20 rounded-full border transition ${
+            isResizingDetails
+              ? 'border-sky-500 bg-sky-400'
+              : 'border-slate-300 bg-slate-200 group-hover:border-sky-400 group-hover:bg-sky-300'
+          }`}
+        />
+      </div>
+
+      <div className="flex min-h-[220px] flex-shrink-0 overflow-hidden" style={{ height: detailPanelHeight }}>
       {selectedReservation ? (
         <ReservationInspector
           key={selectedReservation.id}
@@ -2073,6 +2129,8 @@ export default function BookingsManager({
           Δεν υπάρχουν κρατήσεις.
         </section>
       )}
+      </div>
+      </div>
 
       {showNewModal && (
         <NewReservationModal
