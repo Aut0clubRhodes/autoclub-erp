@@ -1,9 +1,8 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
-  Clock3,
   Eye,
   Globe2,
   Mail,
@@ -14,9 +13,21 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import {
+  loadBookingEngineReservations,
+  saveBookingEngineReservations,
+  subscribeBookingEngineReservations,
+  type BookingEngineReservationStatus,
+  type BookingEngineWebsiteReservation,
+} from '@/lib/bookingEngineReservationsStore';
+import {
+  loadBookingEngineConfig,
+  subscribeBookingEngineConfig,
+  type BookingEngineEmailTemplateId,
+} from '@/lib/bookingEngineLocalConfig';
 
-type ReservationStatus = 'New Request' | 'Under Review' | 'Ready' | 'Cancelled';
-type EmailTemplateId = 'confirmation' | 'reminder' | 'payment' | 'custom';
+type ReservationStatus = BookingEngineReservationStatus;
+type EmailTemplateId = BookingEngineEmailTemplateId;
 type EmailField = 'subject' | 'message';
 type ReservationSortKey =
   | 'id'
@@ -33,158 +44,13 @@ type ReservationSortState = {
   direction: 'asc' | 'desc';
 };
 
-type WebsiteReservation = {
-  id: string;
-  customerName: string;
-  phone: string;
-  email: string;
-  carName: string;
-  groupCode: string;
-  pickupDate: string;
-  pickupTime: string;
-  pickupLocation: string;
-  returnDate: string;
-  returnTime: string;
-  returnLocation: string;
-  total: number;
-  paymentMethod: string;
-  status: ReservationStatus;
-  notes: string;
-  processed: boolean;
-};
-
-const sampleReservations: WebsiteReservation[] = [
-  {
-    id: 'ACR-260615-1047',
-    customerName: 'Lucia Rossi',
-    phone: '+39 333 870 1220',
-    email: 'lucia.rossi@example.com',
-    carName: 'Fiat Panda or similar',
-    groupCode: 'A',
-    pickupDate: '2026-06-21',
-    pickupTime: '12:00',
-    pickupLocation: 'Lindos',
-    returnDate: '2026-06-28',
-    returnTime: '10:00',
-    returnLocation: 'Rhodes Airport',
-    total: 329,
-    paymentMethod: 'Bank Transfer',
-    status: 'New Request',
-    notes: 'Infant seat requested.',
-    processed: false,
-  },
-  {
-    id: 'ACR-260615-1042',
-    customerName: 'Marco Bianchi',
-    phone: '+39 347 555 0194',
-    email: 'marco.bianchi@example.com',
-    carName: 'Peugeot 108 or similar',
-    groupCode: 'A',
-    pickupDate: '2026-06-15',
-    pickupTime: '10:30',
-    pickupLocation: 'Rhodes Airport',
-    returnDate: '2026-06-20',
-    returnTime: '09:00',
-    returnLocation: 'Rhodes Airport',
-    total: 245,
-    paymentMethod: 'Payment Link',
-    status: 'New Request',
-    notes: 'Flight FR 9821.',
-    processed: false,
-  },
-  {
-    id: 'ACR-260614-1038',
-    customerName: 'Claire Martin',
-    phone: '+33 6 44 21 08 77',
-    email: 'claire.martin@example.com',
-    carName: 'Peugeot 208 or similar',
-    groupCode: 'C',
-    pickupDate: '2026-06-17',
-    pickupTime: '14:00',
-    pickupLocation: 'Rhodes Town',
-    returnDate: '2026-06-24',
-    returnTime: '11:00',
-    returnLocation: 'Rhodes Town',
-    total: 392,
-    paymentMethod: 'Card',
-    status: 'Under Review',
-    notes: 'Availability review requested.',
-    processed: false,
-  },
-  {
-    id: 'ACR-260613-1031',
-    customerName: 'Jan Novak',
-    phone: '+420 602 118 442',
-    email: 'jan.novak@example.com',
-    carName: 'Peugeot 2008 or similar',
-    groupCode: 'D1',
-    pickupDate: '2026-06-18',
-    pickupTime: '08:30',
-    pickupLocation: 'Faliraki',
-    returnDate: '2026-06-26',
-    returnTime: '18:00',
-    returnLocation: 'Rhodes Airport',
-    total: 688,
-    paymentMethod: 'Payment Link',
-    status: 'Ready',
-    notes: 'Payment completed.',
-    processed: true,
-  },
-  {
-    id: 'ACR-260612-1026',
-    customerName: 'Anna Keller',
-    phone: '+49 151 242 9981',
-    email: 'anna.keller@example.com',
-    carName: 'Hyundai i10 or similar',
-    groupCode: 'B',
-    pickupDate: '2026-06-15',
-    pickupTime: '16:30',
-    pickupLocation: 'Ixia',
-    returnDate: '2026-06-19',
-    returnTime: '12:00',
-    returnLocation: 'Ixia',
-    total: 196,
-    paymentMethod: 'Pay on Arrival',
-    status: 'Cancelled',
-    notes: 'Cancelled due to flight changes.',
-    processed: true,
-  },
-];
+type WebsiteReservation = BookingEngineWebsiteReservation;
 
 const statusStyles: Record<ReservationStatus, string> = {
   'New Request': 'border-sky-200 bg-sky-50 text-sky-800',
   'Under Review': 'border-amber-200 bg-amber-50 text-amber-800',
   Ready: 'border-emerald-200 bg-emerald-50 text-emerald-800',
   Cancelled: 'border-rose-200 bg-rose-50 text-rose-700',
-};
-
-const emailTemplates: Record<
-  EmailTemplateId,
-  { label: string; subject: string; message: string }
-> = {
-  confirmation: {
-    label: 'Confirmation email',
-    subject: 'Reservation {reservation_id} confirmation',
-    message:
-      'Hello {customer_name},\n\nYour reservation for {car_name} (Group {group}) is confirmed.\nPickup: {pickup_date} at {pickup_time}, {pickup_location}.\nReturn: {return_date} at {return_time}, {return_location}.\nTotal: {total_price}.\nPayment method: {payment_method}.',
-  },
-  reminder: {
-    label: 'Reminder email',
-    subject: 'Reminder for reservation {reservation_id}',
-    message:
-      'Hello {customer_name},\n\nThis is a reminder for your upcoming {car_name} pickup on {pickup_date} at {pickup_time} from {pickup_location}.',
-  },
-  payment: {
-    label: 'Payment request email',
-    subject: 'Payment request for reservation {reservation_id}',
-    message:
-      'Hello {customer_name},\n\nThe total for reservation {reservation_id} is {total_price}. Please complete payment using the agreed {payment_method} method.',
-  },
-  custom: {
-    label: 'Custom message',
-    subject: '',
-    message: '',
-  },
 };
 
 const emailVariables = [
@@ -209,6 +75,28 @@ const formatDate = (value: string) => {
 
 const formatMoney = (value: number) =>
   new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(value);
+
+const replaceEmailVariables = (template: string, reservation: WebsiteReservation) => {
+  const replacements: Record<string, string> = {
+    '{customer_name}': reservation.customerName,
+    '{reservation_id}': reservation.id,
+    '{car_name}': reservation.carName,
+    '{group}': reservation.groupCode,
+    '{pickup_date}': formatDate(reservation.pickupDate),
+    '{pickup_time}': reservation.pickupTime,
+    '{return_date}': formatDate(reservation.returnDate),
+    '{return_time}': reservation.returnTime,
+    '{pickup_location}': reservation.pickupLocation,
+    '{return_location}': reservation.returnLocation,
+    '{total_price}': formatMoney(reservation.total),
+    '{payment_method}': reservation.paymentMethod,
+  };
+
+  return Object.entries(replacements).reduce(
+    (message, [variable, value]) => message.split(variable).join(value || ''),
+    template,
+  );
+};
 
 const getReservationSortValue = (
   reservation: WebsiteReservation,
@@ -255,14 +143,17 @@ const sortReservations = (
   });
 
 export default function AutoClubRhodesReservationsBoard() {
-  const [reservations, setReservations] = useState<WebsiteReservation[]>(sampleReservations);
+  const [reservations, setReservations] = useState<WebsiteReservation[]>(() =>
+    loadBookingEngineReservations(),
+  );
   const [editingReservationId, setEditingReservationId] = useState<string | null>(null);
   const [reservationDraft, setReservationDraft] = useState<WebsiteReservation | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [emailFeedback, setEmailFeedback] = useState('');
   const [emailReservationId, setEmailReservationId] = useState<string | null>(null);
   const [emailInitialTemplate, setEmailInitialTemplate] =
-    useState<EmailTemplateId>('confirmation');
+    useState<EmailTemplateId>('customerRequestReceived');
+  const [bookingEngineConfig, setBookingEngineConfig] = useState(() => loadBookingEngineConfig());
   const [newRequestsSort, setNewRequestsSort] = useState<ReservationSortState>({
     key: 'customer',
     direction: 'asc',
@@ -271,6 +162,22 @@ export default function AutoClubRhodesReservationsBoard() {
     key: 'id',
     direction: 'desc',
   });
+
+  useEffect(
+    () =>
+      subscribeBookingEngineReservations(() => {
+        setReservations(loadBookingEngineReservations());
+      }),
+    [],
+  );
+
+  useEffect(
+    () =>
+      subscribeBookingEngineConfig(() => {
+        setBookingEngineConfig(loadBookingEngineConfig());
+      }),
+    [],
+  );
 
   const newReservations = useMemo(
     () =>
@@ -300,11 +207,13 @@ export default function AutoClubRhodesReservationsBoard() {
     reservationId: string,
     patch: Partial<Pick<WebsiteReservation, 'status' | 'processed'>>,
   ) => {
-    setReservations((current) =>
-      current.map((reservation) =>
+    setReservations((current) => {
+      const nextReservations = current.map((reservation) =>
         reservation.id === reservationId ? { ...reservation, ...patch } : reservation,
-      ),
-    );
+      );
+      saveBookingEngineReservations(nextReservations);
+      return nextReservations;
+    });
   };
 
   const openEditor = (reservation: WebsiteReservation) => {
@@ -320,8 +229,8 @@ export default function AutoClubRhodesReservationsBoard() {
   const saveEditedReservation = () => {
     if (!editingReservationId || !reservationDraft?.customerName.trim()) return;
 
-    setReservations((current) =>
-      current.map((reservation) =>
+    setReservations((current) => {
+      const nextReservations = current.map((reservation) =>
         reservation.id === editingReservationId
           ? {
               ...reservationDraft,
@@ -336,25 +245,30 @@ export default function AutoClubRhodesReservationsBoard() {
               notes: reservationDraft.notes.trim(),
             }
           : reservation,
-      ),
-    );
+      );
+      saveBookingEngineReservations(nextReservations);
+      return nextReservations;
+    });
     closeEditor();
   };
 
   const deleteReservation = (reservationId: string) => {
-    setReservations((current) =>
-      current.filter((reservation) => reservation.id !== reservationId),
-    );
+    setReservations((current) => {
+      const nextReservations = current.filter((reservation) => reservation.id !== reservationId);
+      saveBookingEngineReservations(nextReservations);
+      return nextReservations;
+    });
     closeEditor();
     setPendingDeleteId(null);
   };
 
   const openEmailComposer = (
     reservationId: string,
-    template: EmailTemplateId = 'confirmation',
+    template?: EmailTemplateId,
   ) => {
+    const reservation = reservations.find((item) => item.id === reservationId);
     setEmailReservationId(reservationId);
-    setEmailInitialTemplate(template);
+    setEmailInitialTemplate(template || reservation?.customerEmailTemplateId || 'customerRequestReceived');
     setEmailFeedback('');
   };
 
@@ -418,23 +332,23 @@ export default function AutoClubRhodesReservationsBoard() {
           />
 
           <div className="overflow-x-auto">
-            <div className="min-w-[1230px]">
-              <div className="grid grid-cols-[170px_135px_180px_135px_135px_85px_120px_105px_365px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
+            <div className="min-w-[1370px]">
+              <div className="grid grid-cols-[170px_135px_180px_135px_135px_130px_85px_120px_365px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
                 <SortHeader label="Customer" sortKey="customer" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <SortHeader label="Phone" sortKey="phone" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <SortHeader label="Car / Group" sortKey="car" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <SortHeader label="Pickup" sortKey="pickup" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <SortHeader label="Return" sortKey="return" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
+                <SortHeader label="Status" sortKey="status" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <SortHeader label="Total" sortKey="total" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <SortHeader label="Payment" sortKey="payment" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
-                <SortHeader label="Status" sortKey="status" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <span className="text-right">Actions</span>
               </div>
               {newReservations.length > 0 ? (
                 newReservations.map((reservation) => (
                   <div
                     key={reservation.id}
-                    className="grid grid-cols-[170px_135px_180px_135px_135px_85px_120px_105px_365px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
+                    className="grid grid-cols-[170px_135px_180px_135px_135px_130px_85px_120px_365px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
                   >
                     <div className="min-w-0 pr-3">
                       <p className="truncate font-black text-slate-900">{reservation.customerName}</p>
@@ -446,11 +360,11 @@ export default function AutoClubRhodesReservationsBoard() {
                     <CarCell reservation={reservation} />
                     <DateCell date={reservation.pickupDate} time={reservation.pickupTime} />
                     <DateCell date={reservation.returnDate} time={reservation.returnTime} />
+                    <StatusBadge status={reservation.status} />
                     <span className="font-black text-slate-900">{formatMoney(reservation.total)}</span>
                     <span className="truncate pr-2 text-xs font-bold text-slate-700">
                       {reservation.paymentMethod}
                     </span>
-                    <StatusBadge status={reservation.status} />
                     <div className="flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
                       <TextAction
                         label="View"
@@ -504,24 +418,24 @@ export default function AutoClubRhodesReservationsBoard() {
           />
 
           <div className="overflow-x-auto">
-            <div className="min-w-[1320px]">
-              <div className="grid grid-cols-[135px_160px_135px_180px_135px_135px_85px_120px_105px_330px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
+            <div className="min-w-[1430px]">
+              <div className="grid grid-cols-[135px_160px_135px_180px_135px_135px_130px_85px_120px_330px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
                 <SortHeader label="ID" sortKey="id" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Customer" sortKey="customer" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Phone" sortKey="phone" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Car / Group" sortKey="car" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Pickup" sortKey="pickup" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Return" sortKey="return" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
+                <SortHeader label="Status" sortKey="status" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Total" sortKey="total" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Payment" sortKey="payment" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
-                <SortHeader label="Status" sortKey="status" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <span className="text-right">Actions</span>
               </div>
               {processedReservations.length > 0 ? (
                 processedReservations.map((reservation) => (
                   <div
                     key={reservation.id}
-                    className="grid grid-cols-[135px_160px_135px_180px_135px_135px_85px_120px_105px_330px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
+                    className="grid grid-cols-[135px_160px_135px_180px_135px_135px_130px_85px_120px_330px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
                   >
                     <span className="font-mono text-[11px] font-black text-cyan-700">
                       {reservation.id}
@@ -535,11 +449,11 @@ export default function AutoClubRhodesReservationsBoard() {
                     <CarCell reservation={reservation} />
                     <DateCell date={reservation.pickupDate} time={reservation.pickupTime} />
                     <DateCell date={reservation.returnDate} time={reservation.returnTime} />
+                    <StatusBadge status={reservation.status} />
                     <span className="font-black text-slate-900">{formatMoney(reservation.total)}</span>
                     <span className="truncate pr-2 text-xs font-bold text-slate-700">
                       {reservation.paymentMethod}
                     </span>
-                    <StatusBadge status={reservation.status} />
                     <div className="flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
                       <TextAction
                         label="View"
@@ -595,6 +509,7 @@ export default function AutoClubRhodesReservationsBoard() {
           onSave={saveEditedReservation}
           onDelete={() => setPendingDeleteId(reservationDraft.id)}
           onEmail={(template) => openEmailComposer(reservationDraft.id, template)}
+          onEmailPlaceholder={() => setEmailFeedback('Email sending not connected yet.')}
         />
       )}
 
@@ -603,6 +518,9 @@ export default function AutoClubRhodesReservationsBoard() {
           key={`${emailReservation.id}-${emailInitialTemplate}`}
           reservation={emailReservation}
           initialTemplate={emailInitialTemplate}
+          templates={bookingEngineConfig.emailSettings.templates}
+          siteName={bookingEngineConfig.siteSettings.companyName || 'AutoClub Rhodes'}
+          logoImage={bookingEngineConfig.siteSettings.logoImage}
           onClose={() => setEmailReservationId(null)}
           onFeedback={(message) => {
             setEmailFeedback(message);
@@ -628,6 +546,7 @@ function ReservationEditor({
   onSave,
   onDelete,
   onEmail,
+  onEmailPlaceholder,
 }: {
   draft: WebsiteReservation;
   onDraftChange: (draft: WebsiteReservation) => void;
@@ -635,6 +554,7 @@ function ReservationEditor({
   onSave: () => void;
   onDelete: () => void;
   onEmail: (template: EmailTemplateId) => void;
+  onEmailPlaceholder: () => void;
 }) {
   const updateDraft = (patch: Partial<WebsiteReservation>) => {
     onDraftChange({ ...draft, ...patch });
@@ -685,6 +605,16 @@ function ReservationEditor({
             label="Email"
             value={draft.email}
             onChange={(email) => updateDraft({ email })}
+          />
+          <EditorField
+            label="Hotel / Room"
+            value={draft.hotelRoom}
+            onChange={(hotelRoom) => updateDraft({ hotelRoom })}
+          />
+          <EditorField
+            label="Flight Number"
+            value={draft.flightNumber}
+            onChange={(flightNumber) => updateDraft({ flightNumber })}
           />
           <EditorField
             label="Car"
@@ -739,9 +669,37 @@ function ReservationEditor({
             onChange={(total) => updateDraft({ total: Number(total) || 0 })}
           />
           <EditorField
+            label="Rental days"
+            type="number"
+            value={String(draft.rentalDays)}
+            onChange={(rentalDays) => updateDraft({ rentalDays: Number(rentalDays) || 1 })}
+          />
+          <EditorField
+            label="Rental amount"
+            type="number"
+            value={String(draft.rentalAmount)}
+            onChange={(rentalAmount) => updateDraft({ rentalAmount: Number(rentalAmount) || 0 })}
+          />
+          <EditorField
+            label="Coupon"
+            value={draft.couponCode}
+            onChange={(couponCode) => updateDraft({ couponCode })}
+          />
+          <EditorField
+            label="Coupon discount"
+            type="number"
+            value={String(draft.couponDiscount)}
+            onChange={(couponDiscount) => updateDraft({ couponDiscount: Number(couponDiscount) || 0 })}
+          />
+          <EditorField
             label="Payment method"
             value={draft.paymentMethod}
             onChange={(paymentMethod) => updateDraft({ paymentMethod })}
+          />
+          <EditorField
+            label="Created at"
+            value={new Date(draft.createdAt).toLocaleString('en-GB')}
+            onChange={() => undefined}
           />
           <label className="block md:col-span-2">
             <EditorLabel>Status</EditorLabel>
@@ -771,27 +729,121 @@ function ReservationEditor({
           <section className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-black text-slate-900">Manual email actions</p>
-                <p className="mt-0.5 text-xs text-slate-500">Email provider is not connected yet.</p>
+                <p className="text-sm font-black text-slate-900">Submitted extras</p>
+                <p className="mt-0.5 text-xs text-slate-500">Stored with the local website reservation.</p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => onEmail('confirmation')}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-3 text-xs font-black text-white transition hover:bg-cyan-800"
-                >
-                  <Mail className="h-4 w-4" />
-                  Send confirmation email
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onEmail('reminder')}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-indigo-600 bg-indigo-600 px-3 text-xs font-black text-white transition hover:bg-indigo-700"
-                >
-                  <Clock3 className="h-4 w-4" />
-                  Send reminder email
-                </button>
+              <span className="text-sm font-black text-slate-900">
+                {formatMoney(draft.extras.reduce((sum, extra) => sum + extra.total, 0))}
+              </span>
+            </div>
+            <div className="mt-3 space-y-2">
+              {draft.extras.length > 0 ? (
+                draft.extras.map((extra) => (
+                  <div key={extra.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs">
+                    <span className="font-bold text-slate-800">
+                      {extra.name} x {extra.quantity}
+                    </span>
+                    <span className="font-black text-slate-900">{formatMoney(extra.total)}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-3 text-xs font-semibold text-slate-500">
+                  No extras selected.
+                </p>
+              )}
+            </div>
+          </section>
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+            <div>
+              <p className="text-sm font-black text-slate-900">Custom checkout fields</p>
+              <p className="mt-0.5 text-xs text-slate-500">Values submitted from Public Booking Preview.</p>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {draft.customFields.length > 0 ? (
+                draft.customFields.map((field) => (
+                  <div key={field.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.07em] text-slate-500">
+                      {field.label}
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-slate-900">{field.value || '—'}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-3 text-xs font-semibold text-slate-500 sm:col-span-2">
+                  No custom checkout fields submitted.
+                </p>
+              )}
+            </div>
+          </section>
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-slate-900">Email preview flow</p>
+                <p className="mt-0.5 text-xs text-slate-500">Preview only. Email provider is not connected yet.</p>
               </div>
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black text-amber-800">
+                {draft.emailStatus}
+              </span>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.07em] text-slate-500">
+                  Customer email template used
+                </p>
+                <p className="mt-1 text-sm font-bold text-slate-900">
+                  {draft.customerEmailTemplateLabel || 'Customer Reservation Received'}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.07em] text-slate-500">
+                  Admin notification preview exists
+                </p>
+                <p className="mt-1 text-sm font-bold text-slate-900">
+                  {draft.adminEmailPreviewCreated ? 'Yes' : 'No'}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.07em] text-slate-500">
+                  Customer email preview exists
+                </p>
+                <p className="mt-1 text-sm font-bold text-slate-900">
+                  {draft.customerEmailPreviewCreated ? 'Yes' : 'No'}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.07em] text-slate-500">
+                  Email status
+                </p>
+                <p className="mt-1 text-sm font-bold text-slate-900">
+                  {draft.emailStatus === 'Preview only / Not sent' ? 'Not sent / Preview only' : draft.emailStatus}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.07em] text-slate-500">
+                  Last selected template
+                </p>
+                <p className="mt-1 text-sm font-bold text-slate-900">
+                  {draft.customerEmailTemplateLabel || 'Customer Reservation Received'}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => onEmail(draft.customerEmailTemplateId || 'customerRequestReceived')}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-3 text-xs font-black text-white transition hover:bg-cyan-800"
+              >
+                <Mail className="h-4 w-4" />
+                Open email composer
+              </button>
+              <button
+                type="button"
+                onClick={onEmailPlaceholder}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-700 bg-emerald-700 px-3 text-xs font-black text-white transition hover:bg-emerald-800"
+              >
+                <Mail className="h-4 w-4" />
+                Send email placeholder
+              </button>
             </div>
           </section>
         </div>
@@ -1003,28 +1055,45 @@ function TextAction({
 function EmailComposerModal({
   reservation,
   initialTemplate,
+  templates,
+  siteName,
+  logoImage,
   onClose,
   onFeedback,
 }: {
   reservation: WebsiteReservation;
   initialTemplate: EmailTemplateId;
+  templates: ReturnType<typeof loadBookingEngineConfig>['emailSettings']['templates'];
+  siteName: string;
+  logoImage: string;
   onClose: () => void;
   onFeedback: (message: string) => void;
 }) {
-  const initialContent = emailTemplates[initialTemplate];
-  const [templateId, setTemplateId] = useState<EmailTemplateId>(initialTemplate);
+  const customerTemplateOrder: EmailTemplateId[] = [
+    'customerRequestReceived',
+    'customerOnRequestReceived',
+    'customerBookingConfirmed',
+    'paymentReminder',
+    'customEmail',
+  ];
+  const safeInitialTemplate = customerTemplateOrder.includes(initialTemplate)
+    ? initialTemplate
+    : 'customerRequestReceived';
+  const initialContent = templates[safeInitialTemplate];
+  const [templateId, setTemplateId] = useState<EmailTemplateId>(safeInitialTemplate);
   const [recipient, setRecipient] = useState(reservation.email);
-  const [subject, setSubject] = useState(initialContent.subject);
-  const [message, setMessage] = useState(initialContent.message);
+  const [subject, setSubject] = useState(replaceEmailVariables(initialContent.subject, reservation));
+  const [message, setMessage] = useState(replaceEmailVariables(initialContent.message, reservation));
   const [activeField, setActiveField] = useState<EmailField>('message');
   const subjectRef = useRef<HTMLInputElement | null>(null);
   const messageRef = useRef<HTMLTextAreaElement | null>(null);
 
   const applyTemplate = (nextTemplateId: EmailTemplateId) => {
-    const template = emailTemplates[nextTemplateId];
+    const template = templates[nextTemplateId];
     setTemplateId(nextTemplateId);
-    setSubject(template.subject);
-    setMessage(template.message);
+    setRecipient(reservation.email);
+    setSubject(replaceEmailVariables(template.subject, reservation));
+    setMessage(replaceEmailVariables(template.message, reservation));
     setActiveField('message');
   };
 
@@ -1058,12 +1127,21 @@ function EmailComposerModal({
         className="flex max-h-[90%] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
       >
         <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4">
-          <div>
-            <p className="font-mono text-xs font-black text-cyan-700">{reservation.id}</p>
-            <h3 className="mt-1 text-xl font-black text-slate-950">Email composer</h3>
-            <p className="mt-1 text-xs text-slate-500">
-              Local preview only. No email provider is connected.
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-[#073f5d] text-sm font-black text-white">
+              {logoImage ? (
+                <img src={logoImage} alt={siteName} className="h-full w-full object-contain bg-white p-1" />
+              ) : (
+                <span>AC</span>
+              )}
+            </div>
+            <div>
+              <p className="font-mono text-xs font-black text-cyan-700">{reservation.id}</p>
+              <h3 className="mt-1 text-xl font-black text-slate-950">Email composer</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                {siteName} · Car rental in Rhodes · Local preview only
+              </p>
+            </div>
           </div>
           <button
             type="button"
@@ -1084,13 +1162,14 @@ function EmailComposerModal({
                 onChange={(event) => applyTemplate(event.target.value as EmailTemplateId)}
                 className="mt-1.5 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
               >
-                {(Object.entries(emailTemplates) as Array<
-                  [EmailTemplateId, (typeof emailTemplates)[EmailTemplateId]]
-                >).map(([id, template]) => (
+                {customerTemplateOrder.map((id) => {
+                  const template = templates[id];
+                  return (
                   <option key={id} value={id}>
                     {template.label}
                   </option>
-                ))}
+                  );
+                })}
               </select>
             </label>
 
@@ -1170,7 +1249,7 @@ function EmailComposerModal({
             className="inline-flex h-10 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-4 text-sm font-black text-white transition hover:bg-cyan-800"
           >
             <Mail className="h-4 w-4" />
-            Send email
+            Send email placeholder
           </button>
         </footer>
       </div>

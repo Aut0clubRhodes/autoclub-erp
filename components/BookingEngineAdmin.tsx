@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarRange,
   Car,
@@ -16,11 +16,21 @@ import {
   MapPin,
   PackagePlus,
   Plus,
+  Save,
   Settings2,
   Trash2,
   X,
   type LucideIcon,
 } from 'lucide-react';
+import {
+  bookingEngineLocalConfig,
+  type BookingEngineEmailSettings,
+  type BookingEngineEmailTemplateId,
+  type CheckoutFieldType,
+  loadBookingEngineConfig,
+  resetBookingEngineConfig,
+  saveBookingEngineConfig,
+} from '@/lib/bookingEngineLocalConfig';
 
 type AdminTabId =
   | 'groups'
@@ -32,6 +42,7 @@ type AdminTabId =
   | 'coupons'
   | 'payments'
   | 'booking-settings'
+  | 'checkout-fields'
   | 'site-settings'
   | 'emails';
 
@@ -48,11 +59,6 @@ type SeasonStatus = 'Active' | 'Inactive';
 type ExtraPricingMode = 'Per Day' | 'Per Booking' | 'Free';
 type CouponDiscountType = 'Percentage' | 'Fixed Amount';
 type PaymentMethodType = 'Pay on Arrival' | 'Bank Transfer' | 'Payment Link' | 'Card' | 'Custom';
-type ReminderTiming =
-  | '96 hours before pickup'
-  | '48 hours before pickup'
-  | '24 hours before pickup'
-  | 'Custom hours before pickup';
 type BookingDefaultLanguage = 'English' | 'Italian' | 'French' | 'German' | 'Czech' | 'Greek';
 type NewReservationStatus = 'Pending' | 'Accepted' | 'On Request';
 
@@ -82,6 +88,7 @@ type BookingEngineCar = {
   name: string;
   groupCode: string;
   description: string;
+  imageUrl: string;
   featureIds: string[];
   status: CarStatus;
   locationIds: string[];
@@ -93,6 +100,7 @@ type BookingExtra = {
   description: string;
   pricingMode: ExtraPricingMode;
   price: string;
+  imageUrl: string;
   status: SeasonStatus;
   maximumQuantity: string;
 };
@@ -112,6 +120,7 @@ type SeasonPrice = {
   toDate: string;
   tiers: PricingTier[];
   websiteMode: CarStatus;
+  status: SeasonStatus;
   notes: string;
 };
 
@@ -138,20 +147,7 @@ type BookingPaymentMethod = {
   status: SeasonStatus;
 };
 
-type BookingEmailSettings = {
-  adminEmail: string;
-  adminNotificationActive: boolean;
-  adminSubject: string;
-  adminMessage: string;
-  customerConfirmationActive: boolean;
-  customerConfirmationSubject: string;
-  customerConfirmationMessage: string;
-  reminderActive: boolean;
-  reminderTiming: ReminderTiming;
-  reminderCustomHours: string;
-  reminderSubject: string;
-  reminderMessage: string;
-};
+type BookingEmailSettings = BookingEngineEmailSettings;
 
 type BookingEngineSettings = {
   advanceBookingActive: boolean;
@@ -161,6 +157,17 @@ type BookingEngineSettings = {
   showMarketingConsent: boolean;
   termsUrl: string;
   newReservationStatus: NewReservationStatus;
+};
+
+type CheckoutFieldSetting = {
+  id: string;
+  name: string;
+  fieldType: CheckoutFieldType;
+  enabled: boolean;
+  required: boolean;
+  label: string;
+  options?: string[];
+  builtIn?: boolean;
 };
 
 type SiteSettings = {
@@ -174,17 +181,12 @@ type SiteSettings = {
   whatsappNumber: string;
   termsUrl: string;
   privacyPolicyUrl: string;
+  logoImage: string;
   status: SeasonStatus;
   internalNotes: string;
 };
 
-type EmailTemplateFieldKey =
-  | 'adminSubject'
-  | 'adminMessage'
-  | 'customerConfirmationSubject'
-  | 'customerConfirmationMessage'
-  | 'reminderSubject'
-  | 'reminderMessage';
+type EmailTemplateFieldKey = `${BookingEngineEmailTemplateId}:subject` | `${BookingEngineEmailTemplateId}:message`;
 
 type CarDraft = Omit<BookingEngineCar, 'id'>;
 type GroupDraft = Omit<BookingGroup, 'id'>;
@@ -205,6 +207,7 @@ const adminTabs: AdminTab[] = [
   { id: 'coupons', label: 'Coupons', description: 'Promotional codes and discount definitions.', icon: Gift },
   { id: 'payments', label: 'Payment Methods', description: 'Available payment choices and checkout settings.', icon: CreditCard },
   { id: 'booking-settings', label: 'Booking Settings', description: 'Reservation rules, defaults and customer consent options.', icon: Settings2 },
+  { id: 'checkout-fields', label: 'Checkout Fields', description: 'Choose which customer fields appear during checkout.', icon: ListChecks },
   { id: 'site-settings', label: 'Site Settings', description: 'Site identity, regional defaults and contact configuration.', icon: Globe2 },
   { id: 'emails', label: 'Emails', description: 'Customer email templates and delivery settings.', icon: Mail },
 ];
@@ -213,6 +216,7 @@ const emptyCarDraft: CarDraft = {
   name: '',
   groupCode: '',
   description: '',
+  imageUrl: '',
   featureIds: [],
   status: 'Open',
   locationIds: [],
@@ -239,6 +243,7 @@ const emptyExtraDraft: ExtraDraft = {
   description: '',
   pricingMode: 'Per Day',
   price: '',
+  imageUrl: '',
   status: 'Active',
   maximumQuantity: '',
 };
@@ -250,6 +255,7 @@ const emptySeasonPriceDraft: SeasonPriceDraft = {
   toDate: '',
   tiers: [],
   websiteMode: 'Open',
+  status: 'Active',
   notes: '',
 };
 
@@ -274,24 +280,6 @@ const emptyPaymentMethodDraft: PaymentMethodDraft = {
   status: 'Active',
 };
 
-const initialEmailSettings: BookingEmailSettings = {
-  adminEmail: '',
-  adminNotificationActive: true,
-  adminSubject: 'New reservation {reservation_id}',
-  adminMessage:
-    'A new reservation was received from {customer_name} for {car_name}, from {pickup_date} to {return_date}.',
-  customerConfirmationActive: true,
-  customerConfirmationSubject: 'Your reservation {reservation_id} is confirmed',
-  customerConfirmationMessage:
-    'Hello {customer_name}, your reservation for {car_name} is confirmed. Pickup: {pickup_date} at {pickup_time}, {pickup_location}. Total: {total_price}.',
-  reminderActive: true,
-  reminderTiming: '48 hours before pickup',
-  reminderCustomHours: '',
-  reminderSubject: 'Reminder for your upcoming reservation',
-  reminderMessage:
-    'Hello {customer_name}, this is a reminder for your {car_name} pickup on {pickup_date} at {pickup_time}, from {pickup_location}.',
-};
-
 const initialBookingEngineSettings: BookingEngineSettings = {
   advanceBookingActive: true,
   advanceBookingHours: '48',
@@ -313,6 +301,7 @@ const initialSiteSettings: SiteSettings = {
   whatsappNumber: '',
   termsUrl: '',
   privacyPolicyUrl: '',
+  logoImage: '',
   status: 'Active',
   internalNotes: '',
 };
@@ -321,6 +310,7 @@ const emailTemplateVariables = [
   '{customer_name}',
   '{reservation_id}',
   '{car_name}',
+  '{group}',
   '{pickup_date}',
   '{pickup_time}',
   '{return_date}',
@@ -366,6 +356,7 @@ const sampleExtras: BookingExtra[] = [
     description: 'Child safety seat suitable for young children.',
     pricingMode: 'Per Day',
     price: '5',
+    imageUrl: '',
     status: 'Active',
     maximumQuantity: '2',
   },
@@ -375,6 +366,7 @@ const sampleExtras: BookingExtra[] = [
     description: 'Booster seat for older children.',
     pricingMode: 'Per Day',
     price: '4',
+    imageUrl: '',
     status: 'Active',
     maximumQuantity: '2',
   },
@@ -384,6 +376,7 @@ const sampleExtras: BookingExtra[] = [
     description: 'Rear-facing infant safety seat.',
     pricingMode: 'Per Booking',
     price: '18',
+    imageUrl: '',
     status: 'Active',
     maximumQuantity: '1',
   },
@@ -395,6 +388,7 @@ const sampleCars: BookingEngineCar[] = [
     name: 'Peugeot 108 or similar',
     groupCode: 'A',
     description: 'Compact city car for couples and short island trips.',
+    imageUrl: '',
     featureIds: ['manual', 'air-conditioning', 'four-seats', 'two-bags'],
     status: 'Open',
     locationIds: ['airport', 'rhodes-town', 'faliraki'],
@@ -404,6 +398,7 @@ const sampleCars: BookingEngineCar[] = [
     name: 'Peugeot 2008 or similar',
     groupCode: 'D1',
     description: 'Comfortable crossover with additional luggage room.',
+    imageUrl: '',
     featureIds: ['automatic', 'air-conditioning', 'five-seats', 'three-bags'],
     status: 'On Request',
     locationIds: ['airport', 'rhodes-town', 'lindos', 'pefkos'],
@@ -424,6 +419,7 @@ const sampleSeasonPrices: SeasonPrice[] = [
       { id: 'season-a-tier-4', fromDays: '8', toDays: '14', pricePerDay: '30' },
     ],
     websiteMode: 'Open',
+    status: 'Active',
     notes: 'Local UI sample.',
   },
   {
@@ -439,6 +435,7 @@ const sampleSeasonPrices: SeasonPrice[] = [
       { id: 'season-d1-tier-4', fromDays: '8', toDays: '14', pricePerDay: '78' },
     ],
     websiteMode: 'On Request',
+    status: 'Active',
     notes: '',
   },
 ];
@@ -494,10 +491,28 @@ const locationTypeLabels: Record<LocationType, string> = {
 
 const localId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
+const readImageFileAsDataUrl = (file: File, onLoad: (dataUrl: string) => void) => {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    if (typeof reader.result === 'string') onLoad(reader.result);
+  };
+  reader.readAsDataURL(file);
+};
+
 const createDefaultPricingTiers = (): PricingTier[] => [
   { id: localId('pricing-tier'), fromDays: '1', toDays: '1', pricePerDay: '' },
   { id: localId('pricing-tier'), fromDays: '2', toDays: '3', pricePerDay: '' },
   { id: localId('pricing-tier'), fromDays: '4', toDays: '7', pricePerDay: '' },
+];
+const initialCheckoutFields: CheckoutFieldSetting[] = [
+  { id: 'fullName', name: 'Full Name', fieldType: 'Text', enabled: true, required: true, label: 'Full Name', builtIn: true },
+  { id: 'email', name: 'Email', fieldType: 'Email', enabled: true, required: true, label: 'Email', builtIn: true },
+  { id: 'whatsapp', name: 'WhatsApp', fieldType: 'Phone', enabled: true, required: true, label: 'WhatsApp', builtIn: true },
+  { id: 'hotelRoom', name: 'Hotel / Room', fieldType: 'Text', enabled: true, required: false, label: 'Hotel / Room', builtIn: true },
+  { id: 'flightNumber', name: 'Flight Number', fieldType: 'Text', enabled: true, required: false, label: 'Flight Number', builtIn: true },
+  { id: 'notes', name: 'Notes', fieldType: 'Textarea', enabled: true, required: false, label: 'Notes', builtIn: true },
 ];
 const formatDateOnly = (value: string) => {
   const [year, month, day] = value.split('-');
@@ -505,15 +520,16 @@ const formatDateOnly = (value: string) => {
 };
 
 export default function BookingEngineAdmin() {
+  const initialConfig = useMemo(() => loadBookingEngineConfig(), []);
   const [activeTab, setActiveTab] = useState<AdminTabId>('groups');
-  const [groups, setGroups] = useState<BookingGroup[]>(sampleGroups);
-  const [cars, setCars] = useState<BookingEngineCar[]>(sampleCars);
-  const [locations, setLocations] = useState<BookingLocation[]>(sampleLocations);
-  const [features, setFeatures] = useState<BookingFeature[]>(sampleFeatures);
-  const [extras, setExtras] = useState<BookingExtra[]>(sampleExtras);
-  const [seasonPrices, setSeasonPrices] = useState<SeasonPrice[]>(sampleSeasonPrices);
-  const [coupons, setCoupons] = useState<BookingCoupon[]>(sampleCoupons);
-  const [paymentMethods, setPaymentMethods] = useState<BookingPaymentMethod[]>(samplePaymentMethods);
+  const [groups, setGroups] = useState<BookingGroup[]>(initialConfig.groups);
+  const [cars, setCars] = useState<BookingEngineCar[]>(initialConfig.cars);
+  const [locations, setLocations] = useState<BookingLocation[]>(initialConfig.locations);
+  const [features, setFeatures] = useState<BookingFeature[]>(initialConfig.features);
+  const [extras, setExtras] = useState<BookingExtra[]>(initialConfig.extras);
+  const [seasonPrices, setSeasonPrices] = useState<SeasonPrice[]>(initialConfig.pricingSeasons);
+  const [coupons, setCoupons] = useState<BookingCoupon[]>(initialConfig.coupons);
+  const [paymentMethods, setPaymentMethods] = useState<BookingPaymentMethod[]>(initialConfig.paymentMethods);
 
   const [carModalOpen, setCarModalOpen] = useState(false);
   const [editingCarId, setEditingCarId] = useState<string | null>(null);
@@ -547,12 +563,16 @@ export default function BookingEngineAdmin() {
   const [editingPaymentMethodId, setEditingPaymentMethodId] = useState<string | null>(null);
   const [paymentMethodDraft, setPaymentMethodDraft] =
     useState<PaymentMethodDraft>(emptyPaymentMethodDraft);
-  const [emailSettings, setEmailSettings] = useState<BookingEmailSettings>(initialEmailSettings);
+  const [emailSettings, setEmailSettings] =
+    useState<BookingEmailSettings>(initialConfig.emailSettings);
   const [emailSettingsMessage, setEmailSettingsMessage] = useState('');
   const [bookingEngineSettings, setBookingEngineSettings] =
     useState<BookingEngineSettings>(initialBookingEngineSettings);
   const [bookingSettingsMessage, setBookingSettingsMessage] = useState('');
-  const [siteSettings, setSiteSettings] = useState<SiteSettings>(initialSiteSettings);
+  const [checkoutFields, setCheckoutFields] =
+    useState<CheckoutFieldSetting[]>(initialConfig.checkoutFields);
+  const [checkoutFieldsMessage, setCheckoutFieldsMessage] = useState('');
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>(initialConfig.siteSettings as SiteSettings);
   const [siteSettingsMessage, setSiteSettingsMessage] = useState('');
 
   const currentTab = adminTabs.find((tab) => tab.id === activeTab) || adminTabs[0];
@@ -561,6 +581,50 @@ export default function BookingEngineAdmin() {
   const activeGroups = groups
     .filter((group) => group.active)
     .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+
+  useEffect(() => {
+    saveBookingEngineConfig({
+      siteSettings,
+      groups,
+      cars,
+      locations,
+      features,
+      extras,
+      coupons,
+      paymentMethods,
+      checkoutFields,
+      pricingSeasons: seasonPrices,
+      emailSettings,
+    });
+  }, [
+    cars,
+    checkoutFields,
+    coupons,
+    emailSettings,
+    extras,
+    features,
+    groups,
+    locations,
+    paymentMethods,
+    seasonPrices,
+    siteSettings,
+  ]);
+
+  const resetDemoData = () => {
+    const nextConfig = resetBookingEngineConfig();
+    setGroups(nextConfig.groups);
+    setCars(nextConfig.cars);
+    setLocations(nextConfig.locations);
+    setFeatures(nextConfig.features);
+    setExtras(nextConfig.extras);
+    setSeasonPrices(nextConfig.pricingSeasons);
+    setCoupons(nextConfig.coupons);
+    setPaymentMethods(nextConfig.paymentMethods);
+    setCheckoutFields(nextConfig.checkoutFields);
+    setEmailSettings(nextConfig.emailSettings);
+    setSiteSettings(nextConfig.siteSettings as SiteSettings);
+    setSiteSettingsMessage('Demo data restored locally.');
+  };
 
   const openNewCarModal = () => {
     setEditingCarId(null);
@@ -574,6 +638,7 @@ export default function BookingEngineAdmin() {
       name: car.name,
       groupCode: car.groupCode,
       description: car.description,
+      imageUrl: car.imageUrl,
       featureIds: [...car.featureIds],
       status: car.status,
       locationIds: [...car.locationIds],
@@ -713,6 +778,7 @@ export default function BookingEngineAdmin() {
       toDate: seasonPrice.toDate,
       tiers: seasonPrice.tiers.map((tier) => ({ ...tier })),
       websiteMode: seasonPrice.websiteMode,
+      status: seasonPrice.status,
       notes: seasonPrice.notes,
     });
     setSeasonPriceModalOpen(true);
@@ -868,6 +934,7 @@ export default function BookingEngineAdmin() {
       description: extra.description,
       pricingMode: extra.pricingMode,
       price: extra.price,
+      imageUrl: extra.imageUrl,
       status: extra.status,
       maximumQuantity: extra.maximumQuantity,
     });
@@ -1080,7 +1147,14 @@ export default function BookingEngineAdmin() {
 
         <div className="mt-auto rounded-lg border border-amber-200 bg-amber-50 p-3.5">
           <p className="text-xs font-black uppercase tracking-[0.1em] text-amber-800">Local foundation</p>
-          <p className="mt-1 text-xs leading-5 text-slate-600">Changes reset when the page reloads.</p>
+          <p className="mt-1 text-xs leading-5 text-slate-600">Changes are saved in this browser until Supabase is connected.</p>
+          <button
+            type="button"
+            onClick={resetDemoData}
+            className="mt-3 h-9 w-full rounded-lg border border-amber-600 bg-amber-600 px-3 text-xs font-black text-white transition hover:bg-amber-700"
+          >
+            Reset demo data
+          </button>
         </div>
       </aside>
 
@@ -1188,7 +1262,7 @@ export default function BookingEngineAdmin() {
             <BookingSettingsPanel
               settings={bookingEngineSettings}
               adminEmail={emailSettings.adminEmail}
-              sendAdminCopy={emailSettings.adminNotificationActive}
+              sendAdminCopy={emailSettings.templates.adminNewReservation.active}
               savedMessage={bookingSettingsMessage}
               onSettingsChange={(nextSettings) => {
                 setBookingEngineSettings(nextSettings);
@@ -1200,11 +1274,32 @@ export default function BookingEngineAdmin() {
                 setBookingSettingsMessage('');
               }}
               onSendAdminCopyChange={(adminNotificationActive) => {
-                setEmailSettings((current) => ({ ...current, adminNotificationActive }));
+                setEmailSettings((current) => ({
+                  ...current,
+                  templates: {
+                    ...current.templates,
+                    adminNewReservation: {
+                      ...current.templates.adminNewReservation,
+                      active: adminNotificationActive,
+                    },
+                  },
+                }));
                 setEmailSettingsMessage('');
                 setBookingSettingsMessage('');
               }}
               onSave={saveBookingSettings}
+            />
+          )}
+
+          {activeTab === 'checkout-fields' && (
+            <CheckoutFieldsPanel
+              fields={checkoutFields}
+              savedMessage={checkoutFieldsMessage}
+              onFieldsChange={(nextFields) => {
+                setCheckoutFields(nextFields);
+                setCheckoutFieldsMessage('');
+              }}
+              onSave={() => setCheckoutFieldsMessage('Checkout field settings saved locally.')}
             />
           )}
 
@@ -1223,6 +1318,7 @@ export default function BookingEngineAdmin() {
           {activeTab === 'emails' && (
             <EmailsPanel
               settings={emailSettings}
+              siteSettings={siteSettings}
               savedMessage={emailSettingsMessage}
               onSettingsChange={(nextSettings) => {
                 setEmailSettings(nextSettings);
@@ -1232,7 +1328,7 @@ export default function BookingEngineAdmin() {
             />
           )}
 
-          {!['groups', 'cars', 'pricing', 'locations', 'features', 'extras', 'coupons', 'payments', 'booking-settings', 'site-settings', 'emails'].includes(activeTab) && (
+          {!['groups', 'cars', 'pricing', 'locations', 'features', 'extras', 'coupons', 'payments', 'booking-settings', 'checkout-fields', 'site-settings', 'emails'].includes(activeTab) && (
             <EmptyAdminPanel tab={currentTab} icon={CurrentIcon} />
           )}
         </div>
@@ -1680,8 +1776,12 @@ function CarsPanel({
                     className="h-4 w-4 rounded border-slate-300 text-cyan-700 accent-cyan-700"
                   />
                 </label>
-                <div className="flex h-11 w-14 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.025] text-zinc-600">
-                  <Car className="h-5 w-5" strokeWidth={1.5} />
+                <div className="flex h-11 w-14 items-center justify-center overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.025] text-zinc-600">
+                  {car.imageUrl ? (
+                    <img src={car.imageUrl} alt={car.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <Car className="h-5 w-5" strokeWidth={1.5} />
+                  )}
                 </div>
                 <div className="min-w-0 pr-4">
                   <p className="truncate font-bold text-zinc-100">{car.name}</p>
@@ -2323,6 +2423,195 @@ function BookingSettingsPanel({
   );
 }
 
+function CheckoutFieldsPanel({
+  fields,
+  savedMessage,
+  onFieldsChange,
+  onSave,
+}: {
+  fields: CheckoutFieldSetting[];
+  savedMessage: string;
+  onFieldsChange: (fields: CheckoutFieldSetting[]) => void;
+  onSave: () => void;
+}) {
+  const updateField = (id: string, patch: Partial<CheckoutFieldSetting>) => {
+    onFieldsChange(fields.map((field) => (field.id === id ? { ...field, ...patch } : field)));
+  };
+  const addCustomField = () => {
+    const id = localId('checkout-field');
+    onFieldsChange([
+      ...fields,
+      {
+        id,
+        name: 'Custom Field',
+        fieldType: 'Text',
+        enabled: true,
+        required: false,
+        label: 'Custom Field',
+        options: [],
+        builtIn: false,
+      },
+    ]);
+  };
+  const deleteCustomField = (id: string) => {
+    onFieldsChange(fields.filter((field) => field.id !== id || field.builtIn));
+  };
+
+  return (
+    <section className="min-w-[760px]">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-black text-slate-950">Checkout fields</h3>
+          <p className="mt-1 max-w-3xl text-sm text-slate-600">
+            Configure the customer information requested by the future public booking checkout.
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={addCustomField}
+            className="rounded-lg border border-cyan-700 bg-white px-4 py-2.5 text-sm font-black text-cyan-800 transition hover:bg-cyan-50"
+          >
+            + Add Custom Field
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            className="rounded-lg bg-cyan-700 px-4 py-2.5 text-sm font-black text-white transition hover:bg-cyan-800"
+          >
+            Save fields
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="grid grid-cols-[minmax(180px,0.8fr)_110px_110px_minmax(260px,1.2fr)_130px] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-black uppercase tracking-[0.08em] text-slate-600">
+          <span>Customer field</span>
+          <span>Enabled</span>
+          <span>Required</span>
+          <span>Custom label</span>
+          <span className="text-right">Actions</span>
+        </div>
+        <div className="divide-y divide-slate-200">
+          {fields.map((field) => (
+            <Fragment key={field.id}>
+              <div className="grid grid-cols-[minmax(180px,0.8fr)_110px_110px_minmax(260px,1.2fr)_130px] items-center gap-4 px-5 py-4">
+                <div>
+                  <p className="text-sm font-black text-slate-950">{field.name}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {field.builtIn ? 'Built-in field' : `Custom field key: ${field.id}`}
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={field.enabled}
+                    onChange={(event) => {
+                      const enabled = event.target.checked;
+                      updateField(field.id, {
+                        enabled,
+                        required: enabled ? field.required : false,
+                      });
+                    }}
+                    className="h-4 w-4 accent-cyan-700"
+                  />
+                  Show
+                </label>
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={field.required}
+                    disabled={!field.enabled}
+                    onChange={(event) => updateField(field.id, { required: event.target.checked })}
+                    className="h-4 w-4 accent-cyan-700 disabled:opacity-40"
+                  />
+                  Required
+                </label>
+                <input
+                  value={field.label}
+                  disabled={!field.enabled}
+                  onChange={(event) =>
+                    updateField(field.id, {
+                      label: event.target.value,
+                      name: field.builtIn ? field.name : event.target.value || 'Custom Field',
+                    })
+                  }
+                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 disabled:bg-slate-100 disabled:text-slate-400"
+                />
+                <div className="flex justify-end">
+                  {!field.builtIn ? (
+                    <button
+                      type="button"
+                      onClick={() => deleteCustomField(field.id)}
+                      className="rounded-lg border border-rose-600 bg-rose-600 px-3 py-2 text-xs font-black text-white transition hover:bg-rose-700"
+                    >
+                      Delete
+                    </button>
+                  ) : (
+                    <span className="text-xs font-bold text-slate-400">Locked</span>
+                  )}
+                </div>
+              </div>
+              {!field.builtIn && (
+                <div className="grid gap-3 bg-slate-50 px-5 pb-4 pt-0 sm:grid-cols-[180px_1fr]">
+                  <label className="block">
+                    <FieldLabel>Field Type</FieldLabel>
+                    <select
+                      value={field.fieldType}
+                      onChange={(event) =>
+                        updateField(field.id, {
+                          fieldType: event.target.value as CheckoutFieldType,
+                          options: event.target.value === 'Select' ? field.options || [] : [],
+                        })
+                      }
+                      className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                    >
+                      {['Text', 'Textarea', 'Number', 'Email', 'Phone', 'Select'].map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {field.fieldType === 'Select' && (
+                    <label className="block">
+                      <FieldLabel>Options</FieldLabel>
+                      <input
+                        value={(field.options || []).join(', ')}
+                        onChange={(event) =>
+                          updateField(field.id, {
+                            options: event.target.value
+                              .split(',')
+                              .map((option) => option.trim())
+                              .filter(Boolean),
+                          })
+                        }
+                        placeholder="Option 1, Option 2, Option 3"
+                        className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
+            </Fragment>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <p className="text-xs text-slate-500">
+          Local UI foundation only. Public website synchronization is not connected.
+        </p>
+        {savedMessage && (
+          <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">
+            {savedMessage}
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function SiteSettingsPanel({
   settings,
   savedMessage,
@@ -2378,19 +2667,41 @@ function SiteSettingsPanel({
           </div>
           <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-cyan-700">
-                <ImagePlus className="h-5 w-5" />
+              <span className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white text-cyan-700">
+                {settings.logoImage ? (
+                  <img src={settings.logoImage} alt="Site logo" className="h-full w-full object-contain p-1" />
+                ) : (
+                  <ImagePlus className="h-5 w-5" />
+                )}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-black text-slate-900">Logo upload</p>
-                <p className="mt-0.5 text-xs text-slate-500">Placeholder only. No file is uploaded yet.</p>
+                <p className="mt-0.5 text-xs text-slate-500">Saved locally as JPG, PNG or WEBP base64.</p>
               </div>
-              <button
-                type="button"
-                className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:border-cyan-500 hover:text-cyan-800"
-              >
+              <label className="flex h-9 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:border-cyan-500 hover:text-cyan-800">
                 Choose logo
-              </button>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      readImageFileAsDataUrl(file, (logoImage) => updateSettings({ logoImage }));
+                    }
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+              {settings.logoImage && (
+                <button
+                  type="button"
+                  onClick={() => updateSettings({ logoImage: '' })}
+                  className="h-9 rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-600 transition hover:bg-rose-50"
+                >
+                  Remove
+                </button>
+              )}
             </div>
           </div>
         </BookingSettingCard>
@@ -2537,24 +2848,53 @@ function SiteSettingsPanel({
 
 function EmailsPanel({
   settings,
+  siteSettings,
   savedMessage,
   onSettingsChange,
   onSave,
 }: {
   settings: BookingEmailSettings;
+  siteSettings: SiteSettings;
   savedMessage: string;
   onSettingsChange: (settings: BookingEmailSettings) => void;
   onSave: () => void;
 }) {
-  const updateSettings = (patch: Partial<BookingEmailSettings>) => {
-    onSettingsChange({ ...settings, ...patch });
-  };
   const templateElementsRef = useRef<
     Partial<Record<EmailTemplateFieldKey, HTMLInputElement | HTMLTextAreaElement>>
   >({});
   const focusedTemplateFieldRef = useRef<EmailTemplateFieldKey | null>(null);
-  const activeMessageFieldRef = useRef<EmailTemplateFieldKey>('adminMessage');
+  const activeMessageFieldRef = useRef<EmailTemplateFieldKey>('adminNewReservation:message');
   const [manualPreviewMessage, setManualPreviewMessage] = useState('');
+  const [previewTemplateId, setPreviewTemplateId] =
+    useState<BookingEngineEmailTemplateId | null>(null);
+  const templateOrder: BookingEngineEmailTemplateId[] = [
+    'adminNewReservation',
+    'customerRequestReceived',
+    'customerOnRequestReceived',
+    'customerBookingConfirmed',
+    'paymentReminder',
+    'customEmail',
+  ];
+
+  const updateSettings = (patch: Partial<BookingEmailSettings>) => {
+    onSettingsChange({ ...settings, ...patch });
+  };
+
+  const updateTemplate = (
+    templateId: BookingEngineEmailTemplateId,
+    patch: Partial<BookingEmailSettings['templates'][BookingEngineEmailTemplateId]>,
+  ) => {
+    onSettingsChange({
+      ...settings,
+      templates: {
+        ...settings.templates,
+        [templateId]: {
+          ...settings.templates[templateId],
+          ...patch,
+        },
+      },
+    });
+  };
 
   const handleTemplateFocus = (
     field: EmailTemplateFieldKey,
@@ -2562,20 +2902,24 @@ function EmailsPanel({
   ) => {
     focusedTemplateFieldRef.current = field;
     templateElementsRef.current[field] = element;
-    if (field.endsWith('Message')) activeMessageFieldRef.current = field;
+    if (field.endsWith(':message')) activeMessageFieldRef.current = field;
   };
 
   const insertTemplateVariable = (variable: string) => {
     const field = focusedTemplateFieldRef.current || activeMessageFieldRef.current;
     const element = templateElementsRef.current[field];
-    const currentValue = settings[field];
+    const [templateId, fieldName] = field.split(':') as [
+      BookingEngineEmailTemplateId,
+      'subject' | 'message',
+    ];
+    const currentValue = settings.templates[templateId][fieldName];
     const selectionStart = element?.selectionStart ?? currentValue.length;
     const selectionEnd = element?.selectionEnd ?? selectionStart;
     const nextValue =
       currentValue.slice(0, selectionStart) + variable + currentValue.slice(selectionEnd);
     const nextCaretPosition = selectionStart + variable.length;
 
-    updateSettings({ [field]: nextValue });
+    updateTemplate(templateId, { [fieldName]: nextValue });
     requestAnimationFrame(() => {
       const target = templateElementsRef.current[field];
       target?.focus();
@@ -2608,151 +2952,75 @@ function EmailsPanel({
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_270px]">
         <div className="space-y-3">
-          <EmailSettingsCard
-            icon={Mail}
-            title="Admin Notification"
-            description="Notify the administration team whenever a new reservation arrives."
-            active={settings.adminNotificationActive}
-            toggleLabel="Send admin email for every new reservation"
-            onToggle={(adminNotificationActive) => updateSettings({ adminNotificationActive })}
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <TextField
-                label="Admin email address"
-                value={settings.adminEmail}
-                placeholder="reservations@autoclub-rhodes.com"
-                className="sm:col-span-2"
-                onChange={(adminEmail) => updateSettings({ adminEmail })}
-              />
-              <EmailTemplateField
-                fieldKey="adminSubject"
-                label="Subject template"
-                value={settings.adminSubject}
-                onElement={(element) => {
-                  templateElementsRef.current.adminSubject = element;
-                }}
-                onFocus={handleTemplateFocus}
-                onChange={(adminSubject) => updateSettings({ adminSubject })}
-              />
-              <EmailTemplateField
-                fieldKey="adminMessage"
-                label="Message template"
-                value={settings.adminMessage}
-                multiline
-                onElement={(element) => {
-                  templateElementsRef.current.adminMessage = element;
-                }}
-                onFocus={handleTemplateFocus}
-                onChange={(adminMessage) => updateSettings({ adminMessage })}
-              />
-            </div>
-            <ManualEmailButton
-              label="Send admin notification manually"
-              onClick={() => showManualPreview('Admin notification')}
-            />
-          </EmailSettingsCard>
+          {templateOrder.map((templateId) => {
+            const template = settings.templates[templateId];
+            const subjectKey: EmailTemplateFieldKey = `${templateId}:subject`;
+            const messageKey: EmailTemplateFieldKey = `${templateId}:message`;
+            const Icon =
+              templateId === 'adminNewReservation'
+                ? Mail
+                : templateId === 'paymentReminder'
+                  ? CreditCard
+                  : templateId === 'customerBookingConfirmed'
+                    ? Check
+                    : CalendarRange;
 
-          <EmailSettingsCard
-            icon={Check}
-            title="Customer Confirmation Email"
-            description="Confirmation sent to the customer after a reservation is accepted."
-            active={settings.customerConfirmationActive}
-            toggleLabel={settings.customerConfirmationActive ? 'Active' : 'Inactive'}
-            onToggle={(customerConfirmationActive) => updateSettings({ customerConfirmationActive })}
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <EmailTemplateField
-                fieldKey="customerConfirmationSubject"
-                label="Subject template"
-                value={settings.customerConfirmationSubject}
-                onElement={(element) => {
-                  templateElementsRef.current.customerConfirmationSubject = element;
-                }}
-                onFocus={handleTemplateFocus}
-                onChange={(customerConfirmationSubject) =>
-                  updateSettings({ customerConfirmationSubject })
+            return (
+              <EmailSettingsCard
+                key={templateId}
+                icon={Icon}
+                title={template.label}
+                description={
+                  templateId === 'adminNewReservation'
+                    ? 'Preview the internal notification for every new website reservation.'
+                    : 'Customer-facing template preview. No email provider is connected yet.'
                 }
-              />
-              <EmailTemplateField
-                fieldKey="customerConfirmationMessage"
-                label="Message template"
-                value={settings.customerConfirmationMessage}
-                multiline
-                onElement={(element) => {
-                  templateElementsRef.current.customerConfirmationMessage = element;
-                }}
-                onFocus={handleTemplateFocus}
-                onChange={(customerConfirmationMessage) =>
-                  updateSettings({ customerConfirmationMessage })
-                }
-              />
-            </div>
-            <ManualEmailButton
-              label="Send customer confirmation manually"
-              onClick={() => showManualPreview('Customer confirmation')}
-            />
-          </EmailSettingsCard>
-
-          <EmailSettingsCard
-            icon={CalendarRange}
-            title="Reminder Email"
-            description="Prepare an automatic reminder before the scheduled vehicle pickup."
-            active={settings.reminderActive}
-            toggleLabel={settings.reminderActive ? 'Active' : 'Inactive'}
-            onToggle={(reminderActive) => updateSettings({ reminderActive })}
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block">
-                <FieldLabel>Reminder timing</FieldLabel>
-                <select
-                  value={settings.reminderTiming}
-                  onChange={(event) =>
-                    updateSettings({ reminderTiming: event.target.value as ReminderTiming })
-                  }
-                  className="mt-2 h-10 w-full rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
-                >
-                  <option value="96 hours before pickup">96 hours before pickup</option>
-                  <option value="48 hours before pickup">48 hours before pickup</option>
-                  <option value="24 hours before pickup">24 hours before pickup</option>
-                  <option value="Custom hours before pickup">Custom hours before pickup</option>
-                </select>
-              </label>
-              {settings.reminderTiming === 'Custom hours before pickup' && (
-                <TextField
-                  label="Custom hours before pickup"
-                  value={settings.reminderCustomHours}
-                  placeholder="e.g. 36"
-                  type="number"
-                  onChange={(reminderCustomHours) => updateSettings({ reminderCustomHours })}
+                active={template.active}
+                toggleLabel={template.active ? 'Active' : 'Inactive'}
+                onToggle={(active) => updateTemplate(templateId, { active })}
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {templateId === 'adminNewReservation' && (
+                    <TextField
+                      label="Admin email address"
+                      value={settings.adminEmail}
+                      placeholder="reservations@autoclub-rhodes.com"
+                      className="sm:col-span-2"
+                      onChange={(adminEmail) => updateSettings({ adminEmail })}
+                    />
+                  )}
+                  <EmailTemplateField
+                    fieldKey={subjectKey}
+                    label="Subject template"
+                    value={template.subject}
+                    onElement={(element) => {
+                      templateElementsRef.current[subjectKey] = element;
+                    }}
+                    onFocus={handleTemplateFocus}
+                    onChange={(subject) => updateTemplate(templateId, { subject })}
+                  />
+                  <EmailTemplateField
+                    fieldKey={messageKey}
+                    label="Message template"
+                    value={template.message}
+                    multiline
+                    onElement={(element) => {
+                      templateElementsRef.current[messageKey] = element;
+                    }}
+                    onFocus={handleTemplateFocus}
+                    onChange={(message) => updateTemplate(templateId, { message })}
+                  />
+                </div>
+                <ManualEmailButton
+                  label="Manual preview"
+                  onClick={() => {
+                    setPreviewTemplateId(templateId);
+                    setManualPreviewMessage('');
+                  }}
                 />
-              )}
-              <EmailTemplateField
-                fieldKey="reminderSubject"
-                label="Subject template"
-                value={settings.reminderSubject}
-                onElement={(element) => {
-                  templateElementsRef.current.reminderSubject = element;
-                }}
-                onFocus={handleTemplateFocus}
-                onChange={(reminderSubject) => updateSettings({ reminderSubject })}
-              />
-              <EmailTemplateField
-                fieldKey="reminderMessage"
-                label="Message template"
-                value={settings.reminderMessage}
-                multiline
-                onElement={(element) => {
-                  templateElementsRef.current.reminderMessage = element;
-                }}
-                onFocus={handleTemplateFocus}
-                onChange={(reminderMessage) => updateSettings({ reminderMessage })}
-              />
-            </div>
-            <ManualEmailButton
-              label="Send reminder manually"
-              onClick={() => showManualPreview('Reminder email')}
-            />
-          </EmailSettingsCard>
+              </EmailSettingsCard>
+            );
+          })}
         </div>
 
         <aside className="h-fit rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm xl:sticky xl:top-0">
@@ -2781,7 +3049,7 @@ function EmailsPanel({
           <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
             <p className="text-xs font-bold text-amber-900">Local preview only</p>
             <p className="mt-1 text-[11px] leading-5 text-slate-600">
-              Saving keeps these values in component state until the page reloads.
+              Saving keeps these values in the local booking engine store.
             </p>
           </div>
           {savedMessage && (
@@ -2796,7 +3064,181 @@ function EmailsPanel({
           )}
         </aside>
       </div>
+
+      {previewTemplateId && (
+        <EmailTemplatePreviewModal
+          template={settings.templates[previewTemplateId]}
+          adminEmail={settings.adminEmail}
+          siteName={siteSettings.companyName || 'AutoClub Rhodes'}
+          logoImage={siteSettings.logoImage}
+          onClose={() => setPreviewTemplateId(null)}
+          onSave={(subject, message) => {
+            updateTemplate(previewTemplateId, { subject, message });
+            setManualPreviewMessage(`${settings.templates[previewTemplateId].label}: changes saved locally.`);
+            setPreviewTemplateId(null);
+          }}
+        />
+      )}
     </section>
+  );
+}
+
+const sampleEmailReservation = {
+  customerName: 'Maria Demo',
+  reservationId: 'ACR-DEMO-0001',
+  carName: 'Peugeot 108 or Similar',
+  group: 'A',
+  pickupDate: '20/06/2026',
+  pickupTime: '10:00',
+  returnDate: '27/06/2026',
+  returnTime: '10:00',
+  pickupLocation: 'Rhodes Airport',
+  returnLocation: 'Rhodes Airport',
+  totalPrice: '€280.00',
+  paymentMethod: 'Pay on Arrival',
+};
+
+const renderSampleTemplate = (template: string) =>
+  template
+    .split('{customer_name}')
+    .join(sampleEmailReservation.customerName)
+    .split('{reservation_id}')
+    .join(sampleEmailReservation.reservationId)
+    .split('{car_name}')
+    .join(sampleEmailReservation.carName)
+    .split('{group}')
+    .join(sampleEmailReservation.group)
+    .split('{pickup_date}')
+    .join(sampleEmailReservation.pickupDate)
+    .split('{pickup_time}')
+    .join(sampleEmailReservation.pickupTime)
+    .split('{return_date}')
+    .join(sampleEmailReservation.returnDate)
+    .split('{return_time}')
+    .join(sampleEmailReservation.returnTime)
+    .split('{pickup_location}')
+    .join(sampleEmailReservation.pickupLocation)
+    .split('{return_location}')
+    .join(sampleEmailReservation.returnLocation)
+    .split('{total_price}')
+    .join(sampleEmailReservation.totalPrice)
+    .split('{payment_method}')
+    .join(sampleEmailReservation.paymentMethod);
+
+function EmailTemplatePreviewModal({
+  template,
+  adminEmail,
+  siteName,
+  logoImage,
+  onClose,
+  onSave,
+}: {
+  template: BookingEmailSettings['templates'][BookingEngineEmailTemplateId];
+  adminEmail: string;
+  siteName: string;
+  logoImage: string;
+  onClose: () => void;
+  onSave: (subject: string, message: string) => void;
+}) {
+  const [subject, setSubject] = useState(renderSampleTemplate(template.subject));
+  const [message, setMessage] = useState(renderSampleTemplate(template.message));
+  const recipient =
+    template.id === 'adminNewReservation' ? adminEmail || 'reservations@autoclub-rhodes.com' : 'maria.demo@example.com';
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/45 p-5 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-700">
+              Manual preview
+            </p>
+            <h3 className="mt-1 text-xl font-black text-slate-950">{template.label}</h3>
+            <p className="mt-1 text-sm text-slate-600">Rendered with sample reservation data.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-100"
+            aria-label="Close preview"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-b border-slate-200 bg-[#f8fafc] px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-[#073f5d] text-sm font-black text-white">
+                  {logoImage ? (
+                    <img src={logoImage} alt={siteName} className="h-full w-full object-contain bg-white p-1" />
+                  ) : (
+                    <span>AC</span>
+                  )}
+                </div>
+                <div>
+                  <p className="text-lg font-black text-slate-950">{siteName}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-cyan-700">
+                    Car rental in Rhodes
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-5">
+              <label className="block">
+                <FieldLabel>To</FieldLabel>
+                <input
+                  value={recipient}
+                  readOnly
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 text-sm font-bold text-slate-700"
+                />
+              </label>
+              <label className="block">
+                <FieldLabel>Subject</FieldLabel>
+                <input
+                  value={subject}
+                  onChange={(event) => setSubject(event.target.value)}
+                  className="mt-1.5 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                />
+              </label>
+              <label className="block">
+                <FieldLabel>Message</FieldLabel>
+                <textarea
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  rows={10}
+                  className="mt-1.5 w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm leading-6 text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <footer className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            onClick={() => onSave(subject, message)}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-4 text-sm font-black text-white transition hover:bg-cyan-800"
+          >
+            <Save className="h-4 w-4" />
+            Save changes
+          </button>
+        </footer>
+      </div>
+    </div>
   );
 }
 
@@ -2927,14 +3369,45 @@ function CarModal({
       <div className="grid gap-5 md:grid-cols-[190px_1fr]">
         <div>
           <FieldLabel>Photo</FieldLabel>
-          <button
-            type="button"
-            className="mt-2 flex aspect-[4/3] w-full flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.14] bg-white/[0.025] text-zinc-500 transition hover:border-cyan-300/25 hover:text-cyan-200"
-          >
-            <ImagePlus className="h-7 w-7" strokeWidth={1.5} />
-            <span className="mt-2 text-xs font-bold">Upload placeholder</span>
-            <span className="mt-1 text-[10px] text-zinc-600">No file is stored</span>
-          </button>
+          <div className="mt-2 overflow-hidden rounded-xl border border-dashed border-white/[0.14] bg-white/[0.025]">
+            <div className="flex aspect-[4/3] w-full flex-col items-center justify-center text-zinc-500">
+              {draft.imageUrl ? (
+                <img src={draft.imageUrl} alt={draft.name || 'Car preview'} className="h-full w-full object-cover" />
+              ) : (
+                <>
+                  <ImagePlus className="h-7 w-7" strokeWidth={1.5} />
+                  <span className="mt-2 text-xs font-bold">Image placeholder</span>
+                  <span className="mt-1 text-[10px] text-zinc-600">JPG, PNG or WEBP</span>
+                </>
+              )}
+            </div>
+          </div>
+          <label className="mt-3 flex h-10 cursor-pointer items-center justify-center rounded-lg border border-cyan-700 bg-cyan-700 px-3 text-xs font-black text-white transition hover:bg-cyan-800">
+            Upload Image
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  readImageFileAsDataUrl(file, (imageUrl) =>
+                    onDraftChange((current) => ({ ...current, imageUrl })),
+                  );
+                }
+                event.target.value = '';
+              }}
+            />
+          </label>
+          {draft.imageUrl && (
+            <button
+              type="button"
+              onClick={() => onDraftChange((current) => ({ ...current, imageUrl: '' }))}
+              className="mt-2 h-8 w-full rounded-lg border border-white/[0.1] text-xs font-bold text-zinc-400 transition hover:border-rose-300/40 hover:text-rose-200"
+            >
+              Remove image
+            </button>
+          )}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -3394,6 +3867,46 @@ function ExtraModal({
       }
     >
       <div className="grid gap-4 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <FieldLabel>Image optional</FieldLabel>
+          <div className="mt-2 flex items-center gap-3 rounded-xl border border-white/[0.1] bg-white/[0.025] p-3">
+            <div className="flex h-20 w-28 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/[0.08] bg-black/20 text-zinc-600">
+              {draft.imageUrl ? (
+                <img src={draft.imageUrl} alt={draft.name || 'Extra preview'} className="h-full w-full object-cover" />
+              ) : (
+                <ImagePlus className="h-6 w-6" strokeWidth={1.5} />
+              )}
+            </div>
+            <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+              <label className="flex h-9 cursor-pointer items-center rounded-lg border border-cyan-700 bg-cyan-700 px-3 text-xs font-black text-white transition hover:bg-cyan-800">
+                Upload Image
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      readImageFileAsDataUrl(file, (imageUrl) =>
+                        onDraftChange((current) => ({ ...current, imageUrl })),
+                      );
+                    }
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+              {draft.imageUrl && (
+                <button
+                  type="button"
+                  onClick={() => onDraftChange((current) => ({ ...current, imageUrl: '' }))}
+                  className="h-9 rounded-lg border border-white/[0.1] px-3 text-xs font-bold text-zinc-400 transition hover:border-rose-300/40 hover:text-rose-200"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
         <TextField
           label="Name"
           value={draft.name}

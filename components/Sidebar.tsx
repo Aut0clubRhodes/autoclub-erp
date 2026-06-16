@@ -14,6 +14,7 @@ import {
   FileText,
   FolderArchive,
   Gauge,
+  Globe2,
   LayoutDashboard,
   Megaphone,
   ReceiptText,
@@ -82,6 +83,7 @@ const NAV_SECTIONS: NavSection[] = [
         chip: 'border-sky-400/25 bg-sky-400/10',
       },
       { label: 'Booking Engine Admin', href: '/booking-engine-admin', icon: Gauge, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
+      { label: 'Public Booking Preview', href: '/public-booking-preview', icon: Globe2, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
     ],
   },
   {
@@ -133,6 +135,7 @@ const WINDOW_ITEMS = [
   'Κατηγορίες Εξόδων',
   'Marketing',
   'Booking Engine Admin',
+  'Public Booking Preview',
   'Ρυθμίσεις',
 ];
 

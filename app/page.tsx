@@ -29,6 +29,7 @@ import ExpenseCategoriesManager from '@/components/ExpenseCategoriesManager';
 import SettingsManager from '@/components/SettingsManager';
 import MarketingManager from '@/components/MarketingManager';
 import BookingEngineAdmin from '@/components/BookingEngineAdmin';
+import PublicBookingPreview from '@/components/PublicBookingPreview';
 import ServicesManager from '@/components/ServicesManager';
 import VehicleDocumentsManager from '@/components/VehicleDocumentsManager';
 import AutoClubRhodesReservationsBoard from '@/components/AutoClubRhodesReservationsBoard';
@@ -79,6 +80,7 @@ type WindowType =
   | 'Πρακτορεία'
   | 'Marketing'
   | 'Booking Engine Admin'
+  | 'Public Booking Preview'
   | 'Ρυθμίσεις'
   | null;
 
@@ -1123,6 +1125,8 @@ const handleSaveSupplierPayment = async () => {
         return 'Marketing';
       case 'Booking Engine Admin':
         return 'Booking Engine Admin';
+      case 'Public Booking Preview':
+        return 'Public Booking Preview';
       case 'Ρυθμίσεις':
         return 'Ρυθμίσεις';
       default:
@@ -1738,6 +1742,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       'Πρακτορεία',
       'Marketing',
       'Booking Engine Admin',
+      'Public Booking Preview',
       'Ρυθμίσεις',
     ];
 
@@ -1835,6 +1840,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return <MarketingManager />;
       case 'Booking Engine Admin':
         return <BookingEngineAdmin />;
+      case 'Public Booking Preview':
+        return <PublicBookingPreview />;
       case 'Ρυθμίσεις':
         return <SettingsManager onSuppliersChange={setSuppliers} />;
       case 'Αναφορές':
@@ -1898,6 +1905,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return 'Marketing / Promotions';
       case 'Booking Engine Admin':
         return 'Booking Engine Admin';
+      case 'Public Booking Preview':
+        return 'Public Booking Preview';
       case 'Ρυθμίσεις':
         return 'Ρυθμίσεις';
       default:
@@ -2326,12 +2335,12 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               onMinimize={() => minimizeWindow(windowItem.id)}
               zIndex={windowItem.zIndex}
               titleActions={getWindowActions(windowItem.id)}
-              fullscreen={windowItem.id === 'Κρατήσεις' || windowItem.id === 'Booking Engine Admin'}
+              fullscreen={windowItem.id === 'Κρατήσεις' || windowItem.id === 'Booking Engine Admin' || windowItem.id === 'Public Booking Preview'}
               compactHeader={windowItem.id === 'Κρατήσεις'}
               initialWidth={windowItem.id === 'Αναφορές' ? 1320 : undefined}
               initialHeight={windowItem.id === 'Αναφορές' ? 792 : windowItem.id === 'Πίνακας' ? 760 : undefined}
               financeDashboard={windowItem.id === 'Ταμείο'}
-              wide={windowItem.id === 'Πίνακας' || windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Γραμμάτια' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα' || windowItem.id === 'Marketing' || windowItem.id === 'Booking Engine Admin' || windowItem.id === 'Ρυθμίσεις'}
+              wide={windowItem.id === 'Πίνακας' || windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Γραμμάτια' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα' || windowItem.id === 'Marketing' || windowItem.id === 'Booking Engine Admin' || windowItem.id === 'Public Booking Preview' || windowItem.id === 'Ρυθμίσεις'}
             >
               {renderWindowContent(windowItem.id)}
             </Window>
