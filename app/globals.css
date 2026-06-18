@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #050910;
-  --foreground: #f4f7fb;
+  --background: #e3ebf4;
+  --foreground: #102033;
 }
 
 @theme inline {
@@ -16,12 +16,13 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-size: 16px;
   letter-spacing: 0;
 }
 
 ::selection {
   background: rgba(56, 189, 248, 0.24);
-  color: #fff;
+  color: #0f172a;
 }
 
 * {
@@ -125,13 +126,13 @@ body {
    homepage sit outside this wrapper and intentionally retain their dark theme. */
 .erp-module-light-content {
   color-scheme: light;
-  background: #eef2f7;
-  color: #1e293b;
-  font-size: 15px;
+  background: #e3ebf4;
+  color: #102033;
+  font-size: 16px;
 }
 
 .erp-module-light-content :is(section, article, form, table) {
-  color: #172033;
+  color: #102033;
 }
 
 .erp-module-light-content p {
@@ -139,16 +140,16 @@ body {
 }
 
 .erp-module-light-content :is(h1, h2, h3, h4, h5, h6) {
-  color: #0f172a;
+  color: #102033;
   letter-spacing: 0;
 }
 
 .erp-module-light-content :is(h1, h2) {
-  font-weight: 750;
+  font-weight: 850;
 }
 
 .erp-module-light-content :is(h3, h4, h5, h6) {
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .erp-module-light-content :is(
@@ -177,7 +178,7 @@ body {
   [class*="border-neutral-"],
   [class*="border-gray-"]
 ) {
-  border-color: #d7e0ea;
+  border-color: #b7c3d0;
 }
 
 .erp-module-light-content :is(
@@ -185,7 +186,7 @@ body {
   [class*="divide-zinc-"],
   [class*="divide-slate-"]
 ) > :not([hidden]) ~ :not([hidden]) {
-  border-color: #e2e8f0;
+  border-color: #b7c3d0;
 }
 
 .erp-module-light-content :is(
@@ -195,7 +196,7 @@ body {
   [class*="text-slate-100"],
   [class*="text-slate-200"]
 ):not(button):not(a) {
-  color: #172033;
+  color: #102033;
 }
 
 .erp-module-light-content :is(
@@ -206,7 +207,7 @@ body {
   [class*="text-neutral-300"],
   [class*="text-neutral-400"]
 ) {
-  color: #475569;
+  color: #40546b;
 }
 
 .erp-module-light-content :is(
@@ -215,27 +216,44 @@ body {
   [class*="text-slate-500"],
   [class*="text-slate-600"]
 ) {
-  color: #64748b;
+  color: #40546b;
 }
 
 .erp-module-light-content :is([class*="text-cyan-100"], [class*="text-cyan-200"], [class*="text-sky-100"], [class*="text-sky-200"]) {
-  color: #0e7490;
+  color: #075985;
 }
 
 .erp-module-light-content :is([class*="text-emerald-100"], [class*="text-emerald-200"], [class*="text-green-100"], [class*="text-green-200"]) {
-  color: #047857;
+  color: #065f46;
 }
 
 .erp-module-light-content :is([class*="text-amber-100"], [class*="text-amber-200"], [class*="text-yellow-100"], [class*="text-yellow-200"]) {
-  color: #a16207;
+  color: #92400e;
 }
 
 .erp-module-light-content :is([class*="text-rose-100"], [class*="text-rose-200"], [class*="text-red-100"], [class*="text-red-200"]) {
-  color: #be123c;
+  color: #9f1239;
 }
 
 .erp-module-light-content :is([class*="text-violet-100"], [class*="text-violet-200"], [class*="text-purple-100"], [class*="text-purple-200"]) {
   color: #6d28d9;
+}
+
+.erp-module-light-content span.rounded-full:is(
+  [class*="text-white"],
+  [class*="text-zinc-100"],
+  [class*="text-zinc-200"],
+  [class*="text-zinc-300"],
+  [class*="text-slate-100"],
+  [class*="text-slate-200"],
+  [class*="text-slate-300"]
+) {
+  color: #102033;
+}
+
+.erp-module-light-content span.rounded-full:is([class*="bg-black/"], [class*="bg-white/"]) {
+  background: #e8eef6;
+  border-color: #b7c3d0;
 }
 
 .erp-module-light-content :is(
@@ -244,7 +262,7 @@ body {
   [class*="bg-sky-300/"],
   [class*="bg-sky-400/"]
 ) {
-  background-color: #ecfeff;
+  background-color: #bae6fd;
 }
 
 .erp-module-light-content :is(
@@ -253,7 +271,7 @@ body {
   [class*="bg-green-300/"],
   [class*="bg-green-400/"]
 ) {
-  background-color: #ecfdf5;
+  background-color: #bbf7d0;
 }
 
 .erp-module-light-content :is(
@@ -262,7 +280,7 @@ body {
   [class*="bg-yellow-300/"],
   [class*="bg-yellow-400/"]
 ) {
-  background-color: #fffbeb;
+  background-color: #fde68a;
 }
 
 .erp-module-light-content :is(
@@ -271,7 +289,7 @@ body {
   [class*="bg-red-300/"],
   [class*="bg-red-400/"]
 ) {
-  background-color: #fff1f2;
+  background-color: #fecdd3;
 }
 
 .erp-module-light-content :is(
@@ -280,49 +298,53 @@ body {
   .rounded-2xl,
   .rounded-3xl
 )[class*="border"] {
-  border-color: #d7e0ea;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  border-color: #b7c3d0;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.1);
 }
 
 .erp-module-light-content table {
   background: #ffffff;
-  color: #27364a;
+  color: #102033;
 }
 
 .erp-module-light-content thead {
-  background: #e8eef5;
+  background: #d7e2ee;
 }
 
 .erp-module-light-content th {
-  border-color: #cbd5e1;
-  color: #27364a;
-  font-size: 13px;
-  font-weight: 750;
+  border-color: #b7c3d0;
+  color: #102033;
+  font-size: 14px;
+  font-weight: 850;
 }
 
 .erp-module-light-content td {
-  border-color: #e2e8f0;
-  color: #334155;
-  font-size: 14px;
-}
-
-.erp-module-light-content tbody tr {
-  border-color: #e2e8f0;
-}
-
-.erp-module-light-content tbody tr:hover {
-  background-color: #f8fafc;
-}
-
-.erp-module-light-content :is(input, select, textarea, .input) {
-  border-color: #c4cfdd;
-  background: #ffffff;
-  color: #172033;
+  border-color: #c2ccda;
+  color: #1f2f43;
   font-size: 15px;
 }
 
+.erp-module-light-content tbody tr {
+  border-color: #c2ccda;
+}
+
+.erp-module-light-content tbody tr:nth-child(even) {
+  background-color: #f8fafc;
+}
+
+.erp-module-light-content tbody tr:hover {
+  background-color: #eef3f8;
+}
+
+.erp-module-light-content :is(input, select, textarea, .input) {
+  border-color: #97a8bb;
+  background: #ffffff;
+  color: #102033;
+  font-size: 16px;
+}
+
 .erp-module-light-content :is(input, textarea, .input)::placeholder {
-  color: #7c8ba1;
+  color: #53657a;
   opacity: 1;
 }
 
@@ -332,8 +354,8 @@ body {
 }
 
 .erp-module-light-content :is(button, [role="button"]) {
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 15px;
+  font-weight: 800;
 }
 
 .erp-module-light-content :is(
@@ -344,9 +366,9 @@ body {
   [role="button"][class*="bg-zinc-"],
   [role="button"][class*="bg-slate-"]
 ) {
-  border-color: #cbd5e1;
+  border-color: #7f8fa3;
   background: #ffffff;
-  color: #334155;
+  color: #102033;
 }
 
 .erp-module-light-content :is(
@@ -356,9 +378,9 @@ body {
   [role="button"][class*="bg-zinc-"],
   [role="button"][class*="bg-slate-"]
 ):hover {
-  border-color: #94a3b8;
-  background: #f1f5f9;
-  color: #0f172a;
+  border-color: #40546b;
+  background: #edf3f9;
+  color: #102033;
 }
 
 .erp-module-light-content :is(
@@ -371,10 +393,10 @@ body {
 ),
 .erp-module-light-content .erp-action-primary,
 .erp-module-light-content .erp-active-nav {
-  border-color: #0e7490;
-  background: #0891b2;
+  border-color: #075985;
+  background: #0369a1;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(8, 145, 178, 0.2);
+  box-shadow: 0 5px 15px rgba(3, 105, 161, 0.25);
 }
 
 .erp-module-light-content :is(
@@ -387,10 +409,10 @@ body {
 ):hover,
 .erp-module-light-content .erp-action-primary:hover,
 .erp-module-light-content .erp-active-nav:hover {
-  border-color: #155e75;
-  background: #0e7490;
+  border-color: #0c4a6e;
+  background: #075985;
   color: #ffffff;
-  box-shadow: 0 6px 16px rgba(8, 145, 178, 0.26);
+  box-shadow: 0 7px 18px rgba(3, 105, 161, 0.3);
 }
 
 .erp-module-light-content :is(
@@ -400,10 +422,10 @@ body {
   [role="button"][class*="bg-green-"]
 ),
 .erp-module-light-content .erp-action-success {
-  border-color: #047857;
-  background: #059669;
+  border-color: #065f46;
+  background: #047857;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.2);
+  box-shadow: 0 5px 15px rgba(4, 120, 87, 0.24);
 }
 
 .erp-module-light-content :is(
@@ -414,7 +436,7 @@ body {
 ):hover,
 .erp-module-light-content .erp-action-success:hover {
   border-color: #065f46;
-  background: #047857;
+  background: #065f46;
   color: #ffffff;
 }
 
@@ -427,10 +449,10 @@ body {
   [role="button"][class*="bg-orange-"]
 ),
 .erp-module-light-content .erp-action-warning {
-  border-color: #b45309;
-  background: #d97706;
+  border-color: #92400e;
+  background: #b45309;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.2);
+  box-shadow: 0 5px 15px rgba(180, 83, 9, 0.24);
 }
 
 .erp-module-light-content :is(
@@ -442,8 +464,8 @@ body {
   [role="button"][class*="bg-orange-"]
 ):hover,
 .erp-module-light-content .erp-action-warning:hover {
-  border-color: #92400e;
-  background: #b45309;
+  border-color: #78350f;
+  background: #92400e;
   color: #ffffff;
 }
 
@@ -454,10 +476,10 @@ body {
   [role="button"][class*="bg-red-"]
 ),
 .erp-module-light-content .erp-action-danger {
-  border-color: #be123c;
-  background: #e11d48;
+  border-color: #9f1239;
+  background: #be123c;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(225, 29, 72, 0.18);
+  box-shadow: 0 5px 15px rgba(190, 18, 60, 0.22);
 }
 
 .erp-module-light-content :is(
@@ -467,8 +489,8 @@ body {
   [role="button"][class*="bg-red-"]
 ):hover,
 .erp-module-light-content .erp-action-danger:hover {
-  border-color: #9f1239;
-  background: #be123c;
+  border-color: #881337;
+  background: #9f1239;
   color: #ffffff;
 }
 
@@ -480,10 +502,10 @@ body {
   [role="button"][class*="bg-purple-"],
   [role="button"][class*="bg-fuchsia-"]
 ) {
-  border-color: #0e7490;
-  background: #0891b2;
+  border-color: #075985;
+  background: #0369a1;
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(8, 145, 178, 0.2);
+  box-shadow: 0 5px 15px rgba(3, 105, 161, 0.25);
 }
 
 .erp-module-light-content :is(
@@ -494,8 +516,8 @@ body {
   [role="button"][class*="bg-purple-"],
   [role="button"][class*="bg-fuchsia-"]
 ):hover {
-  border-color: #155e75;
-  background: #0e7490;
+  border-color: #0c4a6e;
+  background: #075985;
   color: #ffffff;
 }
 
@@ -503,15 +525,15 @@ body {
 .erp-module-light-content button[class*="bg-white/"] {
   border-color: #94a3b8;
   background: #ffffff;
-  color: #334155;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  color: #102033;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.12);
 }
 
 .erp-module-light-content .erp-action-secondary:hover,
 .erp-module-light-content button[class*="bg-white/"]:hover {
   border-color: #64748b;
-  background: #f1f5f9;
-  color: #0f172a;
+  background: #edf3f9;
+  color: #102033;
 }
 
 .erp-module-light-content button.erp-action-primary,
@@ -519,50 +541,50 @@ body {
 .erp-module-light-content button.erp-active-nav,
 .erp-module-light-content [role="button"].erp-active-nav {
   border-color: #0e7490;
-  background: #0891b2;
+  background: #0369a1;
   color: #ffffff;
 }
 
 .erp-module-light-content button.erp-action-success,
 .erp-module-light-content [role="button"].erp-action-success {
-  border-color: #047857;
-  background: #059669;
+  border-color: #065f46;
+  background: #047857;
   color: #ffffff;
 }
 
 .erp-module-light-content button.erp-action-warning,
 .erp-module-light-content [role="button"].erp-action-warning {
-  border-color: #b45309;
-  background: #d97706;
+  border-color: #92400e;
+  background: #b45309;
   color: #ffffff;
 }
 
 .erp-module-light-content button.erp-action-danger,
 .erp-module-light-content [role="button"].erp-action-danger {
-  border-color: #be123c;
-  background: #e11d48;
+  border-color: #9f1239;
+  background: #be123c;
   color: #ffffff;
 }
 
 .erp-module-light-content button.erp-action-primary:hover,
 .erp-module-light-content button.erp-active-nav:hover {
-  border-color: #155e75;
-  background: #0e7490;
+  border-color: #0c4a6e;
+  background: #075985;
 }
 
 .erp-module-light-content button.erp-action-success:hover {
   border-color: #065f46;
-  background: #047857;
+  background: #065f46;
 }
 
 .erp-module-light-content button.erp-action-warning:hover {
-  border-color: #92400e;
-  background: #b45309;
+  border-color: #78350f;
+  background: #92400e;
 }
 
 .erp-module-light-content button.erp-action-danger:hover {
-  border-color: #9f1239;
-  background: #be123c;
+  border-color: #881337;
+  background: #9f1239;
 }
 
 .erp-module-light-content :is(
@@ -601,18 +623,19 @@ body {
 .erp-module-light-content :is(button, [role="button"]):disabled,
 .erp-module-light-content :is(button, [role="button"])[aria-disabled="true"] {
   border-color: #cbd5e1;
-  background: #e2e8f0;
-  color: #64748b;
+  background: #d7e2ee;
+  color: #53657a;
   cursor: not-allowed;
   filter: none;
   opacity: 0.75;
 }
 
 .erp-module-light-content .service-history-btn {
-  border-color: #cbd5e1;
+  border-color: #94a3b8;
   background: #ffffff;
-  color: #334155;
-  font-size: 13px;
+  color: #102033;
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .erp-module-light-content .service-history-btn:hover {

@@ -258,8 +258,8 @@ export default function MarketingManager() {
   return (
     <>
       <div className="grid min-h-0 gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="rounded-2xl border border-white/[0.07] bg-black/20 p-3">
-          <p className="px-2 pb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-rose-200/60">
+        <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <p className="px-2 pb-3 text-[10px] font-black uppercase tracking-[0.2em] text-rose-700">
             Languages
           </p>
           <div className="space-y-1.5">
@@ -274,12 +274,18 @@ export default function MarketingManager() {
                 }}
                 className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left transition ${
                   selectedLanguage === language
-                    ? 'erp-active-nav border-rose-300/28 bg-rose-300/[0.09] text-white'
-                    : 'border-transparent text-zinc-400 hover:border-white/[0.07] hover:bg-white/[0.035] hover:text-white'
+                    ? 'border-rose-300 bg-rose-50 text-rose-950 shadow-sm'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-950'
                 }`}
               >
-                <span className="text-sm font-semibold">{language}</span>
-                <span className="rounded-full border border-white/[0.08] bg-black/25 px-2 py-0.5 text-xs font-bold text-zinc-300">
+                <span className="text-sm font-bold">{language}</span>
+                <span
+                  className={`rounded-full border px-2.5 py-0.5 text-xs font-black ${
+                    selectedLanguage === language
+                      ? 'border-rose-300 bg-white text-rose-900'
+                      : 'border-slate-300 bg-slate-100 text-slate-900'
+                  }`}
+                >
                   {counts[language]}
                 </span>
               </button>

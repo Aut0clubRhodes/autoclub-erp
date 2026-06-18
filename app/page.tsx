@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import Image from 'next/image';
-import { Bell, Menu, X } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Menu, X } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import Window from '@/components/Window';
 import LoginScreen from '@/components/LoginScreen';
@@ -100,6 +100,12 @@ type OpenWindow = {
   zIndex: number;
   isMinimized?: boolean;
 };
+
+type TopMenuEntry =
+  | { label: string; windowId: string }
+  | { label: string; items: Array<{ label: string; windowId: string }> };
+
+const WORKSPACE_STORAGE_KEY = 'autoclub-erp-workspace-v1';
 
 type Vehicle = {
   id: string;
@@ -227,6 +233,136 @@ const initialVehicles: Vehicle[] = [
   },
 ];
 
+const topMenuEntries: TopMenuEntry[] = [
+  { label: 'Κρατήσεις', windowId: 'Κρατήσεις' },
+  { label: 'Αυτοκίνητα', windowId: 'Αυτοκίνητα' },
+  { label: 'Service', windowId: 'Service' },
+  { label: 'Leasing', windowId: 'Leasing' },
+  {
+    label: 'AutoClub-Rhodes',
+    items: [
+      { label: 'ΚΡΑΤΗΣΕΙΣ AUTOCLUB-RHODES', windowId: 'Πίνακας' },
+      { label: 'Booking Engine Admin', windowId: 'Booking Engine Admin' },
+      { label: 'Public Booking Preview', windowId: 'Public Booking Preview' },
+    ],
+  },
+  {
+    label: 'Οικονομικά',
+    items: [
+      { label: 'Σύνολα Ταμείου', windowId: 'Ταμείο' },
+      { label: 'Καταχώρηση Εσόδων', windowId: 'Έσοδα' },
+      { label: 'Καταχώρηση Εξόδων', windowId: 'Έξοδα' },
+      { label: 'Γραμμάτια', windowId: 'Γραμμάτια' },
+      { label: 'Financial Engine', windowId: 'Financial Engine' },
+      { label: 'Αναφορές', windowId: 'Αναφορές' },
+    ],
+  },
+  {
+    label: 'Σύστημα',
+    items: [
+      { label: 'Έγγραφα', windowId: 'Έγγραφα' },
+      { label: 'Marketing', windowId: 'Marketing' },
+      { label: 'Ρυθμίσεις', windowId: 'Ρυθμίσεις' },
+    ],
+  },
+];
+
+function DesktopTopNavigation({
+  activeWindow,
+  userEmail,
+  unreadCount,
+  notifications,
+  showNotifications,
+  onWindowOpen,
+  onLogout,
+  onToggleNotifications,
+  onMarkNotificationRead,
+  onMarkAllNotificationsRead,
+}: {
+  activeWindow: WindowId | null;
+  userEmail: string;
+  unreadCount: number;
+  notifications: NotificationRecord[];
+  showNotifications: boolean;
+  onWindowOpen: (windowId: string) => void;
+  onLogout: () => void;
+  onToggleNotifications: () => void;
+  onMarkNotificationRead: (notification: NotificationRecord) => void;
+  onMarkAllNotificationsRead: () => void;
+}) {
+  const isEntryActive = (entry: TopMenuEntry) =>
+    'windowId' in entry
+      ? activeWindow === entry.windowId
+      : entry.items.some((item) => activeWindow === item.windowId);
+
+  return (
+    <header className="fixed left-0 right-0 top-0 z-[9200] flex h-16 items-center border-b border-slate-400/70 bg-white/96 px-4 text-slate-900 shadow-[0_14px_34px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+      <div className="flex min-w-0 flex-1 items-center gap-4">
+        <button type="button" onClick={() => onWindowOpen('Πίνακας')} className="flex items-center gap-3 rounded-2xl px-2 py-1.5 transition hover:bg-slate-100">
+          <span className="relative block h-10 w-28 overflow-hidden rounded-xl bg-[#073f5d] shadow-sm">
+            <Image src="/logo.png" alt="AUTOCLUB" fill priority className="object-cover object-center" sizes="112px" />
+          </span>
+          <span className="hidden text-left xl:block">
+            <span className="block text-[15px] font-black leading-4 text-slate-950">AUTOCLUB ERP</span>
+            <span className="block text-[11px] font-black uppercase tracking-[0.14em] text-sky-800">Operations</span>
+          </span>
+        </button>
+
+        <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-visible">
+          {topMenuEntries.map((entry) => {
+            const active = isEntryActive(entry);
+
+            if ('windowId' in entry) {
+              return (
+                <button
+                  key={entry.label}
+                  type="button"
+                  onClick={() => onWindowOpen(entry.windowId)}
+                  className={`h-10 rounded-xl px-3 text-[15px] font-black transition ${active ? 'bg-sky-800 text-white shadow-[0_8px_18px_rgba(7,89,133,0.28)]' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
+                >
+                  {entry.label}
+                </button>
+              );
+            }
+
+            return (
+              <div key={entry.label} className="group relative">
+                <button type="button" className={`flex h-10 items-center gap-1 rounded-xl px-3 text-[15px] font-black transition ${active ? 'bg-sky-800 text-white shadow-[0_8px_18px_rgba(7,89,133,0.28)]' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}>
+                  {entry.label}
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+                <div className="invisible absolute left-0 top-full z-[9300] min-w-[250px] translate-y-2 rounded-2xl border border-slate-300 bg-white p-2 opacity-0 shadow-[0_22px_60px_rgba(15,23,42,0.2)] transition group-hover:visible group-hover:translate-y-1 group-hover:opacity-100">
+                  {entry.items.map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={() => onWindowOpen(item.windowId)}
+                      className={`flex h-10 w-full items-center rounded-xl px-3 text-left text-[15px] font-black transition ${activeWindow === item.windowId ? 'bg-sky-100 text-sky-900' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </nav>
+      </div>
+
+      <div className="ml-5 flex shrink-0 items-center gap-4">
+        <div className="hidden max-w-[220px] truncate rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-xs font-black text-slate-800 xl:block">
+          {userEmail}
+        </div>
+        <NotificationBell notifications={notifications} unreadCount={unreadCount} isOpen={showNotifications} onToggle={onToggleNotifications} onMarkRead={onMarkNotificationRead} onMarkAllRead={onMarkAllNotificationsRead} embedded />
+        <button type="button" onClick={onLogout} className="flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-800 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-800">
+          <LogOut className="h-4 w-4" />
+          <span className="hidden lg:inline">Logout</span>
+        </button>
+      </div>
+    </header>
+  );
+}
+
 export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -247,9 +383,10 @@ export default function Home() {
   });
   const [openWindows, setOpenWindows] = useState<OpenWindow[]>([]);
   const [topZIndex, setTopZIndex] = useState(50);
+  const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const sidebarWidth = isSidebarCollapsed ? 72 : 250;
+  const sidebarWidth = isPhoneViewport ? (isSidebarCollapsed ? 72 : 250) : 0;
   const visibleWindows = openWindows.filter((windowItem) => !windowItem.isMinimized);
   const activeWindow = visibleWindows.length
     ? visibleWindows.reduce((topWindow, windowItem) => (windowItem.zIndex > topWindow.zIndex ? windowItem : topWindow), visibleWindows[0]).id
@@ -260,7 +397,8 @@ export default function Home() {
 
   useEffect(() => {
     document.documentElement.style.setProperty('--autoclub-sidebar-width', `${sidebarWidth}px`);
-  }, [sidebarWidth]);
+    document.documentElement.style.setProperty('--autoclub-top-offset', isPhoneViewport ? '64px' : '64px');
+  }, [isPhoneViewport, sidebarWidth]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 1023px)');
@@ -1749,6 +1887,82 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     return knownWindows.includes(value as WindowId) ? (value as WindowId) : null;
   };
 
+  useEffect(() => {
+    if (workspaceHydrated || authLoading || !userEmail || !userRole) {
+      return;
+    }
+
+    try {
+      const savedWorkspace = window.localStorage.getItem(WORKSPACE_STORAGE_KEY);
+      if (!savedWorkspace) {
+        setWorkspaceHydrated(true);
+        return;
+      }
+
+      const parsedWorkspace = JSON.parse(savedWorkspace) as {
+        openWindows?: Array<Partial<OpenWindow> & { id?: string }>;
+        activeWindowId?: string | null;
+        topZIndex?: number;
+      };
+      const savedWindows = Array.isArray(parsedWorkspace.openWindows) ? parsedWorkspace.openWindows : [];
+      const seenWindowIds = new Set<WindowId>();
+      const restoredWindows: OpenWindow[] = [];
+
+      savedWindows.forEach((windowItem, index) => {
+        const resolvedId = resolveWindowId(windowItem.id || '', windowItem.title);
+
+        if (!resolvedId || seenWindowIds.has(resolvedId) || !canOpenWindow(resolvedId)) {
+          return;
+        }
+
+        seenWindowIds.add(resolvedId);
+        restoredWindows.push({
+          id: resolvedId,
+          title: windowItem.title || getWindowTitleForId(resolvedId),
+          zIndex: Number.isFinite(Number(windowItem.zIndex)) ? Number(windowItem.zIndex) : 51 + index,
+          isMinimized: Boolean(windowItem.isMinimized),
+        });
+      });
+
+      const resolvedActiveWindow = resolveWindowId(parsedWorkspace.activeWindowId || '');
+      const maxRestoredZIndex = restoredWindows.reduce((maxZIndex, windowItem) => Math.max(maxZIndex, windowItem.zIndex), 50);
+
+      if (resolvedActiveWindow && seenWindowIds.has(resolvedActiveWindow)) {
+        const activeZIndex = maxRestoredZIndex + 1;
+        setOpenWindows(
+          restoredWindows.map((windowItem) =>
+            windowItem.id === resolvedActiveWindow
+              ? { ...windowItem, zIndex: activeZIndex, isMinimized: false }
+              : windowItem
+          )
+        );
+        setTopZIndex(activeZIndex + 1);
+      } else {
+        setOpenWindows(restoredWindows);
+        setTopZIndex(Math.max(maxRestoredZIndex + 1, Number(parsedWorkspace.topZIndex) || 50));
+      }
+    } catch (error) {
+      console.error('Failed to restore ERP workspace', error);
+      window.localStorage.removeItem(WORKSPACE_STORAGE_KEY);
+    } finally {
+      setWorkspaceHydrated(true);
+    }
+  }, [authLoading, userEmail, userRole, workspaceHydrated]);
+
+  useEffect(() => {
+    if (!workspaceHydrated || !userEmail) {
+      return;
+    }
+
+    const workspaceSnapshot = JSON.stringify({
+      openWindows,
+      activeWindowId: activeWindow,
+      topZIndex,
+    });
+
+    window.localStorage.setItem(WORKSPACE_STORAGE_KEY, workspaceSnapshot);
+  }, [activeWindow, openWindows, topZIndex, userEmail, workspaceHydrated]);
+
   const renderWindowContent = (windowId: WindowId) => {
     switch (resolveWindowId(windowId)) {
   case 'Πίνακας':
@@ -1945,7 +2159,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
   if (authLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#08111a_0%,#050910_100%)] text-sm text-zinc-400">
+      <main className="flex min-h-screen items-center justify-center bg-[#e3ebf4] text-base font-bold text-slate-700">
         Φόρτωση...
       </main>
     );
@@ -2046,6 +2260,20 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   return (
     <>
       {!isPhoneViewport && (
+        <DesktopTopNavigation
+          activeWindow={activeWindow}
+          userEmail={userEmail}
+          unreadCount={unreadNotificationsCount}
+          notifications={notifications}
+          showNotifications={showNotifications}
+          onWindowOpen={handleWindowOpen}
+          onLogout={handleLogout}
+          onToggleNotifications={() => setShowNotifications((current) => !current)}
+          onMarkNotificationRead={handleNotificationClick}
+          onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+        />
+      )}
+      {false && !isPhoneViewport && (
         <Sidebar
           onWindowOpen={handleWindowOpen}
           activeWindow={activeWindow}
@@ -2108,13 +2336,13 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         </>
       )}
       <main
-        className={`fixed bottom-0 right-0 overflow-hidden bg-[radial-gradient(circle_at_48%_42%,rgba(14,165,233,0.075),transparent_26%),radial-gradient(circle_at_62%_44%,rgba(34,197,94,0.045),transparent_24%),linear-gradient(180deg,#07101a_0%,#050910_100%)] transition-[left] duration-200 ${isPhoneViewport ? 'top-[64px]' : 'top-[52px]'}`}
-        style={{ left: isPhoneViewport ? 0 : sidebarWidth }}
+        className={`fixed bottom-0 right-0 overflow-hidden bg-[radial-gradient(circle_at_45%_22%,rgba(3,105,161,0.12),transparent_30%),radial-gradient(circle_at_78%_18%,rgba(4,120,87,0.10),transparent_26%),linear-gradient(180deg,#e3ebf4_0%,#d8e3ef_100%)] transition-[left] duration-200 ${isPhoneViewport ? 'top-[64px]' : 'top-[64px]'}`}
+        style={{ left: 0 }}
       >
         {openWindows.length > 0 && (
           <div
-            className={`pointer-events-none fixed right-0 z-[9000] flex h-[52px] items-end border-b border-white/[0.06] bg-[linear-gradient(180deg,#07101a_0%,#050910_100%)] pl-3 transition-[left] duration-200 ${isPhoneViewport ? 'top-[64px]' : 'top-0'}`}
-            style={{ left: isPhoneViewport ? 0 : sidebarWidth }}
+            className={`pointer-events-none fixed right-0 z-[9000] flex h-[52px] items-end border-b border-slate-300 bg-white/86 pl-3 shadow-sm backdrop-blur-xl transition-[left] duration-200 ${isPhoneViewport ? 'top-[64px]' : 'top-[64px]'}`}
+            style={{ left: 0 }}
           >
             <div className="pointer-events-auto flex max-w-full items-end gap-1 overflow-x-auto pt-2">
               {openWindows.map((windowItem) => {
@@ -2131,8 +2359,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                       isBookingEngineAdminTab ? 'w-auto max-w-none flex-none gap-1 px-2' : 'max-w-[190px] gap-2 px-3'
                     } ${
                       isActiveTab
-                        ? 'border-sky-300/25 border-b-transparent bg-[#08111a] text-white shadow-[0_-2px_18px_rgba(56,189,248,0.12)]'
-                        : 'border-white/[0.045] bg-white/[0.025] text-zinc-500 hover:border-sky-300/16 hover:bg-white/[0.045] hover:text-zinc-200'
+                        ? 'border-sky-400 border-b-transparent bg-[#e3ebf4] text-sky-950 shadow-[0_-2px_16px_rgba(3,105,161,0.18)]'
+                        : 'border-slate-300 bg-white/78 text-slate-700 hover:border-sky-300 hover:bg-white hover:text-slate-950'
                     } ${isMinimizedTab ? 'opacity-55' : 'opacity-100'}`}
                   >
                     {isMinimizedTab && <span className="h-1.5 w-1.5 rounded-full bg-zinc-500" />}
@@ -2152,7 +2380,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                         event.stopPropagation();
                         closeWindow(windowItem.id);
                       }}
-                      className="rounded-md px-1.5 py-0.5 text-zinc-500 transition hover:bg-white/[0.08] hover:text-white"
+                      className="rounded-md px-1.5 py-0.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
                       aria-label={`Close ${windowItem.title || getWindowTitle(windowItem.id)}`}
                     >
                       ×
@@ -2160,14 +2388,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                   </button>
                 );
               })}
-              <div className="mb-2 ml-1 rounded-lg border border-white/[0.045] bg-white/[0.02] px-2.5 py-1.5 text-xs font-semibold text-zinc-500">
+              <div className="mb-2 ml-1 rounded-lg border border-slate-300 bg-white/80 px-2.5 py-1.5 text-xs font-black text-slate-600">
                 +
               </div>
             </div>
           </div>
         )}
 
-        {!isPhoneViewport && (
+        {false && !isPhoneViewport && (
           <NotificationBell
             notifications={notifications}
             unreadCount={unreadNotificationsCount}
@@ -2183,9 +2411,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           <div className="flex h-full w-full items-center justify-center px-4 py-8">
             <div className="flex w-full max-w-[640px] flex-col items-center gap-3.5">
               <div className="relative flex h-[304px] w-[min(552px,84vw)] flex-col items-center justify-center transition duration-300 hover:-translate-y-0.5">
-                <div className="absolute inset-10 rounded-full bg-sky-400/[0.07] blur-3xl" />
-                <div className="absolute inset-20 translate-x-10 rounded-full bg-emerald-400/[0.045] blur-3xl" />
-                <div className="absolute inset-0 rounded-[28px] border border-sky-200/[0.16] bg-[linear-gradient(135deg,rgba(56,189,248,0.065),rgba(9,18,29,0.74)_35%,rgba(34,197,94,0.045))] shadow-[0_0_34px_rgba(0,160,255,0.09),0_0_38px_rgba(75,220,100,0.055),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-md" />
+                <div className="absolute inset-10 rounded-full bg-sky-300/20 blur-3xl" />
+                <div className="absolute inset-20 translate-x-10 rounded-full bg-emerald-300/15 blur-3xl" />
+                <div className="absolute inset-0 rounded-[28px] border border-slate-300 bg-white/88 shadow-[0_24px_76px_rgba(15,23,42,0.14),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md" />
                 <Image
                   src="/logo.png"
                   alt="AUTOCLUB"
@@ -2194,7 +2422,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                   className="relative object-cover object-center opacity-95"
                   sizes="552px"
                 />
-                <p className="absolute bottom-8 text-[11px] font-medium uppercase tracking-[0.28em] text-[#8e99a8]">
+                <p className="absolute bottom-8 text-[11px] font-bold uppercase tracking-[0.28em] text-slate-500">
                   Enterprise Fleet ERP
                 </p>
               </div>
@@ -2205,18 +2433,18 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={openHomepageIncome}
-                  className="group rounded-2xl border border-emerald-300/18 bg-emerald-300/[0.045] px-3.5 py-2 text-center shadow-[0_0_18px_rgba(52,211,153,0.055)] transition duration-200 hover:-translate-y-px hover:border-emerald-300/28 hover:bg-emerald-300/[0.07] hover:shadow-[0_0_22px_rgba(52,211,153,0.09)]"
+                  className="group rounded-2xl border border-emerald-400 bg-white px-3.5 py-2.5 text-center shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition duration-200 hover:-translate-y-px hover:border-emerald-600 hover:bg-emerald-50"
                 >
-                  <span className="block text-[9px] uppercase tracking-[0.16em] text-emerald-200/55">Quick entry</span>
-                  <span className="mt-0.5 block text-[12px] font-semibold text-emerald-100">+ Καταχώρηση Εσόδου</span>
+                  <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">Quick entry</span>
+                  <span className="mt-0.5 block text-[13px] font-black text-emerald-950">+ Καταχώρηση Εσόδου</span>
                 </button>
                 <button
                   type="button"
                   onClick={openHomepageExpense}
-                  className="group rounded-2xl border border-rose-300/18 bg-rose-300/[0.045] px-3.5 py-2 text-center shadow-[0_0_18px_rgba(251,113,133,0.055)] transition duration-200 hover:-translate-y-px hover:border-rose-300/28 hover:bg-rose-300/[0.07] hover:shadow-[0_0_22px_rgba(251,113,133,0.09)]"
+                  className="group rounded-2xl border border-rose-400 bg-white px-3.5 py-2.5 text-center shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition duration-200 hover:-translate-y-px hover:border-rose-700 hover:bg-rose-50"
                 >
-                  <span className="block text-[9px] uppercase tracking-[0.16em] text-rose-200/55">Quick entry</span>
-                  <span className="mt-0.5 block text-[12px] font-semibold text-rose-100">+ Καταχώρηση Εξόδου</span>
+                  <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-rose-800">Quick entry</span>
+                  <span className="mt-0.5 block text-[13px] font-black text-rose-950">+ Καταχώρηση Εξόδου</span>
                 </button>
               </div>
 
@@ -2224,22 +2452,22 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={() => openWindow('Έσοδα')}
-                  className="group cursor-pointer rounded-2xl border border-emerald-300/14 bg-white/[0.025] p-2.5 text-left shadow-[0_0_18px_rgba(52,211,153,0.04)] transition duration-200 hover:-translate-y-px hover:border-emerald-300/28 hover:bg-white/[0.04] hover:shadow-[0_0_24px_rgba(52,211,153,0.08)]"
+                  className="group cursor-pointer rounded-2xl border border-emerald-300 bg-white p-3 text-left shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition duration-200 hover:-translate-y-px hover:border-emerald-500 hover:bg-emerald-50"
                 >
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-200/65">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-800">
                     Τελευταίες Καταχωρήσεις Εσόδων
                   </p>
                   <div className="mt-2.5 space-y-1.5">
                     {latestIncomeTransactions.length === 0 && <p className="text-xs text-zinc-500">Δεν υπάρχουν εγγραφές.</p>}
                     {latestIncomeTransactions.map((transaction) => (
-                      <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl bg-black/18 px-2.5 py-1.5">
+                      <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-300 bg-emerald-100 px-2.5 py-1.5">
                         <div className="min-w-0">
-                          <p className="truncate text-xs font-medium text-white">
+                          <p className="truncate text-xs font-bold text-slate-900">
                             {transaction.contract_number || 'Χωρίς συμβόλαιο'}
                           </p>
                           <p className="text-[11px] text-zinc-500">{formatDate(transaction.date)}</p>
                         </div>
-                        <p className="shrink-0 text-xs font-semibold text-emerald-200">{formatMoney(transaction.amount)}</p>
+                        <p className="shrink-0 text-sm font-black text-emerald-950">{formatMoney(transaction.amount)}</p>
                       </div>
                     ))}
                   </div>
@@ -2248,22 +2476,22 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={() => openWindow('Έξοδα')}
-                  className="group cursor-pointer rounded-2xl border border-rose-300/14 bg-white/[0.025] p-2.5 text-left shadow-[0_0_18px_rgba(251,113,133,0.04)] transition duration-200 hover:-translate-y-px hover:border-rose-300/28 hover:bg-white/[0.04] hover:shadow-[0_0_24px_rgba(251,113,133,0.08)]"
+                  className="group cursor-pointer rounded-2xl border border-rose-300 bg-white p-3 text-left shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition duration-200 hover:-translate-y-px hover:border-rose-600 hover:bg-rose-50"
                 >
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-rose-200/65">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-rose-800">
                     Τελευταίες Καταχωρήσεις Εξόδων
                   </p>
                   <div className="mt-2.5 space-y-1.5">
                     {latestExpenseTransactions.length === 0 && <p className="text-xs text-zinc-500">Δεν υπάρχουν εγγραφές.</p>}
                     {latestExpenseTransactions.map((transaction) => (
-                      <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl bg-black/18 px-2.5 py-1.5">
+                      <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl border border-rose-300 bg-rose-100 px-2.5 py-1.5">
                         <div className="min-w-0">
-                          <p className="truncate text-xs font-medium text-white">
+                          <p className="truncate text-xs font-bold text-slate-900">
                             {transaction.category || transaction.supplier_name || transaction.supplier || '-'}
                           </p>
                           <p className="text-[11px] text-zinc-500">{formatDate(transaction.date)}</p>
                         </div>
-                        <p className="shrink-0 text-xs font-semibold text-rose-200">{formatMoney(transaction.amount)}</p>
+                        <p className="shrink-0 text-sm font-black text-rose-950">{formatMoney(transaction.amount)}</p>
                       </div>
                     ))}
                   </div>
@@ -2272,14 +2500,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={() => openWindow('Γραμμάτια')}
-                  className="group cursor-pointer rounded-2xl border border-amber-300/18 bg-amber-300/[0.04] p-2.5 text-left shadow-[0_0_20px_rgba(251,191,36,0.055)] transition duration-200 hover:-translate-y-px hover:border-amber-300/30 hover:bg-amber-300/[0.06] hover:shadow-[0_0_26px_rgba(251,191,36,0.1)]"
+                  className="group cursor-pointer rounded-2xl border border-amber-300 bg-white p-3 text-left shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition duration-200 hover:-translate-y-px hover:border-amber-600 hover:bg-amber-50"
                 >
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-200/70">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-800">
                     Alert Γραμματίων
                   </p>
-                  <div className="mt-2.5 rounded-xl border border-white/[0.055] bg-black/20 px-3 py-2.5 transition duration-200 group-hover:border-amber-200/12">
-                    <p className="text-xl font-semibold text-amber-100">{formatMoney(homeAlertDebtsTotal)}</p>
-                    <p className="mt-1 text-xs text-amber-200/60">
+                  <div className="mt-2.5 rounded-xl border border-amber-300 bg-amber-100 px-3 py-2.5 transition duration-200 group-hover:border-amber-500">
+                    <p className="text-2xl font-black text-amber-950">{formatMoney(homeAlertDebtsTotal)}</p>
+                    <p className="mt-1 text-sm font-bold text-amber-900">
                       {homeAlertDebtsTotal > 0
                         ? `${homeAlertDebts.length} ληξιπρόθεσμα / σήμερα`
                         : '0 για σήμερα'}
@@ -2289,25 +2517,25 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               </div>
 
               {upcomingKteoAlerts.length > 0 && (
-                <div className="w-full max-w-[480px] rounded-2xl border border-amber-300/18 bg-amber-300/[0.045] px-3.5 py-2.5 shadow-[0_0_20px_rgba(251,191,36,0.065)] backdrop-blur-sm transition duration-200 hover:-translate-y-px hover:border-amber-300/26">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-200/70">
+                <div className="w-full max-w-[480px] rounded-2xl border border-amber-300 bg-white px-3.5 py-2.5 shadow-[0_8px_22px_rgba(15,23,42,0.08)] backdrop-blur-sm transition duration-200 hover:-translate-y-px hover:border-amber-400">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700">
                     KTEO expires in 5 days
                   </p>
                   <div className="mt-2.5 space-y-1.5">
                     {upcomingKteoAlerts.map(({ vehicle, daysUntilExpiry }) => (
                       <div
                         key={vehicle.id}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-1.5"
+                        className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-1.5"
                       >
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-white">{vehicle.plate}</p>
-                          <p className="truncate text-xs text-zinc-400">
+                          <p className="truncate text-sm font-semibold text-slate-950">{vehicle.plate}</p>
+                          <p className="truncate text-xs text-slate-600">
                             {vehicle.brand} {vehicle.model}
                           </p>
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="text-sm font-semibold text-amber-100">{formatDate(vehicle.kteo_expiry || '')}</p>
-                          <p className="text-[11px] text-amber-200/60">
+                          <p className="text-sm font-semibold text-amber-950">{formatDate(vehicle.kteo_expiry || '')}</p>
+                          <p className="text-[11px] text-amber-800">
                             {daysUntilExpiry === 0 ? 'Σήμερα' : `σε ${daysUntilExpiry} ημέρες`}
                           </p>
                         </div>
@@ -3034,6 +3262,7 @@ function NotificationBell({
   onMarkRead,
   onMarkAllRead,
   mobile = false,
+  embedded = false,
 }: {
   notifications: NotificationRecord[];
   unreadCount: number;
@@ -3042,13 +3271,20 @@ function NotificationBell({
   onMarkRead: (notification: NotificationRecord) => void;
   onMarkAllRead: () => void;
   mobile?: boolean;
+  embedded?: boolean;
 }) {
+  const isInlineBell = mobile || embedded;
+
   return (
-    <div className={mobile ? 'relative z-[9300]' : 'fixed right-4 top-2 z-[9100]'}>
+    <div className={isInlineBell ? 'relative z-[9300]' : 'fixed right-4 top-2 z-[9100]'}>
       <button
         type="button"
         onClick={onToggle}
-        className="relative flex h-10 w-10 items-center justify-center rounded-2xl border border-white/[0.08] bg-zinc-950/90 text-zinc-300 shadow-[0_12px_34px_rgba(0,0,0,0.35)] backdrop-blur transition duration-200 hover:-translate-y-px hover:border-sky-300/25 hover:bg-zinc-900 hover:text-white"
+        className={`relative flex h-10 w-10 items-center justify-center rounded-2xl border shadow-[0_10px_24px_rgba(15,23,42,0.12)] backdrop-blur transition duration-200 hover:-translate-y-px ${
+          embedded
+            ? 'border-slate-300 bg-white text-slate-700 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-800'
+            : 'border-white/[0.08] bg-zinc-950/90 text-zinc-300 hover:border-sky-300/25 hover:bg-zinc-900 hover:text-white'
+        }`}
         aria-label="Notifications"
       >
         <Bell className="h-4 w-4" />
@@ -3178,7 +3414,7 @@ function VehiclesTable({
                     <button
                       type="button"
                       onClick={() => onViewLicense(vehicle)}
-                      className="rounded-2xl border border-emerald-500/35 bg-emerald-500/[0.06] px-3 py-2 text-xs text-emerald-100 transition hover:border-emerald-400/50 hover:bg-emerald-500/12"
+                      className="rounded-2xl border border-emerald-500/35 bg-emerald-500/[0.06] px-3 py-2 text-xs text-emerald-950 transition hover:border-emerald-400/50 hover:bg-emerald-500/12"
                     >
                       Προβολή Άδειας
                     </button>
@@ -3317,7 +3553,7 @@ function VehicleLicenseViewerModal({
         <div className="flex shrink-0 flex-col gap-4 border-b border-white/[0.08] px-5 py-4 sm:px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200/65">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
                 Άδεια Κυκλοφορίας
               </p>
               <h3 className="mt-1 truncate text-xl font-semibold text-white">{vehicle.plate}</h3>
@@ -3622,7 +3858,7 @@ function VehicleViewModal({
                   <button
                     type="button"
                     onClick={() => setShowLicenseRegistrationModal(true)}
-                    className="h-10 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.08] px-3.5 text-[13px] font-medium text-emerald-100 transition hover:bg-emerald-500/[0.14]"
+                    className="h-10 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.08] px-3.5 text-[13px] font-medium text-emerald-950 transition hover:bg-emerald-500/[0.14]"
                   >
                     Άδεια Κυκλοφορίας
                   </button>
@@ -3634,7 +3870,7 @@ function VehicleViewModal({
                   <button
                     type="button"
                     onClick={() => setShowKteoModal(true)}
-                    className="h-10 rounded-xl border border-amber-500/25 bg-amber-500/[0.08] px-3.5 text-[13px] font-medium text-amber-100 transition hover:bg-amber-500/[0.14]"
+                    className="h-10 rounded-xl border border-amber-500/25 bg-amber-500/[0.08] px-3.5 text-[13px] font-medium text-amber-950 transition hover:bg-amber-500/[0.14]"
                   >
                     Ενημέρωση ΚΤΕΟ
                   </button>
@@ -3699,9 +3935,9 @@ function VehicleViewModal({
                     className="sr-only"
                   />
                 </label>
-                <label className="block cursor-pointer rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-100 transition hover:bg-emerald-500/20">
+                <label className="block cursor-pointer rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-950 transition hover:bg-emerald-500/20">
                   <span className="block font-medium">Camera / Λήψη φωτογραφίας</span>
-                  <span className="mt-1 block text-xs text-emerald-100/70">Χρήση κάμερας συσκευής</span>
+                  <span className="mt-1 block text-xs text-emerald-950/70">Χρήση κάμερας συσκευής</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -3890,4 +4126,5 @@ function VehicleViewModal({
     </div>
   );
 }
+
 

@@ -55,8 +55,8 @@ export default function Window({
     height: initialHeight || 910,
   });
   const [position, setPosition] = useState({
-    x: 320 + Math.round(Math.random() * 24),
-    y: 80 + Math.round(Math.random() * 24),
+    x: 48 + Math.round(Math.random() * 24),
+    y: 136 + Math.round(Math.random() * 24),
   });
   const resizeStartRef = useRef<{
     mouseX: number;
@@ -81,7 +81,7 @@ export default function Window({
   useEffect(() => {
     if (!isAutoClubRhodesReservations || isMobileWindow || fullscreen) return;
 
-    const sidebarWidth = 250;
+    const sidebarWidth = 0;
     const availableWidth = Math.max(620, window.innerWidth - sidebarWidth - 32);
     const availableHeight = Math.max(420, window.innerHeight - 84);
     const nextWidth = Math.min(1600, availableWidth);
@@ -110,8 +110,8 @@ export default function Window({
 
   const clampPosition = (x: number, y: number) => {
     return {
-      x: Math.min(Math.max(x, 230), window.innerWidth - 120),
-      y: Math.min(Math.max(y, 10), window.innerHeight - 80),
+      x: Math.min(Math.max(x, 16), window.innerWidth - 120),
+      y: Math.min(Math.max(y, 72), window.innerHeight - 80),
     };
   };
 
@@ -170,7 +170,7 @@ export default function Window({
       if (direction.includes('left')) {
         const desiredX = resizeStartRef.current.x + deltaX;
         const maxX = resizeStartRef.current.x + resizeStartRef.current.width - minWidth;
-        nextX = Math.min(Math.max(desiredX, 230), maxX);
+        nextX = Math.min(Math.max(desiredX, 16), maxX);
         nextWidth = resizeStartRef.current.width + resizeStartRef.current.x - nextX;
       }
 
@@ -235,7 +235,7 @@ export default function Window({
     >
       <div
         onMouseDown={onFocus}
-        className={`premium-window-in pointer-events-auto fixed flex flex-col overflow-hidden border border-sky-100/[0.1] bg-[linear-gradient(180deg,rgba(13,20,30,0.96),rgba(7,12,18,0.98))] shadow-[0_24px_90px_rgba(0,0,0,0.58)] backdrop-blur-xl ${
+        className={`premium-window-in pointer-events-auto fixed flex flex-col overflow-hidden border border-slate-300 bg-white shadow-[0_26px_82px_rgba(15,23,42,0.2)] ${
           isMobileWindow
             ? 'rounded-none'
             : isMaximized
@@ -253,10 +253,10 @@ export default function Window({
                 : ''
         }`}
         style={{
-          left: isMobileWindow ? 0 : isMaximized ? 'var(--autoclub-sidebar-width, 250px)' : position.x,
-          top: isMobileWindow ? 64 : isMaximized ? 52 : position.y,
-          width: isMobileWindow ? '100vw' : isMaximized ? 'calc(100vw - var(--autoclub-sidebar-width, 250px))' : windowSize.width,
-          height: isMobileWindow ? 'calc(100dvh - 64px)' : isMaximized ? 'calc(100vh - 52px)' : windowSize.height,
+          left: isMobileWindow ? 0 : isMaximized ? 'var(--autoclub-sidebar-width, 0px)' : position.x,
+          top: isMobileWindow ? 64 : isMaximized ? 'calc(var(--autoclub-top-offset, 64px) + 52px)' : position.y,
+          width: isMobileWindow ? '100vw' : isMaximized ? 'calc(100vw - var(--autoclub-sidebar-width, 0px))' : windowSize.width,
+          height: isMobileWindow ? 'calc(100dvh - 64px)' : isMaximized ? 'calc(100vh - var(--autoclub-top-offset, 64px) - 52px)' : windowSize.height,
           zIndex,
         }}
       >
@@ -269,7 +269,7 @@ export default function Window({
               : compactHeader
                 ? 'cursor-move px-4'
                 : 'cursor-move px-6'
-          } items-center justify-between border-b border-sky-100/[0.08] ${
+          } items-center justify-between border-b border-slate-300 bg-[#f3f6fa] ${
             compactHeader && !isMobileWindow
               ? 'py-1.5'
               : financeDashboard && !isMobileWindow
@@ -279,7 +279,7 @@ export default function Window({
                   : ''
           }`}
         >
-          <h2 className={`min-w-0 truncate font-semibold tracking-tight text-[#f4f7fb] ${compactHeader ? 'text-sm' : 'text-base'}`}>{title}</h2>
+          <h2 className={`min-w-0 truncate font-black tracking-tight text-slate-950 ${compactHeader ? 'text-[15px]' : 'text-lg'}`}>{title}</h2>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             {titleActions}
             <button
@@ -287,7 +287,7 @@ export default function Window({
                 event.stopPropagation();
                 onMinimize?.();
               }}
-              className={`hidden rounded-xl border border-transparent text-[0px] text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white sm:block ${compactHeader ? 'px-2.5 py-1' : 'px-3 py-2'}`}
+              className={`hidden rounded-xl border border-transparent text-[0px] text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-slate-950 sm:block ${compactHeader ? 'px-2.5 py-1' : 'px-3 py-2'}`}
               aria-label="Minimize window"
             >
               <Minus className="h-4 w-4" />
@@ -299,14 +299,14 @@ export default function Window({
                 onFocus?.();
                 setIsMaximized((current) => !current);
               }}
-              className={`hidden rounded-xl border border-transparent text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white sm:block ${compactHeader ? 'px-2.5 py-1' : 'px-3 py-2'}`}
+              className={`hidden rounded-xl border border-transparent text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-slate-950 sm:block ${compactHeader ? 'px-2.5 py-1' : 'px-3 py-2'}`}
               aria-label={isMaximized ? 'Restore window' : 'Maximize window'}
             >
               {isMaximized ? '\u2750' : '\u25A1'}
             </button>
             <button
               onClick={onClose}
-              className={`rounded-xl border border-transparent text-[0px] text-zinc-400 transition hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white ${compactHeader ? 'p-1.5' : 'p-2'}`}
+              className={`rounded-xl border border-transparent text-[0px] text-slate-600 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 ${compactHeader ? 'p-1.5' : 'p-2'}`}
               aria-label="Close window"
             >
               <X className="h-4 w-4" />

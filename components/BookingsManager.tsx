@@ -3888,14 +3888,14 @@ function AvailabilityTestModal({ onClose }: { onClose: () => void }) {
                     <tr key={result.vehicle_group}>
                       <td className="px-4 py-2 font-mono font-black text-white">{result.vehicle_group}</td>
                       <td className="px-4 py-2 text-right font-semibold text-zinc-100">{result.allowed_stock}</td>
-                      <td className="px-4 py-2 text-right font-semibold text-zinc-100">{result.booked_count}</td>
+                      <td className="px-4 py-2 text-right font-semibold text-slate-900">{result.booked_count}</td>
                       <td className="px-4 py-2 text-right">
                         {result.available <= 0 ? (
-                          <span className="rounded-full border border-rose-300/35 bg-rose-400/14 px-2.5 py-1 text-[11px] font-black text-rose-50">
+                          <span className="rounded-full border border-rose-300 bg-rose-100 px-2.5 py-1 text-[11px] font-black text-rose-800">
                             FULL
                           </span>
                         ) : (
-                          <span className="rounded-full border border-emerald-300/35 bg-emerald-400/14 px-2.5 py-1 text-[11px] font-black text-emerald-50">
+                          <span className="rounded-full border border-emerald-300 bg-emerald-100 px-2.5 py-1 text-[11px] font-black text-emerald-900">
                             {result.available}
                           </span>
                         )}
