@@ -18,6 +18,7 @@ export type BookingEngineEmailTemplateId =
   | 'customerRequestReceived'
   | 'customerOnRequestReceived'
   | 'customerBookingConfirmed'
+  | 'reviewRequest'
   | 'paymentReminder'
   | 'customEmail';
 
@@ -411,6 +412,14 @@ export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
         message:
           'Hello {customer_name},\n\nYour booking {reservation_id} for {car_name} is confirmed.\n\nPickup: {pickup_date} at {pickup_time}, {pickup_location}\nReturn: {return_date} at {return_time}, {return_location}\nTotal: {total_price}\nPayment method: {payment_method}',
       },
+      reviewRequest: {
+        id: 'reviewRequest',
+        label: 'Review Request',
+        active: true,
+        subject: 'How was your AutoClub Rhodes rental?',
+        message:
+          'Hello {customer_name},\n\nThank you for choosing AutoClub Rhodes for reservation {reservation_id}.\n\nWe hope you enjoyed your rental with {car_name}. We would really appreciate your review and feedback.',
+      },
       paymentReminder: {
         id: 'paymentReminder',
         label: 'Payment Reminder',
@@ -468,6 +477,12 @@ const normalizeEmailSettings = (
         ...(savedTemplates.customerBookingConfirmed || {}),
         id: defaultTemplates.customerBookingConfirmed.id,
         label: defaultTemplates.customerBookingConfirmed.label,
+      },
+      reviewRequest: {
+        ...defaultTemplates.reviewRequest,
+        ...(savedTemplates.reviewRequest || {}),
+        id: defaultTemplates.reviewRequest.id,
+        label: defaultTemplates.reviewRequest.label,
       },
       paymentReminder: {
         ...defaultTemplates.paymentReminder,

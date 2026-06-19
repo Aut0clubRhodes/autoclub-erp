@@ -5,6 +5,7 @@ import {
   CalendarRange,
   Car,
   Check,
+  ChevronDown,
   CreditCard,
   Edit3,
   Gift,
@@ -31,6 +32,7 @@ import {
   resetBookingEngineConfig,
   saveBookingEngineConfig,
 } from '@/lib/bookingEngineLocalConfig';
+import { supabase } from '@/lib/supabaseClient';
 
 type AdminTabId =
   | 'groups'
@@ -68,6 +70,35 @@ type BookingGroup = {
   name: string;
   active: boolean;
   notes: string;
+};
+
+type BeSiteRow = {
+  id: string;
+  name: string | null;
+  domain: string | null;
+};
+
+type BeGroupRow = {
+  id: string | number;
+  code: string | null;
+  name: string | null;
+  description: string | null;
+  status: string | null;
+};
+
+type BeVehicleCategoryRow = {
+  id: string | number;
+  name?: string | null;
+  group_code?: string | null;
+  groupCode?: string | null;
+  description?: string | null;
+  image_url?: string | null;
+  imageUrl?: string | null;
+  feature_ids?: string[] | null;
+  featureIds?: string[] | null;
+  location_ids?: string[] | null;
+  locationIds?: string[] | null;
+  status?: string | null;
 };
 
 type BookingLocation = {
@@ -523,8 +554,13 @@ const formatDateOnly = (value: string) => {
 export default function BookingEngineAdmin() {
   const initialConfig = useMemo(() => loadBookingEngineConfig(), []);
   const [activeTab, setActiveTab] = useState<AdminTabId>('groups');
-  const [groups, setGroups] = useState<BookingGroup[]>(initialConfig.groups);
-  const [cars, setCars] = useState<BookingEngineCar[]>(initialConfig.cars);
+  const [groups, setGroups] = useState<BookingGroup[]>([]);
+  const [beSiteId, setBeSiteId] = useState<string | null>(null);
+  const [groupsLoading, setGroupsLoading] = useState(true);
+  const [groupsError, setGroupsError] = useState('');
+  const [cars, setCars] = useState<BookingEngineCar[]>([]);
+  const [carsLoading, setCarsLoading] = useState(false);
+  const [carsError, setCarsError] = useState('');
   const [locations, setLocations] = useState<BookingLocation[]>(initialConfig.locations);
   const [features, setFeatures] = useState<BookingFeature[]>(initialConfig.features);
   const [extras, setExtras] = useState<BookingExtra[]>(initialConfig.extras);
@@ -583,6 +619,156 @@ export default function BookingEngineAdmin() {
     .filter((group) => group.active)
     .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
 
+  const mapBeGroup = (row: BeGroupRow): BookingGroup => ({
+    id: String(row.id),
+    code: (row.code || '').trim(),
+    name: (row.name || '').trim(),
+    active: (row.status || 'Active') !== 'Inactive',
+    notes: row.description || '',
+  });
+
+  const mapBeVehicleCategory = (row: BeVehicleCategoryRow): BookingEngineCar => ({
+    id: String(row.id),
+    name: (row.name || '').trim(),
+    groupCode: (row.group_code || row.groupCode || '').trim(),
+    description: row.description || '',
+    imageUrl: row.image_url || row.imageUrl || '',
+    featureIds: Array.isArray(row.feature_ids)
+      ? row.feature_ids
+      : Array.isArray(row.featureIds)
+        ? row.featureIds
+        : [],
+    status:
+      row.status === 'On Request' || row.status === 'Hidden' || row.status === 'Open'
+        ? row.status
+        : 'Open',
+    locationIds: Array.isArray(row.location_ids)
+      ? row.location_ids
+      : Array.isArray(row.locationIds)
+        ? row.locationIds
+        : [],
+  });
+
+  const loadSupabaseCars = async (siteId: string) => {
+    setCarsLoading(true);
+    setCarsError('');
+
+    const { data, error } = await supabase
+      .from('be_vehicle_categories')
+      .select('*')
+      .eq('site_id', siteId)
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('Booking Engine cars load failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setCars([]);
+      setCarsError('Failed to load cars from Supabase');
+      setCarsLoading(false);
+      return;
+    }
+
+    setCars((data || []).map((row) => mapBeVehicleCategory(row as BeVehicleCategoryRow)));
+    setCarsLoading(false);
+  };
+
+  const loadSupabaseGroups = async () => {
+    setGroupsLoading(true);
+    setGroupsError('');
+
+    console.log('SUPABASE URL', process.env.NEXT_PUBLIC_SUPABASE_URL);
+
+    const { data: sites, error: siteError } = await supabase
+      .from('be_sites')
+      .select('id, name, domain')
+      .order('domain', { ascending: true });
+
+    console.log('ALL BE SITES', sites);
+
+    if (siteError) {
+      console.error('Booking Engine groups site load failed:', {
+        message: siteError.message,
+        code: siteError.code,
+        details: siteError.details,
+        hint: siteError.hint,
+      });
+      setBeSiteId(null);
+      setGroupsError('Failed to load groups from Supabase');
+      setGroups([]);
+      setGroupsLoading(false);
+      return;
+    }
+
+    if (!sites || sites.length === 0) {
+      console.warn('No rows returned from be_sites');
+      setBeSiteId(null);
+      setGroupsError('No rows returned from be_sites');
+      setGroups([]);
+      setGroupsLoading(false);
+      return;
+    }
+
+    const site = ((sites || []) as BeSiteRow[]).find(
+      (item) => item.domain === 'autoclub-rhodes.com',
+    ) || null;
+
+    console.log('MATCHED SITE', site);
+
+    if (!site?.id) {
+      console.warn('Site domain mismatch', sites);
+      setBeSiteId(null);
+      setGroupsError('Site domain mismatch');
+      setGroups([]);
+      setGroupsLoading(false);
+      return;
+    }
+
+    console.log('Loaded BE site', site);
+    setBeSiteId(site.id);
+
+    const { data, error } = await supabase
+      .from('be_groups')
+      .select('id, code, name, description, status')
+      .eq('site_id', site.id)
+      .order('code', { ascending: true });
+
+    if (error) {
+      console.error('Booking Engine groups load failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setGroupsError('Failed to load groups from Supabase');
+      setGroups([]);
+      setGroupsLoading(false);
+      return;
+    }
+
+    const mappedGroups = (data || []).map((row) => mapBeGroup(row as BeGroupRow));
+    console.log('Loaded BE groups', mappedGroups.length);
+    setGroups(mappedGroups);
+    setGroupsLoading(false);
+  };
+
+  useEffect(() => {
+    void loadSupabaseGroups();
+  }, []);
+
+  useEffect(() => {
+    if (!beSiteId) {
+      setCars([]);
+      setCarsLoading(false);
+      return;
+    }
+
+    void loadSupabaseCars(beSiteId);
+  }, [beSiteId]);
+
   useEffect(() => {
     saveBookingEngineConfig({
       siteSettings,
@@ -605,6 +791,7 @@ export default function BookingEngineAdmin() {
     extras,
     features,
     groups,
+    groupsLoading,
     locations,
     paymentMethods,
     seasonPrices,
@@ -613,8 +800,6 @@ export default function BookingEngineAdmin() {
 
   const resetDemoData = () => {
     const nextConfig = resetBookingEngineConfig();
-    setGroups(nextConfig.groups);
-    setCars(nextConfig.cars);
     setLocations(nextConfig.locations);
     setFeatures(nextConfig.features);
     setExtras(nextConfig.extras);
@@ -662,22 +847,91 @@ export default function BookingEngineAdmin() {
     }));
   };
 
-  const saveCar = () => {
+  const carPayload = (draft: CarDraft, siteId: string) => ({
+    site_id: siteId,
+    name: draft.name.trim(),
+    group_code: draft.groupCode,
+    description: draft.description.trim(),
+    image_url: draft.imageUrl,
+    feature_ids: draft.featureIds,
+    location_ids: draft.locationIds,
+    status: draft.status,
+  });
+
+  const saveCar = async () => {
     const name = carDraft.name.trim();
     const groupCode = carDraft.groupCode;
-    if (!name || !groupCode) return;
+    if (!name || !groupCode || !beSiteId) {
+      if (!beSiteId) setCarsError('Failed to load cars from Supabase');
+      return;
+    }
 
-    const nextDraft = { ...carDraft, name, groupCode };
-    setCars((current) =>
-      editingCarId
-        ? current.map((car) => (car.id === editingCarId ? { id: editingCarId, ...nextDraft } : car))
-        : [...current, { id: localId('car'), ...nextDraft }],
-    );
+    const payload = carPayload({ ...carDraft, name, groupCode }, beSiteId);
+    const { error } = editingCarId
+      ? await supabase.from('be_vehicle_categories').update(payload).eq('id', editingCarId)
+      : await supabase.from('be_vehicle_categories').insert(payload);
+
+    if (error) {
+      console.error('Booking Engine car save failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setCarsError('Failed to save car to Supabase');
+      return;
+    }
+
     closeCarModal();
+    await loadSupabaseCars(beSiteId);
   };
 
-  const deleteCar = (carId: string) => {
-    setCars((current) => current.filter((car) => car.id !== carId));
+  const deleteCar = async (carId: string) => {
+    if (!beSiteId) {
+      setCarsError('Failed to load cars from Supabase');
+      return;
+    }
+
+    const { error } = await supabase.from('be_vehicle_categories').delete().eq('id', carId);
+
+    if (error) {
+      console.error('Booking Engine car delete failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setCarsError('Failed to delete car from Supabase');
+      return;
+    }
+
+    await loadSupabaseCars(beSiteId);
+  };
+
+  const updateCarStatuses = async (carIds: string[], status: CarStatus) => {
+    if (carIds.length === 0) return;
+    if (!beSiteId) {
+      setCarsError('Failed to load cars from Supabase');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('be_vehicle_categories')
+      .update({ status })
+      .in('id', carIds);
+
+    if (error) {
+      console.error('Booking Engine car status update failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setCarsError('Failed to update cars in Supabase');
+      return;
+    }
+
+    await loadSupabaseCars(beSiteId);
   };
 
   const openNewGroupModal = () => {
@@ -703,22 +957,36 @@ export default function BookingEngineAdmin() {
     setGroupDraft(emptyGroupDraft);
   };
 
-  const saveGroup = () => {
+  const saveGroup = async () => {
     const code = groupDraft.code.trim().toUpperCase();
     const name = groupDraft.name.trim();
-    if (!code || !name) return;
+    if (!code || !name || !beSiteId) {
+      if (!beSiteId) setGroupsError('Failed to load groups from Supabase');
+      return;
+    }
 
     const duplicate = groups.some(
       (group) => group.id !== editingGroupId && group.code.toLowerCase() === code.toLowerCase(),
     );
     if (duplicate) return;
 
-    const nextDraft = { ...groupDraft, code, name };
-    setGroups((current) =>
-      editingGroupId
-        ? current.map((group) => (group.id === editingGroupId ? { id: editingGroupId, ...nextDraft } : group))
-        : [...current, { id: localId('group'), ...nextDraft }],
-    );
+    const payload = {
+      site_id: beSiteId,
+      code,
+      name,
+      description: groupDraft.notes.trim(),
+      status: groupDraft.active ? 'Active' : 'Inactive',
+    };
+
+    const { error } = editingGroupId
+      ? await supabase.from('be_groups').update(payload).eq('id', editingGroupId)
+      : await supabase.from('be_groups').insert(payload);
+
+    if (error) {
+      console.error('Booking Engine group save failed:', error);
+      setGroupsError('Failed to load groups from Supabase');
+      return;
+    }
 
     if (editingGroupId) {
       const previousCode = groups.find((group) => group.id === editingGroupId)?.code;
@@ -741,13 +1009,21 @@ export default function BookingEngineAdmin() {
     }
 
     closeGroupModal();
+    await loadSupabaseGroups();
   };
 
-  const deleteGroup = (groupId: string) => {
+  const deleteGroup = async (groupId: string) => {
     const group = groups.find((item) => item.id === groupId);
     if (!group) return;
 
-    setGroups((current) => current.filter((item) => item.id !== groupId));
+    const { error } = await supabase.from('be_groups').delete().eq('id', groupId);
+
+    if (error) {
+      console.error('Booking Engine group delete failed:', error);
+      setGroupsError('Failed to load groups from Supabase');
+      return;
+    }
+
     setCars((current) =>
       current.map((car) => (car.groupCode === group.code ? { ...car, groupCode: '' } : car)),
     );
@@ -755,9 +1031,10 @@ export default function BookingEngineAdmin() {
     setCoupons((current) =>
       current.map((coupon) => ({
         ...coupon,
-        allowedGroupCodes: coupon.allowedGroupCodes.filter((groupCode) => groupCode !== group.code),
+          allowedGroupCodes: coupon.allowedGroupCodes.filter((groupCode) => groupCode !== group.code),
       })),
     );
+    await loadSupabaseGroups();
   };
 
   const openNewSeasonPriceModal = () => {
@@ -1181,6 +1458,8 @@ export default function BookingEngineAdmin() {
               groups={groups}
               cars={cars}
               seasonPrices={seasonPrices}
+              loading={groupsLoading}
+              error={groupsError}
               onAdd={openNewGroupModal}
               onEdit={openEditGroupModal}
               onDelete={deleteGroup}
@@ -1193,14 +1472,12 @@ export default function BookingEngineAdmin() {
               groups={groups}
               locations={locations}
               features={features}
+              loading={carsLoading}
+              error={carsError}
               onAdd={openNewCarModal}
               onEdit={openEditCarModal}
               onDelete={deleteCar}
-              onStatusChange={(carIds, status) =>
-                setCars((current) =>
-                  current.map((car) => (carIds.includes(car.id) ? { ...car, status } : car)),
-                )
-              }
+              onStatusChange={updateCarStatuses}
             />
           )}
 
@@ -1583,6 +1860,8 @@ function GroupsPanel({
   groups,
   cars,
   seasonPrices,
+  loading,
+  error,
   onAdd,
   onEdit,
   onDelete,
@@ -1590,6 +1869,8 @@ function GroupsPanel({
   groups: BookingGroup[];
   cars: BookingEngineCar[];
   seasonPrices: SeasonPrice[];
+  loading: boolean;
+  error: string;
   onAdd: () => void;
   onEdit: (group: BookingGroup) => void;
   onDelete: (groupId: string) => void;
@@ -1602,6 +1883,16 @@ function GroupsPanel({
         buttonLabel="Add Group"
         onAdd={onAdd}
       />
+      {loading && (
+        <div className="mb-3 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-black text-cyan-900">
+          Loading groups...
+        </div>
+      )}
+      {error && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800">
+          {error}
+        </div>
+      )}
       <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
         <div className="grid grid-cols-[110px_minmax(220px,1fr)_120px_110px_120px_100px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
           <span>Code</span>
@@ -1650,6 +1941,8 @@ function CarsPanel({
   groups,
   locations,
   features,
+  loading,
+  error,
   onAdd,
   onEdit,
   onDelete,
@@ -1659,6 +1952,8 @@ function CarsPanel({
   groups: BookingGroup[];
   locations: BookingLocation[];
   features: BookingFeature[];
+  loading: boolean;
+  error: string;
   onAdd: () => void;
   onEdit: (car: BookingEngineCar) => void;
   onDelete: (carId: string) => void;
@@ -1734,6 +2029,17 @@ function CarsPanel({
           </p>
         </div>
       </div>
+
+      {loading && (
+        <div className="mb-3 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-black text-cyan-900">
+          Loading cars...
+        </div>
+      )}
+      {error && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800">
+          {error}
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
         <div className="grid grid-cols-[42px_70px_minmax(180px,1.1fr)_125px_150px_minmax(180px,1fr)_minmax(180px,1fr)_90px] items-center border-b border-white/[0.08] bg-white/[0.035] px-3 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
@@ -2868,14 +3174,55 @@ function EmailsPanel({
   const [manualPreviewMessage, setManualPreviewMessage] = useState('');
   const [previewTemplateId, setPreviewTemplateId] =
     useState<BookingEngineEmailTemplateId | null>(null);
+  const [openTemplateId, setOpenTemplateId] = useState<BookingEngineEmailTemplateId | null>(null);
   const templateOrder: BookingEngineEmailTemplateId[] = [
     'adminNewReservation',
-    'customerRequestReceived',
-    'customerOnRequestReceived',
     'customerBookingConfirmed',
+    'customerOnRequestReceived',
+    'reviewRequest',
     'paymentReminder',
     'customEmail',
   ];
+  const templateMeta: Record<
+    BookingEngineEmailTemplateId,
+    { purpose: string; badge: string; icon: LucideIcon }
+  > = {
+    adminNewReservation: {
+      purpose: 'Admin receives every new website reservation preview.',
+      badge: 'Automatic',
+      icon: Mail,
+    },
+    customerRequestReceived: {
+      purpose: 'Legacy hidden template. OPEN now uses booking confirmation.',
+      badge: 'Hidden',
+      icon: Mail,
+    },
+    customerBookingConfirmed: {
+      purpose: 'OPEN automatic. ON REQUEST uses it when admin confirms later.',
+      badge: 'Automatic / Confirm',
+      icon: Check,
+    },
+    customerOnRequestReceived: {
+      purpose: 'Customer receives this automatically for ON REQUEST cars.',
+      badge: 'Automatic',
+      icon: CalendarRange,
+    },
+    reviewRequest: {
+      purpose: 'Sent automatically one day after return.',
+      badge: 'Automatic +1 day',
+      icon: Mail,
+    },
+    paymentReminder: {
+      purpose: 'Manual payment reminder template for reservation follow-up.',
+      badge: 'Manual',
+      icon: CreditCard,
+    },
+    customEmail: {
+      purpose: 'Manual reusable message for special cases.',
+      badge: 'Manual',
+      icon: Mail,
+    },
+  };
 
   const updateSettings = (patch: Partial<BookingEmailSettings>) => {
     onSettingsChange({ ...settings, ...patch });
@@ -2934,97 +3281,164 @@ function EmailsPanel({
 
   return (
     <section className="min-w-[820px]">
-      <div className="mb-3 flex items-start justify-between gap-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg font-black text-slate-950">Email settings</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-lg font-black text-slate-950">Email templates</h3>
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-emerald-800">
+              Local State
+            </span>
+          </div>
           <p className="mt-1 text-sm text-slate-600">
-            Local notification and customer template setup. No email provider is connected.
+            Locked preview flow only. No email provider is connected.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onSave}
-          className="inline-flex h-10 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-4 text-sm font-black text-white shadow-sm transition hover:border-cyan-800 hover:bg-cyan-800"
-        >
-          <Check className="h-4 w-4" />
-          Save settings
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="min-w-[260px]">
+            <span className="sr-only">Admin email address</span>
+            <input
+              type="email"
+              value={settings.adminEmail}
+              placeholder="Admin email address"
+              onChange={(event) => updateSettings({ adminEmail: event.target.value })}
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={onSave}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-4 text-sm font-black text-white shadow-sm transition hover:border-cyan-800 hover:bg-cyan-800"
+          >
+            <Check className="h-4 w-4" />
+            Save settings
+          </button>
+        </div>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_270px]">
-        <div className="space-y-3">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_230px]">
+        <div className="space-y-2.5">
           {templateOrder.map((templateId) => {
             const template = settings.templates[templateId];
+            if (!template) return null;
             const subjectKey: EmailTemplateFieldKey = `${templateId}:subject`;
             const messageKey: EmailTemplateFieldKey = `${templateId}:message`;
-            const Icon =
-              templateId === 'adminNewReservation'
-                ? Mail
-                : templateId === 'paymentReminder'
-                  ? CreditCard
-                  : templateId === 'customerBookingConfirmed'
-                    ? Check
-                    : CalendarRange;
+            const meta = templateMeta[templateId];
+            const Icon = meta.icon;
+            const isOpen = openTemplateId === templateId;
 
             return (
-              <EmailSettingsCard
+              <section
                 key={templateId}
-                icon={Icon}
-                title={template.label}
-                description={
-                  templateId === 'adminNewReservation'
-                    ? 'Preview the internal notification for every new website reservation.'
-                    : 'Customer-facing template preview. No email provider is connected yet.'
-                }
-                active={template.active}
-                toggleLabel={template.active ? 'Active' : 'Inactive'}
-                onToggle={(active) => updateTemplate(templateId, { active })}
+                className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
               >
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {templateId === 'adminNewReservation' && (
-                    <TextField
-                      label="Admin email address"
-                      value={settings.adminEmail}
-                      placeholder="reservations@autoclub-rhodes.com"
-                      className="sm:col-span-2"
-                      onChange={(adminEmail) => updateSettings({ adminEmail })}
+                <button
+                  type="button"
+                  onClick={() => setOpenTemplateId(isOpen ? null : templateId)}
+                  className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition hover:bg-slate-50"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-black text-slate-950">{template.label}</span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                            meta.badge.includes('Manual')
+                              ? 'border border-blue-200 bg-blue-50 text-blue-800'
+                              : 'border border-emerald-200 bg-emerald-50 text-emerald-800'
+                          }`}
+                        >
+                          {meta.badge}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs font-semibold text-slate-500">
+                        {meta.purpose}
+                      </span>
+                    </span>
+                  </span>
+                  <span className="flex flex-shrink-0 items-center gap-2">
+                    <span
+                      role="switch"
+                      aria-checked={template.active}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        updateTemplate(templateId, { active: !template.active });
+                      }}
+                      className={`inline-flex h-8 items-center rounded-lg border px-2.5 text-xs font-black transition ${
+                        template.active
+                          ? 'border-emerald-600 bg-emerald-600 text-white'
+                          : 'border-slate-300 bg-white text-slate-600'
+                      }`}
+                    >
+                      {template.active ? 'Active' : 'Inactive'}
+                    </span>
+                    <ChevronDown
+                      className={`h-4 w-4 text-slate-500 transition ${
+                        isOpen ? 'rotate-180' : ''
+                      }`}
                     />
-                  )}
-                  <EmailTemplateField
-                    fieldKey={subjectKey}
-                    label="Subject template"
-                    value={template.subject}
-                    onElement={(element) => {
-                      templateElementsRef.current[subjectKey] = element;
-                    }}
-                    onFocus={handleTemplateFocus}
-                    onChange={(subject) => updateTemplate(templateId, { subject })}
-                  />
-                  <EmailTemplateField
-                    fieldKey={messageKey}
-                    label="Message template"
-                    value={template.message}
-                    multiline
-                    onElement={(element) => {
-                      templateElementsRef.current[messageKey] = element;
-                    }}
-                    onFocus={handleTemplateFocus}
-                    onChange={(message) => updateTemplate(templateId, { message })}
-                  />
-                </div>
-                <ManualEmailButton
-                  label="Manual preview"
-                  onClick={() => {
-                    setPreviewTemplateId(templateId);
-                    setManualPreviewMessage('');
-                  }}
-                />
-              </EmailSettingsCard>
+                  </span>
+                </button>
+
+                {isOpen && (
+                  <div className="border-t border-slate-200 bg-slate-50/70 px-3.5 py-3">
+                    <div className="grid gap-3">
+                      <EmailTemplateField
+                        fieldKey={subjectKey}
+                        label="Subject template"
+                        value={template.subject}
+                        onElement={(element) => {
+                          templateElementsRef.current[subjectKey] = element;
+                        }}
+                        onFocus={handleTemplateFocus}
+                        onChange={(subject) => updateTemplate(templateId, { subject })}
+                      />
+                      <EmailTemplateField
+                        fieldKey={messageKey}
+                        label="Message template"
+                        value={template.message}
+                        multiline
+                        onElement={(element) => {
+                          templateElementsRef.current[messageKey] = element;
+                        }}
+                        onFocus={handleTemplateFocus}
+                        onChange={(message) => updateTemplate(templateId, { message })}
+                      />
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreviewTemplateId(templateId);
+                          setManualPreviewMessage('');
+                        }}
+                        className="inline-flex h-9 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-3.5 text-xs font-black text-white shadow-sm transition hover:border-cyan-800 hover:bg-cyan-800"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                        Manual preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onSave}
+                        className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 text-xs font-black text-slate-800 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                        Save
+                      </button>
+                      <span className="text-[11px] font-semibold text-slate-500">
+                        Preview only - sending is not connected.
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </section>
             );
           })}
         </div>
 
-        <aside className="h-fit rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm xl:sticky xl:top-0">
+        <aside className="h-fit rounded-xl border border-slate-200 bg-white p-3 shadow-sm xl:sticky xl:top-3">
           <div className="flex items-center gap-2">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700">
               <Settings2 className="h-4 w-4" />
