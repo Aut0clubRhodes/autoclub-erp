@@ -3,7 +3,15 @@ export type ActiveStatus = 'Active' | 'Inactive';
 export type LocationType = 'airport' | 'town' | 'hotel' | 'custom';
 export type ExtraPricingMode = 'Per Day' | 'Per Booking' | 'Free';
 export type PaymentMethodType = 'Pay on Arrival' | 'Bank Transfer' | 'Payment Link' | 'Card' | 'Custom';
-export type CheckoutFieldId = 'fullName' | 'email' | 'whatsapp' | 'hotelRoom' | 'flightNumber' | 'notes' | string;
+export type CheckoutFieldId =
+  | 'fullName'
+  | 'email'
+  | 'dateOfBirth'
+  | 'whatsapp'
+  | 'hotelRoom'
+  | 'flightNumber'
+  | 'notes'
+  | string;
 export type CheckoutFieldType = 'Text' | 'Textarea' | 'Number' | 'Email' | 'Phone' | 'Select';
 export type BookingEngineEmailTemplateId =
   | 'adminNewReservation'
@@ -362,8 +370,9 @@ export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
   checkoutFields: [
     { id: 'fullName', name: 'Full Name', fieldType: 'Text', enabled: true, required: true, label: 'Full Name', builtIn: true },
     { id: 'email', name: 'Email', fieldType: 'Email', enabled: true, required: true, label: 'Email', builtIn: true },
-    { id: 'whatsapp', name: 'WhatsApp', fieldType: 'Phone', enabled: true, required: true, label: 'WhatsApp', builtIn: true },
-    { id: 'hotelRoom', name: 'Hotel / Room', fieldType: 'Text', enabled: true, required: false, label: 'Hotel / Room', builtIn: true },
+    { id: 'dateOfBirth', name: 'Date of Birth', fieldType: 'Text', enabled: true, required: true, label: 'Date of Birth', builtIn: true },
+    { id: 'whatsapp', name: 'Phone / WhatsApp', fieldType: 'Phone', enabled: true, required: true, label: 'Phone / WhatsApp', builtIn: true },
+    { id: 'hotelRoom', name: 'Hotel / Villa / Apartment', fieldType: 'Text', enabled: true, required: false, label: 'Hotel / Villa / Apartment', builtIn: true },
     { id: 'flightNumber', name: 'Flight Number', fieldType: 'Text', enabled: true, required: false, label: 'Flight Number', builtIn: true },
     { id: 'notes', name: 'Notes', fieldType: 'Textarea', enabled: true, required: false, label: 'Notes', builtIn: true },
   ],
@@ -476,6 +485,40 @@ const normalizeEmailSettings = (
   };
 };
 
+const normalizeCheckoutFields = (
+  fields?: BookingEngineCheckoutField[],
+): BookingEngineCheckoutField[] => {
+  const savedFields = Array.isArray(fields) ? fields : [];
+  const savedById = new Map(savedFields.map((field) => [field.id, field]));
+  const builtInFields = bookingEngineLocalConfig.checkoutFields.map((defaultField) => {
+    const savedField = savedById.get(defaultField.id);
+    return {
+      ...defaultField,
+      ...(savedField || {}),
+      id: defaultField.id,
+      fieldType: defaultField.fieldType,
+      builtIn: true,
+      name: defaultField.name,
+      label:
+        savedField?.label === 'WhatsApp'
+          ? 'Phone / WhatsApp'
+          : savedField?.label === 'Hotel / Room'
+            ? 'Hotel / Villa / Apartment'
+            : savedField?.label || defaultField.label,
+    };
+  });
+  const customFields = savedFields
+    .filter((field) => !bookingEngineLocalConfig.checkoutFields.some((builtIn) => builtIn.id === field.id))
+    .map((field) => ({
+      options: [],
+      builtIn: false,
+      ...field,
+      fieldType: field.fieldType || ('Text' as CheckoutFieldType),
+    }));
+
+  return [...builtInFields, ...customFields];
+};
+
 const normalizeBookingEngineConfig = (config: Partial<BookingEngineLocalConfig>): BookingEngineLocalConfig => ({
   siteSettings: { ...bookingEngineLocalConfig.siteSettings, ...(config.siteSettings || {}) },
   groups: Array.isArray(config.groups) ? config.groups : bookingEngineLocalConfig.groups,
@@ -491,14 +534,7 @@ const normalizeBookingEngineConfig = (config: Partial<BookingEngineLocalConfig>)
   paymentMethods: Array.isArray(config.paymentMethods)
     ? config.paymentMethods
     : bookingEngineLocalConfig.paymentMethods,
-  checkoutFields: Array.isArray(config.checkoutFields)
-    ? config.checkoutFields.map((field) => ({
-        options: [],
-        builtIn: false,
-        ...field,
-        fieldType: field.fieldType || ('Text' as CheckoutFieldType),
-      }))
-    : bookingEngineLocalConfig.checkoutFields,
+  checkoutFields: normalizeCheckoutFields(config.checkoutFields),
   pricingSeasons: Array.isArray(config.pricingSeasons)
     ? config.pricingSeasons.map((season) => ({ ...season, status: season.status || 'Active' }))
     : bookingEngineLocalConfig.pricingSeasons,

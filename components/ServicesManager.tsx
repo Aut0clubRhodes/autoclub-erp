@@ -1760,7 +1760,7 @@ export default function ServicesManager() {
                 <select
                   value={checklistYear}
                   onChange={(event) => setChecklistYear(event.target.value)}
-                  className="rounded-2xl border border-zinc-700 bg-zinc-950/80 px-3 py-2 text-sm text-white outline-none transition duration-200 focus:border-orange-400/55 focus:ring-2 focus:ring-orange-400/15"
+                  className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-950 outline-none transition duration-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                 >
                   {checklistYearOptions.map((year) => (
                     <option key={year} value={year}>
@@ -1769,7 +1769,7 @@ export default function ServicesManager() {
                   ))}
                 </select>
               </label>
-              <div className="flex rounded-2xl border border-white/[0.07] bg-black/25 p-1">
+              <div className="flex h-10 rounded-xl border border-slate-300 bg-white p-0.5 shadow-sm">
                 {[
                   { value: 'all' as const, label: 'All' },
                   { value: 'pending' as const, label: 'Pending' },
@@ -1779,10 +1779,10 @@ export default function ServicesManager() {
                     key={filter.value}
                     type="button"
                     onClick={() => setChecklistFilter(filter.value)}
-                    className={`rounded-xl px-3 py-2 text-xs font-semibold transition duration-200 ${
+                    className={`rounded-lg px-3 text-xs font-black transition duration-200 ${
                       checklistFilter === filter.value
-                        ? 'bg-orange-400/14 text-orange-100'
-                        : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100'
+                        ? 'bg-orange-600 text-white shadow-sm'
+                        : 'text-slate-700 hover:bg-orange-50 hover:text-orange-800'
                     }`}
                   >
                     {filter.label}
@@ -2549,10 +2549,10 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 function ChecklistBadge({ done }: { done: boolean }) {
   return (
     <span
-      className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${
+      className={`inline-flex min-w-[76px] justify-center rounded-full border px-3 py-1 text-xs font-black shadow-sm ${
         done
-          ? 'border-emerald-300/30 bg-emerald-400/12 text-emerald-200'
-          : 'border-orange-300/30 bg-orange-400/12 text-orange-200'
+          ? 'border-emerald-700 bg-emerald-600 text-white'
+          : 'border-amber-600 bg-amber-500 text-slate-950'
       }`}
     >
       {done ? 'DONE' : 'PENDING'}
@@ -2562,12 +2562,12 @@ function ChecklistBadge({ done }: { done: boolean }) {
 
 function ChecklistStatusToggle({ done, onChange }: { done: boolean; onChange: (done: boolean) => void }) {
   return (
-    <div className="inline-flex rounded-full border border-white/[0.08] bg-black/30 p-0.5">
+    <div className="inline-flex rounded-full border border-slate-300 bg-white p-0.5 shadow-sm">
       <button
         type="button"
         onClick={() => onChange(true)}
-        className={`rounded-full px-2.5 py-1 text-[10px] font-bold transition ${
-          done ? 'bg-emerald-400/18 text-emerald-100' : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
+        className={`rounded-full px-2.5 py-1 text-[10px] font-black transition ${
+          done ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-800'
         }`}
       >
         DONE
@@ -2575,8 +2575,8 @@ function ChecklistStatusToggle({ done, onChange }: { done: boolean; onChange: (d
       <button
         type="button"
         onClick={() => onChange(false)}
-        className={`rounded-full px-2.5 py-1 text-[10px] font-bold transition ${
-          !done ? 'bg-orange-400/18 text-orange-100' : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
+        className={`rounded-full px-2.5 py-1 text-[10px] font-black transition ${
+          !done ? 'bg-amber-500 text-slate-950' : 'text-slate-600 hover:bg-amber-50 hover:text-amber-900'
         }`}
       >
         PENDING
@@ -2588,12 +2588,12 @@ function ChecklistStatusToggle({ done, onChange }: { done: boolean; onChange: (d
 function OverallChecklistBadge({ status }: { status: 'DONE' | 'ATTENTION' | 'PENDING' }) {
   const classes =
     status === 'DONE'
-      ? 'border-emerald-300/30 bg-emerald-400/12 text-emerald-200'
+      ? 'border-emerald-700 bg-emerald-600 text-white'
       : status === 'ATTENTION'
-        ? 'border-yellow-300/30 bg-yellow-400/12 text-yellow-100'
-        : 'border-orange-300/30 bg-orange-400/12 text-orange-200';
+        ? 'border-orange-700 bg-orange-500 text-slate-950'
+        : 'border-amber-600 bg-amber-500 text-slate-950';
 
-  return <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${classes}`}>{status}</span>;
+  return <span className={`inline-flex min-w-[92px] justify-center rounded-full border px-3 py-1 text-xs font-black shadow-sm ${classes}`}>{status}</span>;
 }
 
 function SearchableCombobox({

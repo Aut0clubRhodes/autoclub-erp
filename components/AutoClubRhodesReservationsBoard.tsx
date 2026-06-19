@@ -108,7 +108,7 @@ const getReservationSortValue = (
     case 'customer':
       return reservation.customerName;
     case 'phone':
-      return reservation.phone;
+      return reservation.fullPhone || reservation.phone;
     case 'car':
       return `${reservation.carName} ${reservation.groupCode}`;
     case 'pickup':
@@ -236,7 +236,12 @@ export default function AutoClubRhodesReservationsBoard() {
               ...reservationDraft,
               customerName: reservationDraft.customerName.trim(),
               phone: reservationDraft.phone.trim(),
+              fullPhone: reservationDraft.fullPhone?.trim() || reservationDraft.phone.trim(),
+              countryCode: reservationDraft.countryCode?.trim() || '',
               email: reservationDraft.email.trim(),
+              dateOfBirth: reservationDraft.dateOfBirth?.trim() || '',
+              hotelVillaApartment: reservationDraft.hotelVillaApartment?.trim() || reservationDraft.hotelRoom.trim(),
+              hotelRoom: reservationDraft.hotelRoom.trim(),
               carName: reservationDraft.carName.trim(),
               groupCode: reservationDraft.groupCode.trim().toUpperCase(),
               pickupLocation: reservationDraft.pickupLocation.trim(),
@@ -355,7 +360,7 @@ export default function AutoClubRhodesReservationsBoard() {
                       <p className="mt-0.5 font-mono text-[10px] text-slate-400">{reservation.id}</p>
                     </div>
                     <span className="truncate pr-3 text-xs font-semibold text-slate-700">
-                      {reservation.phone}
+                      {reservation.fullPhone || reservation.phone}
                     </span>
                     <CarCell reservation={reservation} />
                     <DateCell date={reservation.pickupDate} time={reservation.pickupTime} />
@@ -444,7 +449,7 @@ export default function AutoClubRhodesReservationsBoard() {
                       {reservation.customerName}
                     </span>
                     <span className="truncate pr-3 text-xs font-semibold text-slate-700">
-                      {reservation.phone}
+                      {reservation.fullPhone || reservation.phone}
                     </span>
                     <CarCell reservation={reservation} />
                     <DateCell date={reservation.pickupDate} time={reservation.pickupTime} />
@@ -599,7 +604,22 @@ function ReservationEditor({
           <EditorField
             label="Phone"
             value={draft.phone}
-            onChange={(phone) => updateDraft({ phone })}
+            onChange={(phone) => updateDraft({ phone, fullPhone: `${draft.countryCode || ''} ${phone}`.trim() })}
+          />
+          <EditorField
+            label="Country code"
+            value={draft.countryCode || ''}
+            onChange={(countryCode) =>
+              updateDraft({
+                countryCode,
+                fullPhone: `${countryCode} ${draft.phone}`.trim(),
+              })
+            }
+          />
+          <EditorField
+            label="Full phone"
+            value={draft.fullPhone || draft.phone}
+            onChange={(fullPhone) => updateDraft({ fullPhone })}
           />
           <EditorField
             label="Email"
@@ -607,9 +627,17 @@ function ReservationEditor({
             onChange={(email) => updateDraft({ email })}
           />
           <EditorField
-            label="Hotel / Room"
-            value={draft.hotelRoom}
-            onChange={(hotelRoom) => updateDraft({ hotelRoom })}
+            label="Date of Birth"
+            type="date"
+            value={draft.dateOfBirth || ''}
+            onChange={(dateOfBirth) => updateDraft({ dateOfBirth })}
+          />
+          <EditorField
+            label="Hotel / Villa / Apartment"
+            value={draft.hotelVillaApartment || draft.hotelRoom}
+            onChange={(hotelVillaApartment) =>
+              updateDraft({ hotelVillaApartment, hotelRoom: hotelVillaApartment })
+            }
           />
           <EditorField
             label="Flight Number"

@@ -1838,18 +1838,18 @@ export default function BookingsManager({
   }
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col gap-0.5 overflow-hidden rounded-xl bg-slate-100 p-1 text-slate-900">
-      <div className="flex flex-shrink-0 flex-col gap-1 rounded-lg border border-slate-200 bg-white px-1.5 py-0.5 shadow-sm md:flex-row md:items-center">
+    <div className="relative flex h-full min-h-0 w-full flex-col gap-px overflow-hidden rounded-xl bg-slate-100 p-0.5 text-slate-900">
+      <div className="flex flex-shrink-0 flex-col gap-0.5 rounded-lg border border-slate-200 bg-white px-1 py-px shadow-sm md:flex-row md:items-center">
         <input
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
           placeholder="Search phone, name, group, agency, hotel..."
-          className="h-7 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-none transition duration-200 placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
+          className="h-[26px] min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 text-[11px] text-slate-900 outline-none transition duration-200 placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
         />
         <select
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value as (typeof statuses)[number])}
-          className="h-7 rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900 outline-none transition duration-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
+          className="h-[26px] rounded-md border border-slate-300 bg-white px-2 text-[11px] text-slate-900 outline-none transition duration-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
         >
           {statuses.map((status) => (
             <option key={status} value={status}>
@@ -1860,28 +1860,28 @@ export default function BookingsManager({
         <button
           type="button"
           onClick={() => setShowHistoryModal(true)}
-          className="h-7 shrink-0 rounded-lg border border-violet-300 bg-violet-100 px-2.5 text-xs font-bold text-violet-800 transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-200"
+          className="h-[26px] shrink-0 rounded-md border border-violet-300 bg-violet-100 px-2 text-[11px] font-bold text-violet-800 transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-200"
         >
           Ιστορικό Κρατήσεων
         </button>
         <button
           type="button"
           onClick={() => setShowReturnsModal(true)}
-          className="h-7 shrink-0 rounded-lg border border-amber-300 bg-amber-100 px-2.5 text-xs font-bold text-amber-800 transition duration-200 hover:-translate-y-0.5 hover:border-amber-400 hover:bg-amber-200"
+          className="h-[26px] shrink-0 rounded-md border border-amber-300 bg-amber-100 px-2 text-[11px] font-bold text-amber-800 transition duration-200 hover:-translate-y-0.5 hover:border-amber-400 hover:bg-amber-200"
         >
           Επιστροφές
         </button>
         <button
           type="button"
           onClick={() => setShowAvailabilityModal(true)}
-          className="h-7 shrink-0 rounded-lg border border-emerald-300 bg-emerald-100 px-2.5 text-xs font-bold text-emerald-800 transition duration-200 hover:-translate-y-0.5 hover:border-emerald-400 hover:bg-emerald-200"
+          className="h-[26px] shrink-0 rounded-md border border-emerald-300 bg-emerald-100 px-2 text-[11px] font-bold text-emerald-800 transition duration-200 hover:-translate-y-0.5 hover:border-emerald-400 hover:bg-emerald-200"
         >
           Availability
         </button>
         <button
           type="button"
           onClick={() => setShowAvailabilityTestModal(true)}
-          className="h-7 shrink-0 rounded-lg border border-cyan-300 bg-cyan-100 px-2.5 text-xs font-bold text-cyan-800 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-400 hover:bg-cyan-200"
+          className="h-[26px] shrink-0 rounded-md border border-cyan-300 bg-cyan-100 px-2 text-[11px] font-bold text-cyan-800 transition duration-200 hover:-translate-y-0.5 hover:border-cyan-400 hover:bg-cyan-200"
         >
           Check Availability
         </button>
@@ -1896,13 +1896,13 @@ export default function BookingsManager({
             });
             setShowNewModal(true);
           }}
-          className="h-7 shrink-0 rounded-lg border border-sky-400 bg-sky-600 px-2.5 text-xs font-bold text-white transition duration-200 hover:-translate-y-0.5 hover:border-sky-500 hover:bg-sky-700"
+          className="h-[26px] shrink-0 rounded-md border border-sky-400 bg-sky-600 px-2 text-[11px] font-bold text-white transition duration-200 hover:-translate-y-0.5 hover:border-sky-500 hover:bg-sky-700"
         >
           + Νέα Κράτηση
         </button>
       </div>
 
-      <div className="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-x-2 gap-y-px rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[9px] font-bold text-slate-700">
         {bookingHealthStatuses.map((health) => {
           const stateLabel = health.state === 'active' ? 'active' : health.state === 'error' ? 'error' : 'no recent event';
           const title = health.lastEventAt
@@ -1929,7 +1929,7 @@ export default function BookingsManager({
         })}
       </div>
 
-      <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 shadow-sm">
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-white px-1.5 py-0.5 shadow-sm">
         {([
           { id: 'active', label: 'Active' },
           { id: 'returned', label: 'Returned' },
@@ -1941,7 +1941,7 @@ export default function BookingsManager({
               key={mode.id}
               type="button"
               onClick={() => setListMode(mode.id)}
-              className={`h-7 rounded-lg border px-2.5 text-[11px] font-black transition duration-200 ${
+              className={`h-[26px] rounded-md border px-2 text-[11px] font-black transition duration-200 ${
                 isActive
                   ? 'border-emerald-400 bg-emerald-100 text-emerald-900 shadow-sm'
                   : 'border-slate-300 bg-white text-slate-600 hover:border-emerald-400 hover:bg-emerald-50 hover:text-slate-900'
@@ -1961,7 +1961,7 @@ export default function BookingsManager({
                 <select
                   value={agencyQuickFilter}
                   onChange={(event) => setAgencyQuickFilter(event.target.value)}
-                  className="h-7 rounded-lg border border-slate-300 bg-white px-2.5 text-[11px] font-bold text-slate-700 outline-none transition hover:border-sky-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
+                  className="h-[26px] rounded-md border border-slate-300 bg-white px-2 text-[11px] font-bold text-slate-700 outline-none transition hover:border-sky-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
                 >
                   <option value="ALL">All agencies</option>
                   {agencyQuickFilterOptions.map((agency) => (
@@ -1973,7 +1973,7 @@ export default function BookingsManager({
                 <button
                   type="button"
                   onClick={() => setQuickFilter(filter.id)}
-                  className={`h-7 rounded-lg border px-2.5 text-[11px] font-bold transition duration-200 ${
+                  className={`h-[26px] rounded-md border px-2 text-[11px] font-bold transition duration-200 ${
                     isActive
                       ? 'border-sky-400 bg-sky-100 text-sky-900 shadow-sm'
                       : 'border-slate-300 bg-white text-slate-600 hover:border-sky-400 hover:bg-sky-50 hover:text-slate-900'
@@ -1990,7 +1990,7 @@ export default function BookingsManager({
               key={filter.id}
               type="button"
               onClick={() => setQuickFilter(filter.id)}
-              className={`h-7 rounded-lg border px-2.5 text-[11px] font-bold transition duration-200 ${
+              className={`h-[26px] rounded-md border px-2 text-[11px] font-bold transition duration-200 ${
                 isActive
                   ? 'border-sky-400 bg-sky-100 text-sky-900 shadow-sm'
                   : 'border-slate-300 bg-white text-slate-600 hover:border-sky-400 hover:bg-sky-50 hover:text-slate-900'
@@ -2001,10 +2001,10 @@ export default function BookingsManager({
           );
         })}
         {quickFilter === 'returnsToday' && (
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
             {reminderFeedback && (
               <span
-                className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold ${
+                className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${
                   isReminderSuccessFeedback(reminderFeedback)
                     ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
                     : isReminderPendingFeedback(reminderFeedback)
@@ -2019,7 +2019,7 @@ export default function BookingsManager({
               type="button"
               onClick={sendAllTodayReturnReminders}
               disabled={isBulkSendingReminders || todayReturnReminderTargets.length === 0}
-              className="rounded-lg border border-cyan-500 bg-cyan-600 px-3 py-1 text-[11px] font-black text-white transition hover:border-cyan-600 hover:bg-cyan-700 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500"
+              className="rounded-md border border-cyan-500 bg-cyan-600 px-2.5 py-0.5 text-[10px] font-black text-white transition hover:border-cyan-600 hover:bg-cyan-700 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500"
             >
               {isBulkSendingReminders ? 'Sending...' : "Send all today's return reminders"}
             </button>
@@ -2034,7 +2034,7 @@ export default function BookingsManager({
             <thead className="sticky top-0 z-10 bg-slate-200 text-xs font-bold text-slate-800 shadow-[0_1px_0_rgba(15,23,42,0.15)]">
               <tr>
                 {bookingTableColumns.map((column) => (
-                  <th key={column.key} className={`whitespace-nowrap px-2.5 py-2.5 ${column.className || ''}`}>
+                  <th key={column.key} className={`whitespace-nowrap px-2.5 py-2 ${column.className || ''}`}>
                     <button
                       type="button"
                       onClick={() =>

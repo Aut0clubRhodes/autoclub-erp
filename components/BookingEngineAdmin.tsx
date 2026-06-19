@@ -509,8 +509,9 @@ const createDefaultPricingTiers = (): PricingTier[] => [
 const initialCheckoutFields: CheckoutFieldSetting[] = [
   { id: 'fullName', name: 'Full Name', fieldType: 'Text', enabled: true, required: true, label: 'Full Name', builtIn: true },
   { id: 'email', name: 'Email', fieldType: 'Email', enabled: true, required: true, label: 'Email', builtIn: true },
-  { id: 'whatsapp', name: 'WhatsApp', fieldType: 'Phone', enabled: true, required: true, label: 'WhatsApp', builtIn: true },
-  { id: 'hotelRoom', name: 'Hotel / Room', fieldType: 'Text', enabled: true, required: false, label: 'Hotel / Room', builtIn: true },
+  { id: 'dateOfBirth', name: 'Date of Birth', fieldType: 'Text', enabled: true, required: true, label: 'Date of Birth', builtIn: true },
+  { id: 'whatsapp', name: 'Phone / WhatsApp', fieldType: 'Phone', enabled: true, required: true, label: 'Phone / WhatsApp', builtIn: true },
+  { id: 'hotelRoom', name: 'Hotel / Villa / Apartment', fieldType: 'Text', enabled: true, required: false, label: 'Hotel / Villa / Apartment', builtIn: true },
   { id: 'flightNumber', name: 'Flight Number', fieldType: 'Text', enabled: true, required: false, label: 'Flight Number', builtIn: true },
   { id: 'notes', name: 'Notes', fieldType: 'Textarea', enabled: true, required: false, label: 'Notes', builtIn: true },
 ];

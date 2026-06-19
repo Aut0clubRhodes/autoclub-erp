@@ -57,16 +57,69 @@ const STEP_INDEX: Record<PreviewStep, number> = {
 const CUSTOMER_FIELD_TYPES: Partial<Record<CheckoutFieldId, 'text' | 'email' | 'tel'>> = {
   email: 'email',
   whatsapp: 'tel',
+  dateOfBirth: 'text',
 };
 
 const BUILT_IN_CHECKOUT_FIELD_IDS = new Set([
   'fullName',
   'email',
+  'dateOfBirth',
   'whatsapp',
   'hotelRoom',
   'flightNumber',
   'notes',
 ]);
+
+type CountryDialCode = {
+  name: string;
+  iso: string;
+  flag: string;
+  dialCode: string;
+};
+
+const COUNTRY_DIAL_CODES: CountryDialCode[] = [
+  { name: 'Greece', iso: 'GR', flag: '🇬🇷', dialCode: '+30' },
+  { name: 'Italy', iso: 'IT', flag: '🇮🇹', dialCode: '+39' },
+  { name: 'United Kingdom', iso: 'GB', flag: '🇬🇧', dialCode: '+44' },
+  { name: 'France', iso: 'FR', flag: '🇫🇷', dialCode: '+33' },
+  { name: 'Germany', iso: 'DE', flag: '🇩🇪', dialCode: '+49' },
+  { name: 'Czech Republic', iso: 'CZ', flag: '🇨🇿', dialCode: '+420' },
+  { name: 'Poland', iso: 'PL', flag: '🇵🇱', dialCode: '+48' },
+  { name: 'Netherlands', iso: 'NL', flag: '🇳🇱', dialCode: '+31' },
+  { name: 'Belgium', iso: 'BE', flag: '🇧🇪', dialCode: '+32' },
+  { name: 'Austria', iso: 'AT', flag: '🇦🇹', dialCode: '+43' },
+  { name: 'Switzerland', iso: 'CH', flag: '🇨🇭', dialCode: '+41' },
+  { name: 'Sweden', iso: 'SE', flag: '🇸🇪', dialCode: '+46' },
+  { name: 'Norway', iso: 'NO', flag: '🇳🇴', dialCode: '+47' },
+  { name: 'Denmark', iso: 'DK', flag: '🇩🇰', dialCode: '+45' },
+  { name: 'Finland', iso: 'FI', flag: '🇫🇮', dialCode: '+358' },
+  { name: 'Ireland', iso: 'IE', flag: '🇮🇪', dialCode: '+353' },
+  { name: 'Spain', iso: 'ES', flag: '🇪🇸', dialCode: '+34' },
+  { name: 'Portugal', iso: 'PT', flag: '🇵🇹', dialCode: '+351' },
+  { name: 'Cyprus', iso: 'CY', flag: '🇨🇾', dialCode: '+357' },
+  { name: 'United States', iso: 'US', flag: '🇺🇸', dialCode: '+1' },
+  { name: 'Canada', iso: 'CA', flag: '🇨🇦', dialCode: '+1' },
+  { name: 'Australia', iso: 'AU', flag: '🇦🇺', dialCode: '+61' },
+  { name: 'Israel', iso: 'IL', flag: '🇮🇱', dialCode: '+972' },
+  { name: 'Turkey', iso: 'TR', flag: '🇹🇷', dialCode: '+90' },
+  { name: 'Romania', iso: 'RO', flag: '🇷🇴', dialCode: '+40' },
+  { name: 'Bulgaria', iso: 'BG', flag: '🇧🇬', dialCode: '+359' },
+  { name: 'Hungary', iso: 'HU', flag: '🇭🇺', dialCode: '+36' },
+  { name: 'Slovakia', iso: 'SK', flag: '🇸🇰', dialCode: '+421' },
+  { name: 'Slovenia', iso: 'SI', flag: '🇸🇮', dialCode: '+386' },
+  { name: 'Croatia', iso: 'HR', flag: '🇭🇷', dialCode: '+385' },
+  { name: 'Lithuania', iso: 'LT', flag: '🇱🇹', dialCode: '+370' },
+  { name: 'Latvia', iso: 'LV', flag: '🇱🇻', dialCode: '+371' },
+  { name: 'Estonia', iso: 'EE', flag: '🇪🇪', dialCode: '+372' },
+  { name: 'Ukraine', iso: 'UA', flag: '🇺🇦', dialCode: '+380' },
+  { name: 'Serbia', iso: 'RS', flag: '🇷🇸', dialCode: '+381' },
+  { name: 'South Africa', iso: 'ZA', flag: '🇿🇦', dialCode: '+27' },
+  { name: 'Brazil', iso: 'BR', flag: '🇧🇷', dialCode: '+55' },
+  { name: 'Argentina', iso: 'AR', flag: '🇦🇷', dialCode: '+54' },
+  { name: 'India', iso: 'IN', flag: '🇮🇳', dialCode: '+91' },
+  { name: 'China', iso: 'CN', flag: '🇨🇳', dialCode: '+86' },
+  { name: 'Japan', iso: 'JP', flag: '🇯🇵', dialCode: '+81' },
+];
 
 const carAccentByIndex = [
   'from-sky-100 via-white to-cyan-50',
@@ -135,11 +188,14 @@ export default function PublicBookingPreview() {
   const [customer, setCustomer] = useState({
     fullName: '',
     email: '',
-    whatsapp: '',
+    dateOfBirth: '',
+    countryCode: '+30',
+    phone: '',
     hotelRoom: '',
     flightNumber: '',
     notes: '',
   });
+  const [countrySearch, setCountrySearch] = useState('');
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [extras, setExtras] = useState<Record<string, number>>({});
   const [couponCode, setCouponCode] = useState('');
@@ -149,6 +205,7 @@ export default function PublicBookingPreview() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [submittedReservationId, setSubmittedReservationId] = useState('');
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const activeCoupons = bookingEngineConfig.coupons.filter((coupon) => coupon.status === 'Active');
 
   useEffect(
@@ -175,17 +232,44 @@ export default function PublicBookingPreview() {
   );
   const couponDiscount = getCouponDiscount(appliedCoupon, subtotal);
   const finalTotal = Math.max(0, baseRental + extrasTotal - couponDiscount);
-  const requiredFieldsMissing = checkoutFields.some((field) => {
-    if (!field.required) return false;
-    if (BUILT_IN_CHECKOUT_FIELD_IDS.has(field.id)) {
-      return !String(customer[field.id as keyof typeof customer] || '').trim();
-    }
-    return !String(customFieldValues[field.id] || '').trim();
-  });
   const effectiveReturnLocation =
     search.returnLocation === 'Same as pickup' ? search.pickupLocation : search.returnLocation;
+  const isAirportPickup = search.pickupLocation.toLowerCase().includes('airport');
+  const visibleCheckoutFields = checkoutFields.filter((field) => {
+    if (field.id === 'flightNumber') return isAirportPickup;
+    if (field.id === 'hotelRoom') return !isAirportPickup;
+    return true;
+  });
+  const isCheckoutFieldRequired = (field: BookingEngineCheckoutField) =>
+    field.required ||
+    field.id === 'dateOfBirth' ||
+    (isAirportPickup && field.id === 'flightNumber') ||
+    (!isAirportPickup && field.id === 'hotelRoom');
+  const getBuiltInFieldValue = (fieldId: string) => {
+    if (fieldId === 'whatsapp') return customer.phone;
+    if (fieldId === 'hotelRoom') return customer.hotelRoom;
+    if (fieldId === 'dateOfBirth') return customer.dateOfBirth;
+    return String(customer[fieldId as keyof typeof customer] || '');
+  };
+  const validationErrors = visibleCheckoutFields
+    .filter((field) => isCheckoutFieldRequired(field))
+    .filter((field) =>
+      BUILT_IN_CHECKOUT_FIELD_IDS.has(field.id)
+        ? !getBuiltInFieldValue(field.id).trim()
+        : !String(customFieldValues[field.id] || '').trim()
+    )
+    .map((field) => `${field.label} is required.`);
+  const requiredFieldsMissing = validationErrors.length > 0;
   const currentStepIndex = STEP_INDEX[step];
   const selectedPickupLocation = activeLocations.find((location) => location.name === search.pickupLocation);
+  const selectedCountry =
+    COUNTRY_DIAL_CODES.find((country) => country.dialCode === customer.countryCode) || COUNTRY_DIAL_CODES[0];
+  const filteredCountries = COUNTRY_DIAL_CODES.filter((country) => {
+    const query = countrySearch.trim().toLowerCase();
+    if (!query) return true;
+    return [country.name, country.iso, country.dialCode]
+      .some((value) => value.toLowerCase().includes(query));
+  });
   const visibleCars = bookingEngineConfig.cars
     .filter((car) => car.status !== 'Hidden')
     .filter((car) => !selectedPickupLocation || car.locationIds.includes(selectedPickupLocation.id))
@@ -251,6 +335,7 @@ export default function PublicBookingPreview() {
   };
 
   const submitReservation = () => {
+    setSubmitAttempted(true);
     if (!selectedCar || !acceptTerms || requiredFieldsMissing) return;
     const customerEmailTemplateId =
       selectedCar.mode === 'Open' ? 'customerRequestReceived' : 'customerOnRequestReceived';
@@ -275,10 +360,20 @@ export default function PublicBookingPreview() {
 
     const reservation = addBookingEngineReservation({
       customerName: customer.fullName.trim(),
+      full_name: customer.fullName.trim(),
       email: customer.email.trim(),
-      phone: customer.whatsapp.trim(),
+      phone: customer.phone.trim(),
+      countryCode: customer.countryCode,
+      country_code: customer.countryCode,
+      fullPhone: `${customer.countryCode} ${customer.phone}`.trim(),
+      full_phone: `${customer.countryCode} ${customer.phone}`.trim(),
+      dateOfBirth: customer.dateOfBirth,
+      date_of_birth: customer.dateOfBirth,
       hotelRoom: customer.hotelRoom.trim(),
+      hotelVillaApartment: customer.hotelRoom.trim(),
+      hotel_villa_apartment: customer.hotelRoom.trim(),
       flightNumber: customer.flightNumber.trim(),
+      flight_number: customer.flightNumber.trim(),
       notes: customer.notes.trim(),
       pickupLocation: search.pickupLocation,
       returnLocation: effectiveReturnLocation,
@@ -293,7 +388,7 @@ export default function PublicBookingPreview() {
       extras: selectedExtras,
       couponCode: appliedCoupon?.code || '',
       couponDiscount,
-      customFields: checkoutFields
+      customFields: visibleCheckoutFields
         .filter((field) => !BUILT_IN_CHECKOUT_FIELD_IDS.has(field.id))
         .map((field) => ({
           id: field.id,
@@ -517,24 +612,45 @@ export default function PublicBookingPreview() {
                   <h1 className="text-2xl font-black text-[#073f5d]">Complete your reservation</h1>
                   <p className="mt-1 text-sm text-slate-500">Tell us who will be driving.</p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {checkoutFields.map((field) => (
+                    {visibleCheckoutFields.map((field) => (
                       !BUILT_IN_CHECKOUT_FIELD_IDS.has(field.id) ? (
                         <CustomCheckoutField
                           key={field.id}
                           field={field}
+                          required={isCheckoutFieldRequired(field)}
                           value={customFieldValues[field.id] || ''}
                           onChange={(value) =>
                             setCustomFieldValues((current) => ({ ...current, [field.id]: value }))
                           }
                         />
+                      ) : field.id === 'whatsapp' ? (
+                        <PhoneCountryField
+                          key={field.id}
+                          label={field.label}
+                          required={isCheckoutFieldRequired(field)}
+                          countryCode={customer.countryCode}
+                          phone={customer.phone}
+                          selectedCountry={selectedCountry}
+                          countries={
+                            filteredCountries.some((country) => country.dialCode === customer.countryCode)
+                              ? filteredCountries
+                              : [selectedCountry, ...filteredCountries]
+                          }
+                          countrySearch={countrySearch}
+                          onCountrySearchChange={setCountrySearch}
+                          onCountryChange={(countryCode) =>
+                            setCustomer((current) => ({ ...current, countryCode }))
+                          }
+                          onPhoneChange={(phone) => setCustomer((current) => ({ ...current, phone }))}
+                        />
                       ) : field.id === 'notes' ? (
                         <label key={field.id} className="grid gap-1.5 sm:col-span-2">
                           <span className="text-sm font-black text-slate-700">
-                            {field.label}{field.required && <span className="ml-1 text-rose-600">*</span>}
+                            {field.label}{isCheckoutFieldRequired(field) && <span className="ml-1 text-rose-600">*</span>}
                           </span>
                           <textarea
                             value={customer.notes}
-                            required={field.required}
+                            required={isCheckoutFieldRequired(field)}
                             onChange={(event) => setCustomer((current) => ({ ...current, notes: event.target.value }))}
                             rows={2}
                             className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-[#0891b2] focus:ring-4 focus:ring-cyan-100"
@@ -545,14 +661,26 @@ export default function PublicBookingPreview() {
                         <CustomerField
                           key={field.id}
                           label={field.label}
-                          type={CUSTOMER_FIELD_TYPES[field.id]}
-                          required={field.required}
-                          value={customer[field.id as keyof typeof customer]}
-                          onChange={(value) => setCustomer((current) => ({ ...current, [field.id]: value }))}
+                          type={field.id === 'dateOfBirth' ? 'date' : CUSTOMER_FIELD_TYPES[field.id]}
+                          required={isCheckoutFieldRequired(field)}
+                          value={getBuiltInFieldValue(field.id)}
+                          onChange={(value) =>
+                            setCustomer((current) => ({
+                              ...current,
+                              [field.id === 'hotelRoom' ? 'hotelRoom' : field.id]: value,
+                            }))
+                          }
                         />
                       )
                     ))}
                   </div>
+                  {submitAttempted && validationErrors.length > 0 && (
+                    <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+                      {validationErrors.map((error) => (
+                        <p key={error}>{error}</p>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="order-1 rounded-[20px] border border-slate-200 bg-white p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)] sm:p-5">
@@ -674,7 +802,12 @@ export default function PublicBookingPreview() {
                     <span>I would like to receive AutoClub Rhodes offers.</span>
                   </label>
                 </div>
-                <button type="button" disabled={!acceptTerms || requiredFieldsMissing} onClick={submitReservation} className={`flex h-[54px] w-full items-center justify-center gap-2 rounded-xl px-6 text-base font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none disabled:hover:translate-y-0 ${selectedCar.mode === 'Open' ? 'bg-emerald-600 shadow-emerald-900/20 hover:bg-emerald-700' : 'bg-[#0891b2] shadow-cyan-900/20 hover:bg-[#087f9c]'}`}>
+                {submitAttempted && !acceptTerms && (
+                  <p className="mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
+                    Please accept the rental terms before continuing.
+                  </p>
+                )}
+                <button type="button" aria-disabled={!acceptTerms || requiredFieldsMissing} onClick={submitReservation} className={`flex h-[54px] w-full items-center justify-center gap-2 rounded-xl px-6 text-base font-black text-white shadow-lg transition hover:-translate-y-0.5 ${selectedCar.mode === 'Open' ? 'bg-emerald-600 shadow-emerald-900/20 hover:bg-emerald-700' : 'bg-[#0891b2] shadow-cyan-900/20 hover:bg-[#087f9c]'}`}>
                   {selectedCar.mode === 'Open' ? 'Confirm Booking' : 'Send Request'} <ArrowRight className="h-5 w-5" />
                 </button>
                 <p className="mt-2 text-center text-xs text-slate-400">Prototype only · no payment will be taken</p>
@@ -747,7 +880,7 @@ function InputField({ label, icon, type, value, onChange }: { label: string; ico
   );
 }
 
-function CustomerField({ label, type = 'text', required = false, value, onChange }: { label: string; type?: 'text' | 'email' | 'tel'; required?: boolean; value: string; onChange: (value: string) => void }) {
+function CustomerField({ label, type = 'text', required = false, value, onChange }: { label: string; type?: 'text' | 'email' | 'tel' | 'date'; required?: boolean; value: string; onChange: (value: string) => void }) {
   return (
     <label className="grid gap-1.5">
       <span className="text-sm font-black text-slate-700">
@@ -758,12 +891,78 @@ function CustomerField({ label, type = 'text', required = false, value, onChange
   );
 }
 
+function PhoneCountryField({
+  label,
+  required,
+  countryCode,
+  phone,
+  selectedCountry,
+  countries,
+  countrySearch,
+  onCountrySearchChange,
+  onCountryChange,
+  onPhoneChange,
+}: {
+  label: string;
+  required: boolean;
+  countryCode: string;
+  phone: string;
+  selectedCountry: CountryDialCode;
+  countries: CountryDialCode[];
+  countrySearch: string;
+  onCountrySearchChange: (value: string) => void;
+  onCountryChange: (value: string) => void;
+  onPhoneChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-1.5 sm:col-span-2">
+      <span className="text-sm font-black text-slate-700">
+        {label}{required && <span className="ml-1 text-rose-600">*</span>}
+      </span>
+      <div className="grid gap-2 sm:grid-cols-[minmax(220px,0.8fr)_minmax(0,1.2fr)]">
+        <div className="rounded-xl border border-slate-300 bg-white p-2 shadow-sm">
+          <input
+            value={countrySearch}
+            onChange={(event) => onCountrySearchChange(event.target.value)}
+            placeholder={`${selectedCountry.flag} ${selectedCountry.name} ${countryCode}`}
+            className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-950 outline-none focus:border-[#0891b2] focus:ring-2 focus:ring-cyan-100"
+          />
+          <select
+            value={countryCode}
+            onChange={(event) => onCountryChange(event.target.value)}
+            className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none focus:border-[#0891b2] focus:ring-2 focus:ring-cyan-100"
+          >
+            {countries.map((country) => (
+              <option key={`${country.iso}-${country.dialCode}`} value={country.dialCode}>
+                {country.flag} {country.name} {country.dialCode}
+              </option>
+            ))}
+          </select>
+        </div>
+        <input
+          type="tel"
+          required={required}
+          value={phone}
+          onChange={(event) => onPhoneChange(event.target.value)}
+          placeholder="Phone number"
+          className="min-h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition focus:border-[#0891b2] focus:ring-4 focus:ring-cyan-100"
+        />
+      </div>
+      <p className="text-xs font-semibold text-slate-500">
+        Saved as {countryCode} {phone || '...'}
+      </p>
+    </div>
+  );
+}
+
 function CustomCheckoutField({
   field,
+  required,
   value,
   onChange,
 }: {
   field: BookingEngineCheckoutField;
+  required?: boolean;
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -782,12 +981,12 @@ function CustomCheckoutField({
     <label className={`grid gap-1.5 ${field.fieldType === 'Textarea' ? 'sm:col-span-2' : ''}`}>
       <span className="text-sm font-black text-slate-700">
         {field.label}
-        {field.required && <span className="ml-1 text-rose-600">*</span>}
+        {required && <span className="ml-1 text-rose-600">*</span>}
       </span>
       {field.fieldType === 'Textarea' ? (
         <textarea
           value={value}
-          required={field.required}
+          required={required}
           onChange={(event) => onChange(event.target.value)}
           rows={2}
           className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-[#0891b2] focus:ring-4 focus:ring-cyan-100"
@@ -795,7 +994,7 @@ function CustomCheckoutField({
       ) : field.fieldType === 'Select' ? (
         <select
           value={value}
-          required={field.required}
+          required={required}
           onChange={(event) => onChange(event.target.value)}
           className={commonClassName}
         >
@@ -809,7 +1008,7 @@ function CustomCheckoutField({
       ) : (
         <input
           type={inputType}
-          required={field.required}
+          required={required}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           className={commonClassName}

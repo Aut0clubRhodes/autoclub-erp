@@ -25,8 +25,12 @@ export type BookingEngineWebsiteReservation = {
   id: string;
   customerName: string;
   phone: string;
+  countryCode: string;
+  fullPhone: string;
   email: string;
+  dateOfBirth: string;
   hotelRoom: string;
+  hotelVillaApartment: string;
   flightNumber: string;
   notes: string;
   pickupLocation: string;
@@ -53,6 +57,12 @@ export type BookingEngineWebsiteReservation = {
   adminEmailPreviewCreated: boolean;
   customerEmailPreviewCreated: boolean;
   emailStatus: 'Preview only / Not sent' | 'Not sent / Preview only';
+  full_name?: string;
+  date_of_birth?: string;
+  country_code?: string;
+  full_phone?: string;
+  flight_number?: string;
+  hotel_villa_apartment?: string;
 };
 
 export type BookingEngineReservationCreateInput = Omit<
@@ -68,8 +78,12 @@ const defaultReservations: BookingEngineWebsiteReservation[] = [
     id: 'ACR-20260615-1047',
     customerName: 'Lucia Rossi',
     phone: '+39 333 870 1220',
+    countryCode: '+39',
+    fullPhone: '+39 333 870 1220',
     email: 'lucia.rossi@example.com',
+    dateOfBirth: '',
     hotelRoom: 'Lindos Bay 204',
+    hotelVillaApartment: 'Lindos Bay 204',
     flightNumber: '',
     pickupDate: '2026-06-21',
     pickupTime: '12:00',
@@ -101,8 +115,12 @@ const defaultReservations: BookingEngineWebsiteReservation[] = [
     id: 'ACR-20260615-1042',
     customerName: 'Marco Bianchi',
     phone: '+39 347 555 0194',
+    countryCode: '+39',
+    fullPhone: '+39 347 555 0194',
     email: 'marco.bianchi@example.com',
+    dateOfBirth: '',
     hotelRoom: 'Rhodes Town 18',
+    hotelVillaApartment: 'Rhodes Town 18',
     flightNumber: 'FR 9821',
     pickupDate: '2026-06-15',
     pickupTime: '10:30',
@@ -134,8 +152,12 @@ const defaultReservations: BookingEngineWebsiteReservation[] = [
     id: 'ACR-20260614-1038',
     customerName: 'Claire Martin',
     phone: '+33 6 44 21 08 77',
+    countryCode: '+33',
+    fullPhone: '+33 6 44 21 08 77',
     email: 'claire.martin@example.com',
+    dateOfBirth: '',
     hotelRoom: 'Old Town Suites',
+    hotelVillaApartment: 'Old Town Suites',
     flightNumber: '',
     pickupDate: '2026-06-17',
     pickupTime: '14:00',
@@ -167,8 +189,12 @@ const defaultReservations: BookingEngineWebsiteReservation[] = [
     id: 'ACR-20260613-1031',
     customerName: 'Jan Novak',
     phone: '+420 602 118 442',
+    countryCode: '+420',
+    fullPhone: '+420 602 118 442',
     email: 'jan.novak@example.com',
+    dateOfBirth: '',
     hotelRoom: 'Faliraki Blue',
+    hotelVillaApartment: 'Faliraki Blue',
     flightNumber: '',
     pickupDate: '2026-06-18',
     pickupTime: '08:30',
@@ -200,8 +226,12 @@ const defaultReservations: BookingEngineWebsiteReservation[] = [
     id: 'ACR-20260612-1026',
     customerName: 'Anna Keller',
     phone: '+49 151 242 9981',
+    countryCode: '+49',
+    fullPhone: '+49 151 242 9981',
     email: 'anna.keller@example.com',
+    dateOfBirth: '',
     hotelRoom: 'Ixia Grand',
+    hotelVillaApartment: 'Ixia Grand',
     flightNumber: '',
     pickupDate: '2026-06-15',
     pickupTime: '16:30',
@@ -237,8 +267,12 @@ const normalizeReservation = (reservation: Partial<BookingEngineWebsiteReservati
   id: reservation.id || '',
   customerName: reservation.customerName || '',
   phone: reservation.phone || '',
+  countryCode: reservation.countryCode || '',
+  fullPhone: reservation.fullPhone || reservation.phone || '',
   email: reservation.email || '',
+  dateOfBirth: reservation.dateOfBirth || '',
   hotelRoom: reservation.hotelRoom || '',
+  hotelVillaApartment: reservation.hotelVillaApartment || reservation.hotelRoom || '',
   flightNumber: reservation.flightNumber || '',
   notes: reservation.notes || '',
   pickupLocation: reservation.pickupLocation || '',
@@ -270,6 +304,12 @@ const normalizeReservation = (reservation: Partial<BookingEngineWebsiteReservati
   emailStatus: reservation.emailStatus === 'Preview only / Not sent'
     ? 'Not sent / Preview only'
     : reservation.emailStatus || 'Not sent / Preview only',
+  full_name: reservation.full_name || reservation.customerName || '',
+  date_of_birth: reservation.date_of_birth || reservation.dateOfBirth || '',
+  country_code: reservation.country_code || reservation.countryCode || '',
+  full_phone: reservation.full_phone || reservation.fullPhone || reservation.phone || '',
+  flight_number: reservation.flight_number || reservation.flightNumber || '',
+  hotel_villa_apartment: reservation.hotel_villa_apartment || reservation.hotelVillaApartment || reservation.hotelRoom || '',
 });
 
 const emitReservationChange = () => {
