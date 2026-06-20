@@ -76,6 +76,17 @@ type BeSiteRow = {
   id: string;
   name: string | null;
   domain: string | null;
+  admin_email?: string | null;
+  booking_notification_email?: string | null;
+  currency?: string | null;
+  timezone?: string | null;
+  default_language?: BookingDefaultLanguage | string | null;
+  whatsapp_number?: string | null;
+  terms_url?: string | null;
+  privacy_policy_url?: string | null;
+  logo_image?: string | null;
+  status?: SeasonStatus | string | null;
+  internal_notes?: string | null;
 };
 
 type BeGroupRow = {
@@ -99,6 +110,106 @@ type BeVehicleCategoryRow = {
   location_ids?: string[] | null;
   locationIds?: string[] | null;
   status?: string | null;
+};
+
+type BePricingSeasonRow = {
+  id: string | number;
+  group_code?: string | null;
+  groupCode?: string | null;
+  season_name?: string | null;
+  seasonName?: string | null;
+  from_date?: string | null;
+  fromDate?: string | null;
+  to_date?: string | null;
+  toDate?: string | null;
+  tiers?: PricingTier[] | null;
+  pricing_tiers?: PricingTier[] | null;
+  website_mode?: string | null;
+  websiteMode?: string | null;
+  status?: string | null;
+  notes?: string | null;
+};
+
+type BeLocationRow = {
+  id: string | number;
+  name?: string | null;
+  type?: LocationType | string | null;
+  active?: boolean | null;
+  fee?: string | number | null;
+  status?: string | null;
+};
+
+type BeFeatureRow = {
+  id: string | number;
+  name?: string | null;
+};
+
+type BeExtraRow = {
+  id: string | number;
+  name?: string | null;
+  description?: string | null;
+  pricing_mode?: ExtraPricingMode | string | null;
+  pricingMode?: ExtraPricingMode | string | null;
+  price?: string | number | null;
+  image_url?: string | null;
+  imageUrl?: string | null;
+  status?: SeasonStatus | string | null;
+  maximum_quantity?: string | number | null;
+  maximumQuantity?: string | number | null;
+};
+
+type BeCouponRow = {
+  id: string | number;
+  code?: string | null;
+  discount_type?: CouponDiscountType | string | null;
+  discountType?: CouponDiscountType | string | null;
+  discount_value?: string | number | null;
+  discountValue?: string | number | null;
+  valid_from?: string | null;
+  validFrom?: string | null;
+  valid_to?: string | null;
+  validTo?: string | null;
+  minimum_days?: string | number | null;
+  minimumDays?: string | number | null;
+  allowed_group_codes?: string[] | null;
+  allowedGroupCodes?: string[] | null;
+  usage_limit?: string | number | null;
+  usageLimit?: string | number | null;
+  status?: SeasonStatus | string | null;
+};
+
+type BeBookingSettingsRow = {
+  id?: string | null;
+  site_id?: string | null;
+  advance_booking_active?: boolean | null;
+  advance_booking_hours?: string | number | null;
+  default_language?: BookingDefaultLanguage | string | null;
+  require_rental_terms?: boolean | null;
+  show_marketing_consent?: boolean | null;
+  terms_url?: string | null;
+  new_reservation_status?: NewReservationStatus | string | null;
+};
+
+type BeCheckoutFieldRow = {
+  id: string | number;
+  field_key?: string | null;
+  name?: string | null;
+  field_type?: CheckoutFieldType | string | null;
+  enabled?: boolean | null;
+  required?: boolean | null;
+  label?: string | null;
+  options?: string[] | null;
+  built_in?: boolean | null;
+  sort_order?: number | null;
+};
+
+type BeEmailTemplateRow = {
+  id: string | number;
+  template_key?: string | null;
+  label?: string | null;
+  active?: boolean | null;
+  subject?: string | null;
+  message?: string | null;
 };
 
 type BookingLocation = {
@@ -242,6 +353,13 @@ const adminTabs: AdminTab[] = [
   { id: 'site-settings', label: 'Site Settings', description: 'Site identity, regional defaults and contact configuration.', icon: Globe2 },
   { id: 'emails', label: 'Emails', description: 'Customer email templates and delivery settings.', icon: Mail },
 ];
+const BOOKING_ENGINE_ACTIVE_TAB_STORAGE_KEY = 'booking_engine_active_tab';
+const getStoredBookingEngineActiveTab = (): AdminTabId => {
+  if (typeof window === 'undefined') return 'groups';
+
+  const savedTab = window.localStorage.getItem(BOOKING_ENGINE_ACTIVE_TAB_STORAGE_KEY);
+  return adminTabs.some((tab) => tab.id === savedTab) ? (savedTab as AdminTabId) : 'groups';
+};
 
 const emptyCarDraft: CarDraft = {
   name: '',
@@ -335,6 +453,36 @@ const initialSiteSettings: SiteSettings = {
   logoImage: '',
   status: 'Active',
   internalNotes: '',
+};
+
+const lockedEmailTemplateIds: BookingEngineEmailTemplateId[] = [
+  'adminNewReservation',
+  'customerBookingConfirmed',
+  'customerOnRequestReceived',
+  'reviewRequest',
+  'paymentReminder',
+  'customEmail',
+];
+
+const initialEmailSettings: BookingEmailSettings = {
+  adminEmail: '',
+  templates: (() => {
+    const templates = { ...bookingEngineLocalConfig.emailSettings.templates };
+    templates.customerRequestReceived = {
+      ...templates.customerRequestReceived,
+      active: false,
+      subject: '',
+      message: '',
+    };
+    lockedEmailTemplateIds.forEach((templateId) => {
+      templates[templateId] = {
+        ...templates[templateId],
+        subject: '',
+        message: '',
+      };
+    });
+    return templates;
+  })(),
 };
 
 const emailTemplateVariables = [
@@ -553,7 +701,7 @@ const formatDateOnly = (value: string) => {
 
 export default function BookingEngineAdmin() {
   const initialConfig = useMemo(() => loadBookingEngineConfig(), []);
-  const [activeTab, setActiveTab] = useState<AdminTabId>('groups');
+  const [activeTab, setActiveTab] = useState<AdminTabId>(getStoredBookingEngineActiveTab);
   const [groups, setGroups] = useState<BookingGroup[]>([]);
   const [beSiteId, setBeSiteId] = useState<string | null>(null);
   const [groupsLoading, setGroupsLoading] = useState(true);
@@ -561,11 +709,21 @@ export default function BookingEngineAdmin() {
   const [cars, setCars] = useState<BookingEngineCar[]>([]);
   const [carsLoading, setCarsLoading] = useState(false);
   const [carsError, setCarsError] = useState('');
-  const [locations, setLocations] = useState<BookingLocation[]>(initialConfig.locations);
-  const [features, setFeatures] = useState<BookingFeature[]>(initialConfig.features);
-  const [extras, setExtras] = useState<BookingExtra[]>(initialConfig.extras);
-  const [seasonPrices, setSeasonPrices] = useState<SeasonPrice[]>(initialConfig.pricingSeasons);
-  const [coupons, setCoupons] = useState<BookingCoupon[]>(initialConfig.coupons);
+  const [locations, setLocations] = useState<BookingLocation[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
+  const [locationsError, setLocationsError] = useState('');
+  const [features, setFeatures] = useState<BookingFeature[]>([]);
+  const [featuresLoading, setFeaturesLoading] = useState(false);
+  const [featuresError, setFeaturesError] = useState('');
+  const [extras, setExtras] = useState<BookingExtra[]>([]);
+  const [extrasLoading, setExtrasLoading] = useState(false);
+  const [extrasError, setExtrasError] = useState('');
+  const [seasonPrices, setSeasonPrices] = useState<SeasonPrice[]>([]);
+  const [seasonPricesLoading, setSeasonPricesLoading] = useState(false);
+  const [seasonPricesError, setSeasonPricesError] = useState('');
+  const [coupons, setCoupons] = useState<BookingCoupon[]>([]);
+  const [couponsLoading, setCouponsLoading] = useState(false);
+  const [couponsError, setCouponsError] = useState('');
   const [paymentMethods, setPaymentMethods] = useState<BookingPaymentMethod[]>(initialConfig.paymentMethods);
 
   const [carModalOpen, setCarModalOpen] = useState(false);
@@ -601,15 +759,23 @@ export default function BookingEngineAdmin() {
   const [paymentMethodDraft, setPaymentMethodDraft] =
     useState<PaymentMethodDraft>(emptyPaymentMethodDraft);
   const [emailSettings, setEmailSettings] =
-    useState<BookingEmailSettings>(initialConfig.emailSettings);
+    useState<BookingEmailSettings>(initialEmailSettings);
+  const [emailSettingsLoading, setEmailSettingsLoading] = useState(false);
+  const [emailSettingsError, setEmailSettingsError] = useState('');
   const [emailSettingsMessage, setEmailSettingsMessage] = useState('');
   const [bookingEngineSettings, setBookingEngineSettings] =
     useState<BookingEngineSettings>(initialBookingEngineSettings);
+  const [bookingSettingsLoading, setBookingSettingsLoading] = useState(false);
+  const [bookingSettingsError, setBookingSettingsError] = useState('');
   const [bookingSettingsMessage, setBookingSettingsMessage] = useState('');
   const [checkoutFields, setCheckoutFields] =
-    useState<CheckoutFieldSetting[]>(initialConfig.checkoutFields);
+    useState<CheckoutFieldSetting[]>([]);
+  const [checkoutFieldsLoading, setCheckoutFieldsLoading] = useState(false);
+  const [checkoutFieldsError, setCheckoutFieldsError] = useState('');
   const [checkoutFieldsMessage, setCheckoutFieldsMessage] = useState('');
-  const [siteSettings, setSiteSettings] = useState<SiteSettings>(initialConfig.siteSettings as SiteSettings);
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>(initialSiteSettings);
+  const [siteSettingsLoading, setSiteSettingsLoading] = useState(false);
+  const [siteSettingsError, setSiteSettingsError] = useState('');
   const [siteSettingsMessage, setSiteSettingsMessage] = useState('');
 
   const currentTab = adminTabs.find((tab) => tab.id === activeTab) || adminTabs[0];
@@ -618,6 +784,10 @@ export default function BookingEngineAdmin() {
   const activeGroups = groups
     .filter((group) => group.active)
     .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+
+  useEffect(() => {
+    window.localStorage.setItem(BOOKING_ENGINE_ACTIVE_TAB_STORAGE_KEY, activeTab);
+  }, [activeTab]);
 
   const mapBeGroup = (row: BeGroupRow): BookingGroup => ({
     id: String(row.id),
@@ -648,6 +818,492 @@ export default function BookingEngineAdmin() {
         ? row.locationIds
         : [],
   });
+
+  const mapBePricingSeason = (row: BePricingSeasonRow): SeasonPrice => {
+    const rawTiers = Array.isArray(row.pricing_tiers)
+      ? row.pricing_tiers
+      : Array.isArray(row.tiers)
+        ? row.tiers
+        : [];
+    const websiteMode = row.website_mode || row.websiteMode;
+    const status = row.status || 'Active';
+
+    return {
+      id: String(row.id),
+      groupCode: (row.group_code || row.groupCode || '').trim(),
+      seasonName: (row.season_name || row.seasonName || '').trim(),
+      fromDate: row.from_date || row.fromDate || '',
+      toDate: row.to_date || row.toDate || '',
+      tiers: rawTiers.map((tier) => ({
+        id: tier.id || localId('pricing-tier'),
+        fromDays: String(tier.fromDays || ''),
+        toDays: String(tier.toDays || ''),
+        pricePerDay: String(tier.pricePerDay || ''),
+      })),
+      websiteMode:
+        websiteMode === 'On Request' || websiteMode === 'Hidden' || websiteMode === 'Open'
+          ? websiteMode
+          : 'Open',
+      status: status === 'Inactive' ? 'Inactive' : 'Active',
+      notes: row.notes || '',
+    };
+  };
+
+  const mapBeLocation = (row: BeLocationRow): BookingLocation => ({
+    id: String(row.id),
+    name: (row.name || '').trim(),
+    type:
+      row.type === 'airport' || row.type === 'town' || row.type === 'hotel' || row.type === 'custom'
+        ? row.type
+        : 'custom',
+    active: typeof row.active === 'boolean' ? row.active : row.status !== 'Inactive',
+    fee: row.fee === null || row.fee === undefined ? '' : String(row.fee),
+  });
+
+  const loadSupabaseLocations = async (siteId: string) => {
+    setLocationsLoading(true);
+    setLocationsError('');
+
+    const { data, error } = await supabase
+      .from('be_locations')
+      .select('*')
+      .eq('site_id', siteId)
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('Booking Engine locations load failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setLocations([]);
+      setLocationsError('Failed to load locations from Supabase');
+      setLocationsLoading(false);
+      return;
+    }
+
+    setLocations((data || []).map((row) => mapBeLocation(row as BeLocationRow)));
+    setLocationsLoading(false);
+  };
+
+  const mapBeFeature = (row: BeFeatureRow): BookingFeature => ({
+    id: String(row.id),
+    name: (row.name || '').trim(),
+  });
+
+  const loadSupabaseFeatures = async (siteId: string) => {
+    setFeaturesLoading(true);
+    setFeaturesError('');
+
+    const { data, error } = await supabase
+      .from('be_features')
+      .select('id, name')
+      .eq('site_id', siteId)
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('Booking Engine features load failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setFeatures([]);
+      setFeaturesError('Failed to load features from Supabase');
+      setFeaturesLoading(false);
+      return;
+    }
+
+    setFeatures((data || []).map((row) => mapBeFeature(row as BeFeatureRow)));
+    setFeaturesLoading(false);
+  };
+
+  const mapBeExtra = (row: BeExtraRow): BookingExtra => {
+    const pricingMode = row.pricing_mode || row.pricingMode;
+    const status = row.status || 'Active';
+
+    return {
+      id: String(row.id),
+      name: (row.name || '').trim(),
+      description: row.description || '',
+      pricingMode:
+        pricingMode === 'Per Day' || pricingMode === 'Per Booking' || pricingMode === 'Free'
+          ? pricingMode
+          : 'Per Day',
+      price: row.price === null || row.price === undefined ? '' : String(row.price),
+      imageUrl: row.image_url || row.imageUrl || '',
+      status: status === 'Inactive' ? 'Inactive' : 'Active',
+      maximumQuantity:
+        row.maximum_quantity === null || row.maximum_quantity === undefined
+          ? ''
+          : String(row.maximum_quantity),
+    };
+  };
+
+  const loadSupabaseExtras = async (siteId: string) => {
+    setExtrasLoading(true);
+    setExtrasError('');
+
+    const { data, error } = await supabase
+      .from('be_extras')
+      .select('*')
+      .eq('site_id', siteId)
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('Booking Engine extras load failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setExtras([]);
+      setExtrasError('Failed to load extras from Supabase');
+      setExtrasLoading(false);
+      return;
+    }
+
+    setExtras((data || []).map((row) => mapBeExtra(row as BeExtraRow)));
+    setExtrasLoading(false);
+  };
+
+  const mapBeCoupon = (row: BeCouponRow): BookingCoupon => {
+    const discountType = row.discount_type || row.discountType;
+    const status = row.status || 'Active';
+
+    return {
+      id: String(row.id),
+      code: (row.code || '').trim(),
+      discountType:
+        discountType === 'Fixed Amount' || discountType === 'Percentage'
+          ? discountType
+          : 'Percentage',
+      discountValue:
+        row.discount_value === null || row.discount_value === undefined
+          ? row.discountValue === null || row.discountValue === undefined
+            ? ''
+            : String(row.discountValue)
+          : String(row.discount_value),
+      validFrom: row.valid_from || row.validFrom || '',
+      validTo: row.valid_to || row.validTo || '',
+      minimumDays:
+        row.minimum_days === null || row.minimum_days === undefined
+          ? row.minimumDays === null || row.minimumDays === undefined
+            ? ''
+            : String(row.minimumDays)
+          : String(row.minimum_days),
+      allowedGroupCodes: Array.isArray(row.allowed_group_codes)
+        ? row.allowed_group_codes
+        : Array.isArray(row.allowedGroupCodes)
+          ? row.allowedGroupCodes
+          : [],
+      usageLimit:
+        row.usage_limit === null || row.usage_limit === undefined
+          ? row.usageLimit === null || row.usageLimit === undefined
+            ? ''
+            : String(row.usageLimit)
+          : String(row.usage_limit),
+      status: status === 'Inactive' ? 'Inactive' : 'Active',
+    };
+  };
+
+  const loadSupabaseCoupons = async (siteId: string) => {
+    setCouponsLoading(true);
+    setCouponsError('');
+
+    const { data, error } = await supabase
+      .from('be_coupons')
+      .select('*')
+      .eq('site_id', siteId)
+      .order('code', { ascending: true });
+
+    if (error) {
+      console.error('Booking Engine coupons load failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setCoupons([]);
+      setCouponsError('Failed to load coupons from Supabase');
+      setCouponsLoading(false);
+      return;
+    }
+
+    setCoupons((data || []).map((row) => mapBeCoupon(row as BeCouponRow)));
+    setCouponsLoading(false);
+  };
+
+  const mapBeSiteSettings = (row: BeSiteRow): SiteSettings => {
+    const defaultLanguage = row.default_language;
+    const status = row.status;
+
+    return {
+      companyName: (row.name || '').trim(),
+      domain: (row.domain || '').trim(),
+      adminEmail: row.admin_email || '',
+      bookingNotificationEmail: row.booking_notification_email || '',
+      currency: row.currency || 'EUR',
+      timezone: row.timezone || 'Europe/Athens',
+      defaultLanguage:
+        defaultLanguage === 'English' ||
+        defaultLanguage === 'Italian' ||
+        defaultLanguage === 'French' ||
+        defaultLanguage === 'German' ||
+        defaultLanguage === 'Czech' ||
+        defaultLanguage === 'Greek'
+          ? defaultLanguage
+          : 'English',
+      whatsappNumber: row.whatsapp_number || '',
+      termsUrl: row.terms_url || '',
+      privacyPolicyUrl: row.privacy_policy_url || '',
+      logoImage: row.logo_image || '',
+      status: status === 'Inactive' ? 'Inactive' : 'Active',
+      internalNotes: row.internal_notes || '',
+    };
+  };
+
+  const loadSupabaseSiteSettings = async (siteId: string) => {
+    setSiteSettingsLoading(true);
+    setSiteSettingsError('');
+
+    const { data, error } = await supabase
+      .from('be_sites')
+      .select('*')
+      .eq('id', siteId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Booking Engine site settings load failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setSiteSettingsError('Failed to load site settings from Supabase');
+      setSiteSettingsLoading(false);
+      return;
+    }
+
+    if (data) {
+      const mappedSiteSettings = mapBeSiteSettings(data as BeSiteRow);
+      setSiteSettings(mappedSiteSettings);
+      setEmailSettings((current) => ({ ...current, adminEmail: mappedSiteSettings.adminEmail }));
+    }
+    setSiteSettingsLoading(false);
+  };
+
+  const mapBeEmailTemplate = (
+    row: BeEmailTemplateRow,
+  ): BookingEmailSettings['templates'][BookingEngineEmailTemplateId] | null => {
+    const templateId = row.template_key as BookingEngineEmailTemplateId;
+    if (!lockedEmailTemplateIds.includes(templateId)) return null;
+
+    const defaultTemplate = bookingEngineLocalConfig.emailSettings.templates[templateId];
+    return {
+      id: templateId,
+      label: row.label || defaultTemplate.label,
+      active: row.active !== false,
+      subject: row.subject || '',
+      message: row.message || '',
+    };
+  };
+
+  const loadSupabaseEmailTemplates = async (siteId: string) => {
+    setEmailSettingsLoading(true);
+    setEmailSettingsError('');
+
+    const { data, error } = await supabase
+      .from('be_email_templates')
+      .select('*')
+      .eq('site_id', siteId)
+      .order('template_key', { ascending: true });
+
+    if (error) {
+      console.error('Booking Engine email templates load failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setEmailSettings(initialEmailSettings);
+      setEmailSettingsError('Failed to load email templates from Supabase');
+      setEmailSettingsLoading(false);
+      return;
+    }
+
+    const nextSettings: BookingEmailSettings = {
+      ...initialEmailSettings,
+      adminEmail: siteSettings.adminEmail,
+      templates: { ...initialEmailSettings.templates },
+    };
+
+    (data || []).forEach((row) => {
+      const template = mapBeEmailTemplate(row as BeEmailTemplateRow);
+      if (template) nextSettings.templates[template.id] = template;
+    });
+
+    setEmailSettings(nextSettings);
+    setEmailSettingsLoading(false);
+  };
+
+  const mapBeBookingSettings = (row: BeBookingSettingsRow): BookingEngineSettings => {
+    const defaultLanguage = row.default_language;
+    const newReservationStatus = row.new_reservation_status;
+
+    return {
+      advanceBookingActive: Boolean(row.advance_booking_active),
+      advanceBookingHours:
+        row.advance_booking_hours === null || row.advance_booking_hours === undefined
+          ? '48'
+          : String(row.advance_booking_hours),
+      defaultLanguage:
+        defaultLanguage === 'English' ||
+        defaultLanguage === 'Italian' ||
+        defaultLanguage === 'French' ||
+        defaultLanguage === 'German' ||
+        defaultLanguage === 'Czech' ||
+        defaultLanguage === 'Greek'
+          ? defaultLanguage
+          : 'English',
+      requireRentalTerms: Boolean(row.require_rental_terms),
+      showMarketingConsent: Boolean(row.show_marketing_consent),
+      termsUrl: row.terms_url || '',
+      newReservationStatus:
+        newReservationStatus === 'Pending' ||
+        newReservationStatus === 'Accepted' ||
+        newReservationStatus === 'On Request'
+          ? newReservationStatus
+          : 'Pending',
+    };
+  };
+
+  const loadSupabaseBookingSettings = async (siteId: string) => {
+    setBookingSettingsLoading(true);
+    setBookingSettingsError('');
+
+    const { data, error } = await supabase
+      .from('be_booking_settings')
+      .select('*')
+      .eq('site_id', siteId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Booking Engine booking settings load failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setBookingSettingsError('Failed to load booking settings from Supabase');
+      setBookingSettingsLoading(false);
+      return;
+    }
+
+    if (data) {
+      setBookingEngineSettings(mapBeBookingSettings(data as BeBookingSettingsRow));
+    }
+
+    setBookingSettingsLoading(false);
+  };
+
+  const mapBeCheckoutField = (row: BeCheckoutFieldRow): CheckoutFieldSetting => {
+    const fieldType = row.field_type;
+
+    return {
+      id: row.field_key || String(row.id),
+      name: row.name || row.label || 'Custom Field',
+      fieldType:
+        fieldType === 'Text' ||
+        fieldType === 'Textarea' ||
+        fieldType === 'Number' ||
+        fieldType === 'Email' ||
+        fieldType === 'Phone' ||
+        fieldType === 'Select'
+          ? fieldType
+          : 'Text',
+      enabled: Boolean(row.enabled),
+      required: Boolean(row.required),
+      label: row.label || row.name || 'Custom Field',
+      options: Array.isArray(row.options) ? row.options : [],
+      builtIn: Boolean(row.built_in),
+    };
+  };
+
+  const loadSupabaseCheckoutFields = async (siteId: string) => {
+    setCheckoutFieldsLoading(true);
+    setCheckoutFieldsError('');
+
+    const { data, error } = await supabase
+      .from('be_checkout_fields')
+      .select('*')
+      .eq('site_id', siteId)
+      .order('sort_order', { ascending: true });
+
+    if (error) {
+      console.error('Booking Engine checkout fields load failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setCheckoutFields([]);
+      setCheckoutFieldsError('Failed to load checkout fields from Supabase');
+      setCheckoutFieldsLoading(false);
+      return;
+    }
+
+    setCheckoutFields((data || []).map((row) => mapBeCheckoutField(row as BeCheckoutFieldRow)));
+    setCheckoutFieldsLoading(false);
+  };
+
+  const loadSupabaseSeasonPrices = async (siteId: string) => {
+    setSeasonPricesLoading(true);
+    setSeasonPricesError('');
+
+    const { data: sites, error: sitesError } = await supabase
+      .from('be_sites')
+      .select('id, name, domain')
+      .order('domain', { ascending: true });
+    console.log('ALL BE SITES', sites);
+    console.log(
+      'MATCHED SITE',
+      ((sites || []) as BeSiteRow[]).find((site) => site.id === siteId) || null,
+    );
+    if (sitesError) {
+      console.error('PRICING SEASONS ERROR', {
+        message: sitesError.message,
+        code: sitesError.code,
+        details: sitesError.details,
+        hint: sitesError.hint,
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('be_pricing_seasons')
+      .select('*')
+      .eq('site_id', siteId)
+      .order('from_date', { ascending: true });
+
+    console.log('ALL PRICING SEASONS', data);
+
+    if (error) {
+      console.error('PRICING SEASONS ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setSeasonPrices([]);
+      setSeasonPricesError('Failed to load pricing seasons from Supabase');
+      setSeasonPricesLoading(false);
+      return;
+    }
+
+    setSeasonPrices((data || []).map((row) => mapBePricingSeason(row as BePricingSeasonRow)));
+    setSeasonPricesLoading(false);
+  };
 
   const loadSupabaseCars = async (siteId: string) => {
     setCarsLoading(true);
@@ -763,10 +1419,35 @@ export default function BookingEngineAdmin() {
     if (!beSiteId) {
       setCars([]);
       setCarsLoading(false);
+      setSeasonPrices([]);
+      setSeasonPricesLoading(false);
+      setLocations([]);
+      setLocationsLoading(false);
+      setFeatures([]);
+      setFeaturesLoading(false);
+      setExtras([]);
+      setExtrasLoading(false);
+      setCoupons([]);
+      setCouponsLoading(false);
+      setBookingSettingsLoading(false);
+      setCheckoutFields([]);
+      setCheckoutFieldsLoading(false);
+      setSiteSettingsLoading(false);
+      setEmailSettings(initialEmailSettings);
+      setEmailSettingsLoading(false);
       return;
     }
 
     void loadSupabaseCars(beSiteId);
+    void loadSupabaseSeasonPrices(beSiteId);
+    void loadSupabaseLocations(beSiteId);
+    void loadSupabaseFeatures(beSiteId);
+    void loadSupabaseExtras(beSiteId);
+    void loadSupabaseCoupons(beSiteId);
+    void loadSupabaseBookingSettings(beSiteId);
+    void loadSupabaseCheckoutFields(beSiteId);
+    void loadSupabaseSiteSettings(beSiteId);
+    void loadSupabaseEmailTemplates(beSiteId);
   }, [beSiteId]);
 
   useEffect(() => {
@@ -781,13 +1462,12 @@ export default function BookingEngineAdmin() {
       paymentMethods,
       checkoutFields,
       pricingSeasons: seasonPrices,
-      emailSettings,
+      emailSettings: bookingEngineLocalConfig.emailSettings,
     });
   }, [
     cars,
     checkoutFields,
     coupons,
-    emailSettings,
     extras,
     features,
     groups,
@@ -800,16 +1480,8 @@ export default function BookingEngineAdmin() {
 
   const resetDemoData = () => {
     const nextConfig = resetBookingEngineConfig();
-    setLocations(nextConfig.locations);
-    setFeatures(nextConfig.features);
-    setExtras(nextConfig.extras);
-    setSeasonPrices(nextConfig.pricingSeasons);
-    setCoupons(nextConfig.coupons);
     setPaymentMethods(nextConfig.paymentMethods);
-    setCheckoutFields(nextConfig.checkoutFields);
-    setEmailSettings(nextConfig.emailSettings);
-    setSiteSettings(nextConfig.siteSettings as SiteSettings);
-    setSiteSettingsMessage('Demo data restored locally.');
+    setSiteSettingsMessage('');
   };
 
   const openNewCarModal = () => {
@@ -978,9 +1650,14 @@ export default function BookingEngineAdmin() {
       status: groupDraft.active ? 'Active' : 'Inactive',
     };
 
-    const { error } = editingGroupId
-      ? await supabase.from('be_groups').update(payload).eq('id', editingGroupId)
-      : await supabase.from('be_groups').insert(payload);
+    console.log('GROUP INSERT PAYLOAD', payload);
+
+    const { data, error } = editingGroupId
+      ? await supabase.from('be_groups').update(payload).eq('id', editingGroupId).select()
+      : await supabase.from('be_groups').insert(payload).select();
+
+    console.log('GROUP INSERT RESULT', data);
+    console.error('GROUP INSERT ERROR', error);
 
     if (error) {
       console.error('Booking Engine group save failed:', error);
@@ -1068,7 +1745,19 @@ export default function BookingEngineAdmin() {
     setSeasonPriceDraft(emptySeasonPriceDraft);
   };
 
-  const saveSeasonPrice = () => {
+  const seasonPricePayload = (draft: SeasonPriceDraft, seasonName: string, siteId: string) => ({
+    site_id: siteId,
+    group_code: draft.groupCode,
+    season_name: seasonName,
+    from_date: draft.fromDate,
+    to_date: draft.toDate,
+    pricing_tiers: draft.tiers.map((tier) => ({ ...tier })),
+    website_mode: draft.websiteMode,
+    status: draft.status,
+    notes: draft.notes.trim(),
+  });
+
+  const saveSeasonPrice = async () => {
     const seasonName = seasonPriceDraft.seasonName.trim();
     if (
       !seasonPriceDraft.groupCode ||
@@ -1085,30 +1774,53 @@ export default function BookingEngineAdmin() {
           Number(tier.toDays) < Number(tier.fromDays) ||
           Number(tier.pricePerDay) <= 0,
       ) ||
-      seasonPriceDraft.toDate < seasonPriceDraft.fromDate
+      seasonPriceDraft.toDate < seasonPriceDraft.fromDate ||
+      !beSiteId
     ) {
+      if (!beSiteId) setSeasonPricesError('Failed to load pricing seasons from Supabase');
       return;
     }
 
-    const nextDraft = {
-      ...seasonPriceDraft,
-      seasonName,
-      tiers: seasonPriceDraft.tiers.map((tier) => ({ ...tier })),
-    };
-    setSeasonPrices((current) =>
-      editingSeasonPriceId
-        ? current.map((seasonPrice) =>
-            seasonPrice.id === editingSeasonPriceId
-              ? { id: editingSeasonPriceId, ...nextDraft }
-              : seasonPrice,
-          )
-        : [...current, { id: localId('season-price'), ...nextDraft }],
-    );
+    const payload = seasonPricePayload(seasonPriceDraft, seasonName, beSiteId);
+    const { error } = editingSeasonPriceId
+      ? await supabase.from('be_pricing_seasons').update(payload).eq('id', editingSeasonPriceId)
+      : await supabase.from('be_pricing_seasons').insert(payload);
+
+    if (error) {
+      console.error('Booking Engine pricing season save failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setSeasonPricesError('Failed to save pricing season to Supabase');
+      return;
+    }
+
     closeSeasonPriceModal();
+    await loadSupabaseSeasonPrices(beSiteId);
   };
 
-  const deleteSeasonPrice = (seasonPriceId: string) => {
-    setSeasonPrices((current) => current.filter((seasonPrice) => seasonPrice.id !== seasonPriceId));
+  const deleteSeasonPrice = async (seasonPriceId: string) => {
+    if (!beSiteId) {
+      setSeasonPricesError('Failed to load pricing seasons from Supabase');
+      return;
+    }
+
+    const { error } = await supabase.from('be_pricing_seasons').delete().eq('id', seasonPriceId);
+
+    if (error) {
+      console.error('Booking Engine pricing season delete failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setSeasonPricesError('Failed to delete pricing season from Supabase');
+      return;
+    }
+
+    await loadSupabaseSeasonPrices(beSiteId);
   };
 
   const openNewLocationModal = () => {
@@ -1134,29 +1846,68 @@ export default function BookingEngineAdmin() {
     setLocationDraft(emptyLocationDraft);
   };
 
-  const saveLocation = () => {
-    const name = locationDraft.name.trim();
-    if (!name) return;
+  const locationPayload = (draft: LocationDraft, name: string, siteId: string) => ({
+    site_id: siteId,
+    name,
+    type: draft.type,
+    active: draft.active,
+    fee: draft.fee,
+    status: draft.active ? 'Active' : 'Inactive',
+  });
 
-    const nextDraft = { ...locationDraft, name };
-    setLocations((current) =>
-      editingLocationId
-        ? current.map((location) =>
-            location.id === editingLocationId ? { id: editingLocationId, ...nextDraft } : location,
-          )
-        : [...current, { id: localId('location'), ...nextDraft }],
-    );
+  const saveLocation = async () => {
+    const name = locationDraft.name.trim();
+    if (!name || !beSiteId) {
+      if (!beSiteId) setLocationsError('Failed to load locations from Supabase');
+      return;
+    }
+
+    const payload = locationPayload(locationDraft, name, beSiteId);
+    const { error } = editingLocationId
+      ? await supabase.from('be_locations').update(payload).eq('id', editingLocationId)
+      : await supabase.from('be_locations').insert(payload);
+
+    if (error) {
+      console.error('Booking Engine location save failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setLocationsError('Failed to save location to Supabase');
+      return;
+    }
+
     closeLocationModal();
+    await loadSupabaseLocations(beSiteId);
   };
 
-  const deleteLocation = (locationId: string) => {
-    setLocations((current) => current.filter((location) => location.id !== locationId));
+  const deleteLocation = async (locationId: string) => {
+    if (!beSiteId) {
+      setLocationsError('Failed to load locations from Supabase');
+      return;
+    }
+
+    const { error } = await supabase.from('be_locations').delete().eq('id', locationId);
+
+    if (error) {
+      console.error('Booking Engine location delete failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setLocationsError('Failed to delete location from Supabase');
+      return;
+    }
+
     setCars((current) =>
       current.map((car) => ({
         ...car,
         locationIds: car.locationIds.filter((id) => id !== locationId),
       })),
     );
+    await loadSupabaseLocations(beSiteId);
   };
 
   const openNewFeatureModal = () => {
@@ -1177,26 +1928,62 @@ export default function BookingEngineAdmin() {
     setFeatureDraft(emptyFeatureDraft);
   };
 
-  const saveFeature = () => {
+  const saveFeature = async () => {
     const name = featureDraft.name.trim();
-    if (!name) return;
+    if (!name || !beSiteId) {
+      if (!beSiteId) setFeaturesError('Failed to load features from Supabase');
+      return;
+    }
 
-    setFeatures((current) =>
-      editingFeatureId
-        ? current.map((feature) => (feature.id === editingFeatureId ? { id: editingFeatureId, name } : feature))
-        : [...current, { id: localId('feature'), name }],
-    );
+    const payload = {
+      site_id: beSiteId,
+      name,
+    };
+    const { error } = editingFeatureId
+      ? await supabase.from('be_features').update(payload).eq('id', editingFeatureId)
+      : await supabase.from('be_features').insert(payload);
+
+    if (error) {
+      console.error('Booking Engine feature save failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setFeaturesError('Failed to save feature to Supabase');
+      return;
+    }
+
     closeFeatureModal();
+    await loadSupabaseFeatures(beSiteId);
   };
 
-  const deleteFeature = (featureId: string) => {
-    setFeatures((current) => current.filter((feature) => feature.id !== featureId));
+  const deleteFeature = async (featureId: string) => {
+    if (!beSiteId) {
+      setFeaturesError('Failed to load features from Supabase');
+      return;
+    }
+
+    const { error } = await supabase.from('be_features').delete().eq('id', featureId);
+
+    if (error) {
+      console.error('Booking Engine feature delete failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setFeaturesError('Failed to delete feature from Supabase');
+      return;
+    }
+
     setCars((current) =>
       current.map((car) => ({
         ...car,
         featureIds: car.featureIds.filter((id) => id !== featureId),
       })),
     );
+    await loadSupabaseFeatures(beSiteId);
   };
 
   const openNewExtraModal = () => {
@@ -1225,27 +2012,74 @@ export default function BookingEngineAdmin() {
     setExtraDraft(emptyExtraDraft);
   };
 
-  const saveExtra = () => {
+  const extraPayload = (draft: ExtraDraft, name: string, price: string, siteId: string) => ({
+    site_id: siteId,
+    name,
+    description: draft.description.trim(),
+    pricing_mode: draft.pricingMode,
+    price,
+    image_url: draft.imageUrl,
+    status: draft.status,
+    maximum_quantity: draft.maximumQuantity.trim(),
+  });
+
+  const saveExtra = async () => {
     const name = extraDraft.name.trim();
     const price = extraDraft.pricingMode === 'Free' ? '0' : extraDraft.price;
-    if (!name || (extraDraft.pricingMode !== 'Free' && !price)) return;
+    if (!name || (extraDraft.pricingMode !== 'Free' && !price) || !beSiteId) {
+      if (!beSiteId) setExtrasError('Failed to load extras from Supabase');
+      return;
+    }
 
-    const nextDraft = {
-      ...extraDraft,
-      name,
-      price,
-      maximumQuantity: extraDraft.maximumQuantity.trim(),
-    };
-    setExtras((current) =>
-      editingExtraId
-        ? current.map((extra) => (extra.id === editingExtraId ? { id: editingExtraId, ...nextDraft } : extra))
-        : [...current, { id: localId('extra'), ...nextDraft }],
-    );
+    const payload = extraPayload(extraDraft, name, price, beSiteId);
+    console.log('EXTRA SAVE PAYLOAD', payload);
+
+    const { data, error } = editingExtraId
+      ? await supabase.from('be_extras').update(payload).eq('id', editingExtraId).select()
+      : await supabase.from('be_extras').insert(payload).select();
+
+    console.log('EXTRA SAVE RESULT', data);
+
+    if (error) {
+      console.error('EXTRA SAVE ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setExtrasError('Failed to save extra to Supabase');
+      return;
+    }
+
+    setExtrasError('');
     closeExtraModal();
+    await loadSupabaseExtras(beSiteId);
   };
 
-  const deleteExtra = (extraId: string) => {
-    setExtras((current) => current.filter((extra) => extra.id !== extraId));
+  const deleteExtra = async (extraId: string) => {
+    if (!beSiteId) {
+      setExtrasError('Failed to load extras from Supabase');
+      return;
+    }
+
+    console.log('EXTRA DELETE ID', extraId);
+    const { data, error } = await supabase.from('be_extras').delete().eq('id', extraId).select();
+
+    console.log('EXTRA DELETE RESULT', data);
+
+    if (error) {
+      console.error('EXTRA DELETE ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setExtrasError('Failed to delete extra from Supabase');
+      return;
+    }
+
+    setExtrasError('');
+    await loadSupabaseExtras(beSiteId);
   };
 
   const openNewCouponModal = () => {
@@ -1285,7 +2119,20 @@ export default function BookingEngineAdmin() {
     }));
   };
 
-  const saveCoupon = () => {
+  const couponPayload = (draft: CouponDraft, code: string, siteId: string) => ({
+    site_id: siteId,
+    code,
+    discount_type: draft.discountType,
+    discount_value: draft.discountValue,
+    valid_from: draft.validFrom,
+    valid_to: draft.validTo,
+    minimum_days: draft.minimumDays.trim(),
+    allowed_group_codes: draft.allowedGroupCodes,
+    usage_limit: draft.usageLimit.trim(),
+    status: draft.status,
+  });
+
+  const saveCoupon = async () => {
     const code = couponDraft.code.trim().toUpperCase();
     const duplicateCode = coupons.some(
       (coupon) => coupon.id !== editingCouponId && coupon.code.toLowerCase() === code.toLowerCase(),
@@ -1297,30 +2144,62 @@ export default function BookingEngineAdmin() {
       !couponDraft.validFrom ||
       !couponDraft.validTo ||
       couponDraft.validTo < couponDraft.validFrom ||
-      duplicateCode
+      duplicateCode ||
+      !beSiteId
     ) {
+      if (!beSiteId) setCouponsError('Failed to load coupons from Supabase');
       return;
     }
 
-    const nextDraft = {
-      ...couponDraft,
-      code,
-      minimumDays: couponDraft.minimumDays.trim(),
-      usageLimit: couponDraft.usageLimit.trim(),
-    };
+    const payload = couponPayload(couponDraft, code, beSiteId);
+    console.log('COUPON SAVE PAYLOAD', payload);
 
-    setCoupons((current) =>
-      editingCouponId
-        ? current.map((coupon) =>
-            coupon.id === editingCouponId ? { id: editingCouponId, ...nextDraft } : coupon,
-          )
-        : [...current, { id: localId('coupon'), ...nextDraft }],
-    );
+    const { data, error } = editingCouponId
+      ? await supabase.from('be_coupons').update(payload).eq('id', editingCouponId).select()
+      : await supabase.from('be_coupons').insert(payload).select();
+
+    console.log('COUPON SAVE RESULT', data);
+
+    if (error) {
+      console.error('COUPON SAVE ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setCouponsError('Failed to save coupon to Supabase');
+      return;
+    }
+
+    setCouponsError('');
     closeCouponModal();
+    await loadSupabaseCoupons(beSiteId);
   };
 
-  const deleteCoupon = (couponId: string) => {
-    setCoupons((current) => current.filter((coupon) => coupon.id !== couponId));
+  const deleteCoupon = async (couponId: string) => {
+    if (!beSiteId) {
+      setCouponsError('Failed to load coupons from Supabase');
+      return;
+    }
+
+    console.log('COUPON DELETE ID', couponId);
+    const { data, error } = await supabase.from('be_coupons').delete().eq('id', couponId).select();
+
+    console.log('COUPON DELETE RESULT', data);
+
+    if (error) {
+      console.error('COUPON DELETE ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setCouponsError('Failed to delete coupon from Supabase');
+      return;
+    }
+
+    setCouponsError('');
+    await loadSupabaseCoupons(beSiteId);
   };
 
   const openNewPaymentMethodModal = () => {
@@ -1377,16 +2256,242 @@ export default function BookingEngineAdmin() {
     );
   };
 
-  const saveEmailSettings = () => {
-    setEmailSettingsMessage('Email settings saved locally.');
+  const emailTemplatePayload = (
+    template: BookingEmailSettings['templates'][BookingEngineEmailTemplateId],
+    siteId: string,
+  ) => ({
+    site_id: siteId,
+    template_key: template.id,
+    label: template.label,
+    active: template.active,
+    subject: template.subject,
+    message: template.message,
+  });
+
+  const saveEmailSettings = async () => {
+    if (!beSiteId) {
+      setEmailSettingsError('Failed to load email templates from Supabase');
+      return;
+    }
+
+    const payload = lockedEmailTemplateIds.map((templateId) =>
+      emailTemplatePayload(emailSettings.templates[templateId], beSiteId),
+    );
+    console.log('EMAIL TEMPLATES SAVE PAYLOAD', payload);
+
+    const { data, error } = await supabase
+      .from('be_email_templates')
+      .upsert(payload, { onConflict: 'site_id,template_key' })
+      .select();
+
+    console.log('EMAIL TEMPLATES SAVE RESULT', data);
+
+    if (error) {
+      console.error('EMAIL TEMPLATES SAVE ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setEmailSettingsError('Failed to save email templates to Supabase');
+      return;
+    }
+
+    setEmailSettingsError('');
+    setEmailSettingsMessage('Email templates saved to Supabase.');
+    await loadSupabaseEmailTemplates(beSiteId);
   };
 
-  const saveBookingSettings = () => {
-    setBookingSettingsMessage('Booking settings saved locally.');
+  const bookingSettingsPayload = (settings: BookingEngineSettings, siteId: string) => ({
+    site_id: siteId,
+    advance_booking_active: settings.advanceBookingActive,
+    advance_booking_hours: settings.advanceBookingHours,
+    default_language: settings.defaultLanguage,
+    require_rental_terms: settings.requireRentalTerms,
+    show_marketing_consent: settings.showMarketingConsent,
+    terms_url: settings.termsUrl,
+    new_reservation_status: settings.newReservationStatus,
+  });
+
+  const saveBookingSettings = async () => {
+    if (!beSiteId) {
+      setBookingSettingsError('Failed to load booking settings from Supabase');
+      return;
+    }
+
+    const payload = bookingSettingsPayload(bookingEngineSettings, beSiteId);
+    console.log('BOOKING SETTINGS SAVE PAYLOAD', payload);
+
+    const { data, error } = await supabase
+      .from('be_booking_settings')
+      .upsert(payload, { onConflict: 'site_id' })
+      .select();
+
+    console.log('BOOKING SETTINGS SAVE RESULT', data);
+
+    if (error) {
+      console.error('BOOKING SETTINGS SAVE ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setBookingSettingsError('Failed to save booking settings to Supabase');
+      return;
+    }
+
+    setBookingSettingsError('');
+    setBookingSettingsMessage('Booking settings saved to Supabase.');
+    await loadSupabaseBookingSettings(beSiteId);
   };
 
-  const saveSiteSettings = () => {
-    setSiteSettingsMessage('Site settings saved locally.');
+  const checkoutFieldPayload = (
+    field: CheckoutFieldSetting,
+    siteId: string,
+    sortOrder: number,
+  ) => ({
+    site_id: siteId,
+    field_key: field.id,
+    name: field.name,
+    field_type: field.fieldType,
+    enabled: field.enabled,
+    required: field.required,
+    label: field.label,
+    options: field.options || [],
+    built_in: Boolean(field.builtIn),
+    sort_order: sortOrder,
+  });
+
+  const saveCheckoutFields = async () => {
+    if (!beSiteId) {
+      setCheckoutFieldsError('Failed to load checkout fields from Supabase');
+      return;
+    }
+
+    const payload = checkoutFields.map((field, index) =>
+      checkoutFieldPayload(field, beSiteId, index),
+    );
+    console.log('CHECKOUT FIELDS SAVE PAYLOAD', payload);
+
+    const { data, error } = await supabase
+      .from('be_checkout_fields')
+      .upsert(payload, { onConflict: 'site_id,field_key' })
+      .select();
+
+    console.log('CHECKOUT FIELDS SAVE RESULT', data);
+
+    if (error) {
+      console.error('CHECKOUT FIELDS SAVE ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setCheckoutFieldsError('Failed to save checkout fields to Supabase');
+      return;
+    }
+
+    setCheckoutFieldsError('');
+    setCheckoutFieldsMessage('Checkout field settings saved to Supabase.');
+    await loadSupabaseCheckoutFields(beSiteId);
+  };
+
+  const deleteCheckoutField = async (field: CheckoutFieldSetting) => {
+    if (!beSiteId || field.builtIn) {
+      if (!beSiteId) setCheckoutFieldsError('Failed to load checkout fields from Supabase');
+      return;
+    }
+
+    console.log('CHECKOUT FIELD DELETE ID', field.id);
+    const { data, error } = await supabase
+      .from('be_checkout_fields')
+      .delete()
+      .eq('site_id', beSiteId)
+      .eq('field_key', field.id)
+      .select();
+
+    console.log('CHECKOUT FIELD DELETE RESULT', data);
+
+    if (error) {
+      console.error('CHECKOUT FIELD DELETE ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setCheckoutFieldsError('Failed to delete checkout field from Supabase');
+      return;
+    }
+
+    setCheckoutFieldsError('');
+    await loadSupabaseCheckoutFields(beSiteId);
+  };
+
+  const siteSettingsPayload = (settings: SiteSettings) => ({
+    name: settings.companyName.trim(),
+    domain: settings.domain.trim(),
+    admin_email: settings.adminEmail.trim(),
+    booking_notification_email: settings.bookingNotificationEmail.trim(),
+    currency: settings.currency.trim(),
+    timezone: settings.timezone.trim(),
+    default_language: settings.defaultLanguage,
+    whatsapp_number: settings.whatsappNumber.trim(),
+    terms_url: settings.termsUrl.trim(),
+    privacy_policy_url: settings.privacyPolicyUrl.trim(),
+    logo_image: settings.logoImage,
+    status: settings.status,
+    internal_notes: settings.internalNotes.trim(),
+  });
+
+  const saveSiteSettings = async () => {
+    if (!beSiteId) {
+      setSiteSettingsError('Failed to load site settings from Supabase');
+      return;
+    }
+
+    const payload = siteSettingsPayload(siteSettings);
+    setSiteSettingsLoading(true);
+    setSiteSettingsError('');
+    console.log('SITE SETTINGS SAVE PAYLOAD', payload);
+    console.log('SITE SETTINGS SAVE SITE ID', beSiteId);
+
+    const { data, error } = await supabase
+      .from('be_sites')
+      .update(payload)
+      .eq('id', beSiteId)
+      .select('*')
+      .maybeSingle();
+
+    console.log('SITE SETTINGS SAVE RESULT', data);
+
+    if (error) {
+      console.error('SITE SETTINGS SAVE ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setSiteSettingsError('Failed to save site settings to Supabase');
+      setSiteSettingsLoading(false);
+      return;
+    }
+
+    if (!data) {
+      const emptyUpdateError = {
+        message: 'No be_sites row was updated for the current be_site_id',
+        code: 'NO_ROWS_UPDATED',
+        details: `be_site_id=${beSiteId}`,
+        hint: 'Check RLS UPDATE policy and that the current be_site_id exists in public.be_sites.',
+      };
+      console.error('SITE SETTINGS SAVE ERROR', emptyUpdateError);
+      setSiteSettingsError('Site settings were not saved. No Supabase row was updated.');
+      setSiteSettingsLoading(false);
+      return;
+    }
+
+    setSiteSettingsError('');
+    setSiteSettingsMessage('Site settings saved to Supabase.');
+    await loadSupabaseSiteSettings(beSiteId);
   };
 
   return (
@@ -1484,6 +2589,8 @@ export default function BookingEngineAdmin() {
           {activeTab === 'pricing' && (
             <PricingPanel
               seasonPrices={seasonPrices}
+              loading={seasonPricesLoading}
+              error={seasonPricesError}
               onAdd={openNewSeasonPriceModal}
               onEdit={openEditSeasonPriceModal}
               onDelete={deleteSeasonPrice}
@@ -1493,6 +2600,8 @@ export default function BookingEngineAdmin() {
           {activeTab === 'locations' && (
             <LocationsPanel
               locations={locations}
+              loading={locationsLoading}
+              error={locationsError}
               onAdd={openNewLocationModal}
               onEdit={openEditLocationModal}
               onDelete={deleteLocation}
@@ -1503,6 +2612,8 @@ export default function BookingEngineAdmin() {
             <FeaturesPanel
               features={features}
               cars={cars}
+              loading={featuresLoading}
+              error={featuresError}
               onAdd={openNewFeatureModal}
               onEdit={openEditFeatureModal}
               onDelete={deleteFeature}
@@ -1512,6 +2623,8 @@ export default function BookingEngineAdmin() {
           {activeTab === 'extras' && (
             <ExtrasPanel
               extras={extras}
+              loading={extrasLoading}
+              error={extrasError}
               onAdd={openNewExtraModal}
               onEdit={openEditExtraModal}
               onDelete={deleteExtra}
@@ -1521,6 +2634,8 @@ export default function BookingEngineAdmin() {
           {activeTab === 'coupons' && (
             <CouponsPanel
               coupons={coupons}
+              loading={couponsLoading}
+              error={couponsError}
               onAdd={openNewCouponModal}
               onEdit={openEditCouponModal}
               onDelete={deleteCoupon}
@@ -1542,9 +2657,12 @@ export default function BookingEngineAdmin() {
               adminEmail={emailSettings.adminEmail}
               sendAdminCopy={emailSettings.templates.adminNewReservation.active}
               savedMessage={bookingSettingsMessage}
+              loading={bookingSettingsLoading}
+              error={bookingSettingsError}
               onSettingsChange={(nextSettings) => {
                 setBookingEngineSettings(nextSettings);
                 setBookingSettingsMessage('');
+                setBookingSettingsError('');
               }}
               onAdminEmailChange={(adminEmail) => {
                 setEmailSettings((current) => ({ ...current, adminEmail }));
@@ -1564,6 +2682,7 @@ export default function BookingEngineAdmin() {
                 }));
                 setEmailSettingsMessage('');
                 setBookingSettingsMessage('');
+                setBookingSettingsError('');
               }}
               onSave={saveBookingSettings}
             />
@@ -1573,11 +2692,15 @@ export default function BookingEngineAdmin() {
             <CheckoutFieldsPanel
               fields={checkoutFields}
               savedMessage={checkoutFieldsMessage}
+              loading={checkoutFieldsLoading}
+              error={checkoutFieldsError}
               onFieldsChange={(nextFields) => {
                 setCheckoutFields(nextFields);
                 setCheckoutFieldsMessage('');
+                setCheckoutFieldsError('');
               }}
-              onSave={() => setCheckoutFieldsMessage('Checkout field settings saved locally.')}
+              onDeleteField={deleteCheckoutField}
+              onSave={saveCheckoutFields}
             />
           )}
 
@@ -1585,9 +2708,12 @@ export default function BookingEngineAdmin() {
             <SiteSettingsPanel
               settings={siteSettings}
               savedMessage={siteSettingsMessage}
+              loading={siteSettingsLoading}
+              error={siteSettingsError}
               onSettingsChange={(nextSettings) => {
                 setSiteSettings(nextSettings);
                 setSiteSettingsMessage('');
+                setSiteSettingsError('');
               }}
               onSave={saveSiteSettings}
             />
@@ -1598,9 +2724,12 @@ export default function BookingEngineAdmin() {
               settings={emailSettings}
               siteSettings={siteSettings}
               savedMessage={emailSettingsMessage}
+              loading={emailSettingsLoading}
+              error={emailSettingsError}
               onSettingsChange={(nextSettings) => {
                 setEmailSettings(nextSettings);
                 setEmailSettingsMessage('');
+                setEmailSettingsError('');
               }}
               onSave={saveEmailSettings}
             />
@@ -2128,11 +3257,15 @@ function CarsPanel({
 
 function PricingPanel({
   seasonPrices,
+  loading,
+  error,
   onAdd,
   onEdit,
   onDelete,
 }: {
   seasonPrices: SeasonPrice[];
+  loading: boolean;
+  error: string;
   onAdd: () => void;
   onEdit: (seasonPrice: SeasonPrice) => void;
   onDelete: (seasonPriceId: string) => void;
@@ -2159,6 +3292,16 @@ function PricingPanel({
           description="Do not show the group for this date range."
         />
       </div>
+      {loading && (
+        <div className="mb-3 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-black text-cyan-900">
+          Loading pricing seasons...
+        </div>
+      )}
+      {error && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800">
+          {error}
+        </div>
+      )}
       <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
         <div className="grid grid-cols-[140px_minmax(220px,1fr)_125px_125px_120px_90px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
           <span>Category / Group</span>
@@ -2224,11 +3367,15 @@ function ModeMeaning({
 
 function LocationsPanel({
   locations,
+  loading,
+  error,
   onAdd,
   onEdit,
   onDelete,
 }: {
   locations: BookingLocation[];
+  loading: boolean;
+  error: string;
   onAdd: () => void;
   onEdit: (location: BookingLocation) => void;
   onDelete: (locationId: string) => void;
@@ -2241,6 +3388,16 @@ function LocationsPanel({
         buttonLabel="Add Location"
         onAdd={onAdd}
       />
+      {loading && (
+        <div className="mb-3 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-black text-cyan-900">
+          Loading locations...
+        </div>
+      )}
+      {error && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800">
+          {error}
+        </div>
+      )}
       <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
         <div className="grid grid-cols-[minmax(220px,1fr)_150px_120px_140px_100px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
           <span>Location Name</span>
@@ -2271,12 +3428,16 @@ function LocationsPanel({
 function FeaturesPanel({
   features,
   cars,
+  loading,
+  error,
   onAdd,
   onEdit,
   onDelete,
 }: {
   features: BookingFeature[];
   cars: BookingEngineCar[];
+  loading: boolean;
+  error: string;
   onAdd: () => void;
   onEdit: (feature: BookingFeature) => void;
   onDelete: (featureId: string) => void;
@@ -2289,6 +3450,16 @@ function FeaturesPanel({
         buttonLabel="Add Feature"
         onAdd={onAdd}
       />
+      {loading && (
+        <div className="mb-3 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-black text-cyan-900">
+          Loading features...
+        </div>
+      )}
+      {error && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800">
+          {error}
+        </div>
+      )}
       <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
         <div className="grid grid-cols-[minmax(260px,1fr)_150px_100px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
           <span>Feature</span>
@@ -2316,11 +3487,15 @@ function FeaturesPanel({
 
 function ExtrasPanel({
   extras,
+  loading,
+  error,
   onAdd,
   onEdit,
   onDelete,
 }: {
   extras: BookingExtra[];
+  loading: boolean;
+  error: string;
   onAdd: () => void;
   onEdit: (extra: BookingExtra) => void;
   onDelete: (extraId: string) => void;
@@ -2333,6 +3508,16 @@ function ExtrasPanel({
         buttonLabel="Add Extra"
         onAdd={onAdd}
       />
+      {loading && (
+        <div className="mb-3 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-black text-cyan-900">
+          Loading extras...
+        </div>
+      )}
+      {error && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800">
+          {error}
+        </div>
+      )}
       <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
         <div className="grid grid-cols-[minmax(220px,1fr)_150px_160px_130px_120px_100px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
           <span>Name</span>
@@ -2386,11 +3571,15 @@ function ExtrasPanel({
 
 function CouponsPanel({
   coupons,
+  loading,
+  error,
   onAdd,
   onEdit,
   onDelete,
 }: {
   coupons: BookingCoupon[];
+  loading: boolean;
+  error: string;
   onAdd: () => void;
   onEdit: (coupon: BookingCoupon) => void;
   onDelete: (couponId: string) => void;
@@ -2403,6 +3592,16 @@ function CouponsPanel({
         buttonLabel="Add Coupon"
         onAdd={onAdd}
       />
+      {loading && (
+        <div className="mb-3 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-black text-cyan-900">
+          Loading coupons...
+        </div>
+      )}
+      {error && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800">
+          {error}
+        </div>
+      )}
       <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
         <div className="grid grid-cols-[145px_140px_110px_115px_115px_95px_minmax(180px,1fr)_105px_100px_90px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
           <span>Coupon Code</span>
@@ -2545,6 +3744,8 @@ function BookingSettingsPanel({
   adminEmail,
   sendAdminCopy,
   savedMessage,
+  loading,
+  error,
   onSettingsChange,
   onAdminEmailChange,
   onSendAdminCopyChange,
@@ -2554,6 +3755,8 @@ function BookingSettingsPanel({
   adminEmail: string;
   sendAdminCopy: boolean;
   savedMessage: string;
+  loading: boolean;
+  error: string;
   onSettingsChange: (settings: BookingEngineSettings) => void;
   onAdminEmailChange: (email: string) => void;
   onSendAdminCopyChange: (active: boolean) => void;
@@ -2569,7 +3772,7 @@ function BookingSettingsPanel({
         <div>
           <h3 className="text-lg font-black text-slate-950">Booking settings</h3>
           <p className="mt-1 text-sm text-slate-600">
-            Local reservation defaults and customer-facing booking rules.
+            Supabase reservation defaults and customer-facing booking rules.
           </p>
         </div>
         <button
@@ -2719,7 +3922,19 @@ function BookingSettingsPanel({
       </div>
 
       <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <p className="text-xs text-slate-500">Local state only. No website or reservation workflow is connected.</p>
+        <p className="text-xs text-slate-500">
+          Booking settings are stored per Booking Engine site.
+        </p>
+        {loading && (
+          <span className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-800">
+            Loading booking settings...
+          </span>
+        )}
+        {error && (
+          <span className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-800">
+            {error}
+          </span>
+        )}
         {savedMessage && (
           <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">
             {savedMessage}
@@ -2733,12 +3948,18 @@ function BookingSettingsPanel({
 function CheckoutFieldsPanel({
   fields,
   savedMessage,
+  loading,
+  error,
   onFieldsChange,
+  onDeleteField,
   onSave,
 }: {
   fields: CheckoutFieldSetting[];
   savedMessage: string;
+  loading: boolean;
+  error: string;
   onFieldsChange: (fields: CheckoutFieldSetting[]) => void;
+  onDeleteField: (field: CheckoutFieldSetting) => void;
   onSave: () => void;
 }) {
   const updateField = (id: string, patch: Partial<CheckoutFieldSetting>) => {
@@ -2761,7 +3982,8 @@ function CheckoutFieldsPanel({
     ]);
   };
   const deleteCustomField = (id: string) => {
-    onFieldsChange(fields.filter((field) => field.id !== id || field.builtIn));
+    const field = fields.find((item) => item.id === id);
+    if (field) onDeleteField(field);
   };
 
   return (
@@ -2790,6 +4012,17 @@ function CheckoutFieldsPanel({
           </button>
         </div>
       </div>
+
+      {loading && (
+        <div className="mb-3 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-black text-cyan-900">
+          Loading checkout fields...
+        </div>
+      )}
+      {error && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800">
+          {error}
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="grid grid-cols-[minmax(180px,0.8fr)_110px_110px_minmax(260px,1.2fr)_130px] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-black uppercase tracking-[0.08em] text-slate-600">
@@ -2907,7 +4140,7 @@ function CheckoutFieldsPanel({
 
       <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
         <p className="text-xs text-slate-500">
-          Local UI foundation only. Public website synchronization is not connected.
+          Checkout fields are stored per Booking Engine site.
         </p>
         {savedMessage && (
           <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">
@@ -2922,13 +4155,17 @@ function CheckoutFieldsPanel({
 function SiteSettingsPanel({
   settings,
   savedMessage,
+  loading,
+  error,
   onSettingsChange,
   onSave,
 }: {
   settings: SiteSettings;
   savedMessage: string;
+  loading: boolean;
+  error: string;
   onSettingsChange: (settings: SiteSettings) => void;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
 }) {
   const updateSettings = (patch: Partial<SiteSettings>) => {
     onSettingsChange({ ...settings, ...patch });
@@ -2946,12 +4183,18 @@ function SiteSettingsPanel({
         <button
           type="button"
           onClick={onSave}
+          disabled={loading}
           className="inline-flex h-10 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-4 text-sm font-black text-white shadow-sm transition hover:border-cyan-800 hover:bg-cyan-800"
         >
           <Check className="h-4 w-4" />
-          Save settings
+          {loading ? 'Loading...' : 'Save settings'}
         </button>
       </div>
+      {error && (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+          {error}
+        </div>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <BookingSettingCard
@@ -3140,7 +4383,7 @@ function SiteSettingsPanel({
 
         <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm xl:col-span-2">
           <p className="text-xs text-slate-500">
-            Local state only. No domain, website, storage or notification service is connected.
+            Site settings are loaded from public.be_sites for the current Booking Engine site.
           </p>
           {savedMessage && (
             <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800">
@@ -3157,14 +4400,18 @@ function EmailsPanel({
   settings,
   siteSettings,
   savedMessage,
+  loading,
+  error,
   onSettingsChange,
   onSave,
 }: {
   settings: BookingEmailSettings;
   siteSettings: SiteSettings;
   savedMessage: string;
+  loading: boolean;
+  error: string;
   onSettingsChange: (settings: BookingEmailSettings) => void;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
 }) {
   const templateElementsRef = useRef<
     Partial<Record<EmailTemplateFieldKey, HTMLInputElement | HTMLTextAreaElement>>
@@ -3286,7 +4533,7 @@ function EmailsPanel({
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-lg font-black text-slate-950">Email templates</h3>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-emerald-800">
-              Local State
+              Supabase
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-600">
@@ -3307,13 +4554,19 @@ function EmailsPanel({
           <button
             type="button"
             onClick={onSave}
+            disabled={loading}
             className="inline-flex h-10 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-4 text-sm font-black text-white shadow-sm transition hover:border-cyan-800 hover:bg-cyan-800"
           >
             <Check className="h-4 w-4" />
-            Save settings
+            {loading ? 'Loading...' : 'Save settings'}
           </button>
         </div>
       </div>
+      {error && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-800">
+          {error}
+        </div>
+      )}
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_230px]">
         <div className="space-y-2.5">
@@ -3464,9 +4717,14 @@ function EmailsPanel({
           <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
             <p className="text-xs font-bold text-amber-900">Local preview only</p>
             <p className="mt-1 text-[11px] leading-5 text-slate-600">
-              Saving keeps these values in the local booking engine store.
+              Templates are stored in Supabase. Sending is not connected yet.
             </p>
           </div>
+          {loading && (
+            <p className="mt-3 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2.5 text-xs font-bold text-cyan-800">
+              Loading email templates...
+            </p>
+          )}
           {savedMessage && (
             <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-bold text-emerald-800">
               {savedMessage}
@@ -3489,7 +4747,7 @@ function EmailsPanel({
           onClose={() => setPreviewTemplateId(null)}
           onSave={(subject, message) => {
             updateTemplate(previewTemplateId, { subject, message });
-            setManualPreviewMessage(`${settings.templates[previewTemplateId].label}: changes saved locally.`);
+            setManualPreviewMessage(`${settings.templates[previewTemplateId].label}: changes staged. Click Save settings to persist.`);
             setPreviewTemplateId(null);
           }}
         />
