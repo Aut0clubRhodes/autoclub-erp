@@ -18,16 +18,21 @@ import {
   Sparkles,
 } from 'lucide-react';
 import {
-  loadBookingEngineConfig,
-  subscribeBookingEngineConfig,
+  bookingEngineLocalConfig,
+  type BookingEngineGroup,
   type BookingEngineCarConfig,
   type BookingEngineCheckoutField,
   type BookingEngineCoupon,
   type BookingEngineExtra,
+  type BookingEngineFeature,
+  type BookingEngineLocalConfig,
+  type BookingEngineLocation,
+  type BookingEnginePaymentMethod,
   type BookingEngineSeasonPrice,
+  type BookingEngineSiteSettings,
   type CheckoutFieldId,
 } from '@/lib/bookingEngineLocalConfig';
-import { addBookingEngineReservation } from '@/lib/bookingEngineReservationsStore';
+import { supabase } from '@/lib/supabaseClient';
 
 type PreviewStep = 'search' | 'results' | 'checkout' | 'success';
 type BookingMode = 'Open' | 'On Request' | 'Hidden';
@@ -38,6 +43,127 @@ type SelectedPreviewCar = BookingEngineCarConfig & {
   priceOnRequest: boolean;
   mode: BookingMode;
   accent: string;
+};
+
+type BeSiteRow = {
+  id: string;
+  name?: string | null;
+  domain?: string | null;
+  admin_email?: string | null;
+  booking_notification_email?: string | null;
+  currency?: string | null;
+  timezone?: string | null;
+  default_language?: string | null;
+  whatsapp_number?: string | null;
+  terms_url?: string | null;
+  privacy_policy_url?: string | null;
+  logo_image?: string | null;
+  status?: string | null;
+  internal_notes?: string | null;
+};
+
+type BeGroupRow = {
+  id: string | number;
+  code?: string | null;
+  name?: string | null;
+  description?: string | null;
+  status?: string | null;
+};
+
+type BeVehicleCategoryRow = {
+  id: string | number;
+  name?: string | null;
+  group_code?: string | null;
+  description?: string | null;
+  image_url?: string | null;
+  feature_ids?: string[] | null;
+  location_ids?: string[] | null;
+  status?: string | null;
+};
+
+type BeFeatureRow = {
+  id: string | number;
+  name?: string | null;
+};
+
+type BePricingSeasonRow = {
+  id: string | number;
+  group_code?: string | null;
+  season_name?: string | null;
+  from_date?: string | null;
+  to_date?: string | null;
+  pricing_tiers?: BookingEngineSeasonPrice['tiers'] | null;
+  website_mode?: string | null;
+  status?: string | null;
+  notes?: string | null;
+};
+
+type BeLocationRow = {
+  id: string | number;
+  name?: string | null;
+  type?: string | null;
+  active?: boolean | null;
+  fee?: string | number | null;
+  status?: string | null;
+};
+
+type BeExtraRow = {
+  id: string | number;
+  name?: string | null;
+  description?: string | null;
+  pricing_mode?: string | null;
+  price?: string | number | null;
+  image_url?: string | null;
+  status?: string | null;
+  maximum_quantity?: string | number | null;
+};
+
+type BeCouponRow = {
+  id: string | number;
+  code?: string | null;
+  discount_type?: string | null;
+  discount_value?: string | number | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  minimum_days?: string | number | null;
+  allowed_group_codes?: string[] | null;
+  usage_limit?: string | number | null;
+  status?: string | null;
+};
+
+type BePaymentMethodRow = {
+  id: string | number;
+  name?: string | null;
+  type?: string | null;
+  description?: string | null;
+  deposit_required?: boolean | null;
+  deposit_amount?: string | number | null;
+  status?: string | null;
+};
+
+type BeCheckoutFieldRow = {
+  id: string | number;
+  field_key?: string | null;
+  name?: string | null;
+  field_type?: string | null;
+  enabled?: boolean | null;
+  required?: boolean | null;
+  label?: string | null;
+  options?: string[] | null;
+  built_in?: boolean | null;
+  sort_order?: number | null;
+};
+
+type BeBookingSettingsRow = {
+  id?: string | null;
+  site_id?: string | null;
+  advance_booking_active?: boolean | null;
+  advance_booking_hours?: string | number | null;
+  default_language?: string | null;
+  require_rental_terms?: boolean | null;
+  show_marketing_consent?: boolean | null;
+  terms_url?: string | null;
+  new_reservation_status?: string | null;
 };
 
 const STEP_ITEMS: Array<{ id: PreviewStep; label: string; index: number }> = [
@@ -128,6 +254,167 @@ const carAccentByIndex = [
   'from-indigo-50 via-white to-cyan-50',
 ];
 
+const emptySupabaseBookingEngineConfig: BookingEngineLocalConfig = {
+  ...bookingEngineLocalConfig,
+  groups: [],
+  cars: [],
+  locations: [],
+  features: [],
+  extras: [],
+  coupons: [],
+  paymentMethods: [],
+  checkoutFields: [],
+  pricingSeasons: [],
+  siteSettings: {
+    ...bookingEngineLocalConfig.siteSettings,
+    companyName: '',
+    logoImage: '',
+  },
+};
+
+const isBookingMode = (value: string | null | undefined): value is BookingMode =>
+  value === 'Open' || value === 'On Request' || value === 'Hidden';
+
+const mapSiteSettings = (row: BeSiteRow): BookingEngineSiteSettings => ({
+  companyName: (row.name || '').trim(),
+  domain: (row.domain || '').trim(),
+  adminEmail: row.admin_email || '',
+  bookingNotificationEmail: row.booking_notification_email || '',
+  currency: row.currency || 'EUR',
+  timezone: row.timezone || 'Europe/Athens',
+  defaultLanguage: row.default_language || 'English',
+  whatsappNumber: row.whatsapp_number || '',
+  termsUrl: row.terms_url || '',
+  privacyPolicyUrl: row.privacy_policy_url || '',
+  logoImage: row.logo_image || '',
+  status: row.status === 'Inactive' ? 'Inactive' : 'Active',
+  internalNotes: row.internal_notes || '',
+});
+
+const mapGroup = (row: BeGroupRow): BookingEngineGroup => ({
+  id: String(row.id),
+  code: (row.code || '').trim(),
+  name: (row.name || '').trim(),
+  active: row.status !== 'Inactive',
+  notes: row.description || '',
+});
+
+const mapCar = (row: BeVehicleCategoryRow): BookingEngineCarConfig => ({
+  id: String(row.id),
+  name: (row.name || '').trim(),
+  groupCode: (row.group_code || '').trim(),
+  description: row.description || '',
+  imageUrl: row.image_url || '',
+  featureIds: Array.isArray(row.feature_ids) ? row.feature_ids : [],
+  status: isBookingMode(row.status) ? row.status : 'Open',
+  locationIds: Array.isArray(row.location_ids) ? row.location_ids : [],
+});
+
+const mapFeature = (row: BeFeatureRow): BookingEngineFeature => ({
+  id: String(row.id),
+  name: (row.name || '').trim(),
+});
+
+const mapLocation = (row: BeLocationRow): BookingEngineLocation => ({
+  id: String(row.id),
+  name: (row.name || '').trim(),
+  type:
+    row.type === 'airport' || row.type === 'town' || row.type === 'hotel' || row.type === 'custom'
+      ? row.type
+      : 'custom',
+  active: typeof row.active === 'boolean' ? row.active : row.status !== 'Inactive',
+  fee: row.fee === null || row.fee === undefined ? '' : String(row.fee),
+});
+
+const mapExtra = (row: BeExtraRow): BookingEngineExtra => ({
+  id: String(row.id),
+  name: (row.name || '').trim(),
+  description: row.description || '',
+  pricingMode:
+    row.pricing_mode === 'Per Booking' || row.pricing_mode === 'Free' || row.pricing_mode === 'Per Day'
+      ? row.pricing_mode
+      : 'Per Day',
+  price: row.price === null || row.price === undefined ? '' : String(row.price),
+  imageUrl: row.image_url || '',
+  status: row.status === 'Inactive' ? 'Inactive' : 'Active',
+  maximumQuantity:
+    row.maximum_quantity === null || row.maximum_quantity === undefined
+      ? ''
+      : String(row.maximum_quantity),
+});
+
+const mapCoupon = (row: BeCouponRow): BookingEngineCoupon => ({
+  id: String(row.id),
+  code: (row.code || '').trim(),
+  discountType: row.discount_type === 'Fixed Amount' ? 'Fixed Amount' : 'Percentage',
+  discountValue:
+    row.discount_value === null || row.discount_value === undefined
+      ? ''
+      : String(row.discount_value),
+  validFrom: row.valid_from || '',
+  validTo: row.valid_to || '',
+  minimumDays: row.minimum_days === null || row.minimum_days === undefined ? '' : String(row.minimum_days),
+  allowedGroupCodes: Array.isArray(row.allowed_group_codes) ? row.allowed_group_codes : [],
+  usageLimit: row.usage_limit === null || row.usage_limit === undefined ? '' : String(row.usage_limit),
+  status: row.status === 'Inactive' ? 'Inactive' : 'Active',
+});
+
+const mapPaymentMethod = (row: BePaymentMethodRow): BookingEnginePaymentMethod => ({
+  id: String(row.id),
+  name: (row.name || '').trim(),
+  type:
+    row.type === 'Bank Transfer' ||
+    row.type === 'Payment Link' ||
+    row.type === 'Card' ||
+    row.type === 'Custom' ||
+    row.type === 'Pay on Arrival'
+      ? row.type
+      : 'Pay on Arrival',
+  description: row.description || '',
+  depositRequired: Boolean(row.deposit_required),
+  depositAmount:
+    row.deposit_amount === null || row.deposit_amount === undefined ? '' : String(row.deposit_amount),
+  status: row.status === 'Inactive' ? 'Inactive' : 'Active',
+});
+
+const mapCheckoutField = (row: BeCheckoutFieldRow): BookingEngineCheckoutField => ({
+  id: row.field_key || String(row.id),
+  name: row.name || row.label || 'Custom Field',
+  fieldType:
+    row.field_type === 'Textarea' ||
+    row.field_type === 'Number' ||
+    row.field_type === 'Email' ||
+    row.field_type === 'Phone' ||
+    row.field_type === 'Select' ||
+    row.field_type === 'Text'
+      ? row.field_type
+      : 'Text',
+  enabled: Boolean(row.enabled),
+  required: Boolean(row.required),
+  label: row.label || row.name || 'Custom Field',
+  options: Array.isArray(row.options) ? row.options : [],
+  builtIn: Boolean(row.built_in),
+});
+
+const mapPricingSeason = (row: BePricingSeasonRow): BookingEngineSeasonPrice => ({
+  id: String(row.id),
+  groupCode: (row.group_code || '').trim(),
+  seasonName: (row.season_name || '').trim(),
+  fromDate: row.from_date || '',
+  toDate: row.to_date || '',
+  tiers: Array.isArray(row.pricing_tiers)
+    ? row.pricing_tiers.map((tier) => ({
+        id: tier.id || `${row.id}-${tier.fromDays}-${tier.toDays}`,
+        fromDays: String(tier.fromDays || ''),
+        toDays: String(tier.toDays || ''),
+        pricePerDay: String(tier.pricePerDay || ''),
+      }))
+    : [],
+  websiteMode: isBookingMode(row.website_mode) ? row.website_mode : 'Open',
+  status: row.status === 'Inactive' ? 'Inactive' : 'Active',
+  notes: row.notes || '',
+});
+
 function formatDisplayDate(value: string) {
   const [year, month, day] = value.split('-');
   return year && month && day ? `${day}/${month}/${year}` : value;
@@ -168,15 +455,35 @@ function getCouponDiscount(coupon: BookingEngineCoupon | undefined, subtotal: nu
 export default function PublicBookingPreview() {
   const [step, setStep] = useState<PreviewStep>('search');
   const [selectedCar, setSelectedCar] = useState<SelectedPreviewCar | null>(null);
-  const [bookingEngineConfig, setBookingEngineConfig] = useState(() => loadBookingEngineConfig());
-  const activeLocations = bookingEngineConfig.locations.filter((location) => location.active);
-  const locationOptions = activeLocations.map((location) => location.name);
-  const returnLocationOptions = ['Same as pickup', ...locationOptions];
-  const activeExtras = bookingEngineConfig.extras.filter((extra) => extra.status === 'Active');
-  const activePaymentMethods = bookingEngineConfig.paymentMethods.filter(
-    (method) => method.status === 'Active',
+  const [bookingEngineConfig, setBookingEngineConfig] =
+    useState<BookingEngineLocalConfig>(emptySupabaseBookingEngineConfig);
+  const [beSiteId, setBeSiteId] = useState('');
+  const [loadingConfig, setLoadingConfig] = useState(true);
+  const [configError, setConfigError] = useState('');
+  const activeLocations = useMemo(
+    () => bookingEngineConfig.locations.filter((location) => location.active),
+    [bookingEngineConfig.locations],
   );
-  const checkoutFields = bookingEngineConfig.checkoutFields.filter((field) => field.enabled);
+  const locationOptions = useMemo(
+    () => activeLocations.map((location) => location.name),
+    [activeLocations],
+  );
+  const returnLocationOptions = useMemo(
+    () => ['Same as pickup', ...locationOptions],
+    [locationOptions],
+  );
+  const activeExtras = useMemo(
+    () => bookingEngineConfig.extras.filter((extra) => extra.status === 'Active'),
+    [bookingEngineConfig.extras],
+  );
+  const activePaymentMethods = useMemo(
+    () => bookingEngineConfig.paymentMethods.filter((method) => method.status === 'Active'),
+    [bookingEngineConfig.paymentMethods],
+  );
+  const checkoutFields = useMemo(
+    () => bookingEngineConfig.checkoutFields.filter((field) => field.enabled),
+    [bookingEngineConfig.checkoutFields],
+  );
   const [search, setSearch] = useState({
     pickupLocation: locationOptions[0] || 'Rhodes Airport',
     returnLocation: 'Same as pickup',
@@ -206,15 +513,172 @@ export default function PublicBookingPreview() {
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [submittedReservationId, setSubmittedReservationId] = useState('');
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [submittingReservation, setSubmittingReservation] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const activeCoupons = bookingEngineConfig.coupons.filter((coupon) => coupon.status === 'Active');
 
-  useEffect(
-    () =>
-      subscribeBookingEngineConfig(() => {
-        setBookingEngineConfig(loadBookingEngineConfig());
-      }),
-    [],
-  );
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSupabasePreviewConfig = async () => {
+      setLoadingConfig(true);
+      setConfigError('');
+
+      const { data: sites, error: siteError } = await supabase
+        .from('be_sites')
+        .select('*')
+        .order('domain', { ascending: true });
+
+      if (siteError) {
+        console.error('Public Booking Preview site load failed:', {
+          message: siteError.message,
+          code: siteError.code,
+          details: siteError.details,
+          hint: siteError.hint,
+        });
+        if (!cancelled) {
+          setConfigError('Failed to load booking site from Supabase.');
+          setLoadingConfig(false);
+        }
+        return;
+      }
+
+      const site = ((sites || []) as BeSiteRow[]).find(
+        (item) => item.domain === 'autoclub-rhodes.com',
+      );
+      if (!site?.id) {
+        if (!cancelled) {
+          setConfigError('No Booking Engine site found for autoclub-rhodes.com.');
+          setLoadingConfig(false);
+        }
+        return;
+      }
+
+      const [
+        groupsResult,
+        carsResult,
+        featuresResult,
+        pricingResult,
+        locationsResult,
+        extrasResult,
+        couponsResult,
+        paymentMethodsResult,
+        bookingSettingsResult,
+        checkoutFieldsResult,
+      ] = await Promise.all([
+        supabase.from('be_groups').select('*').eq('site_id', site.id).order('code', { ascending: true }),
+        supabase.from('be_vehicle_categories').select('*').eq('site_id', site.id).order('name', { ascending: true }),
+        supabase.from('be_features').select('*').eq('site_id', site.id).order('name', { ascending: true }),
+        supabase.from('be_pricing_seasons').select('*').eq('site_id', site.id).order('from_date', { ascending: true }),
+        supabase.from('be_locations').select('*').eq('site_id', site.id).order('name', { ascending: true }),
+        supabase.from('be_extras').select('*').eq('site_id', site.id).order('name', { ascending: true }),
+        supabase.from('be_coupons').select('*').eq('site_id', site.id).order('code', { ascending: true }),
+        supabase.from('be_payment_methods').select('*').eq('site_id', site.id).order('name', { ascending: true }),
+        supabase.from('be_booking_settings').select('*').eq('site_id', site.id).maybeSingle(),
+        supabase.from('be_checkout_fields').select('*').eq('site_id', site.id).order('sort_order', { ascending: true }),
+      ]);
+
+      const loadErrors = [
+        ['groups', groupsResult.error],
+        ['cars', carsResult.error],
+        ['features', featuresResult.error],
+        ['pricing', pricingResult.error],
+        ['locations', locationsResult.error],
+        ['extras', extrasResult.error],
+        ['coupons', couponsResult.error],
+        ['payment methods', paymentMethodsResult.error],
+        ['booking settings', bookingSettingsResult.error],
+        ['checkout fields', checkoutFieldsResult.error],
+      ].filter(([, error]) => error);
+
+      if (loadErrors.length > 0) {
+        loadErrors.forEach(([label, error]) => {
+          const supabaseError = error as NonNullable<typeof groupsResult.error>;
+          console.error(`Public Booking Preview ${label} load failed:`, {
+            message: supabaseError.message,
+            code: supabaseError.code,
+            details: supabaseError.details,
+            hint: supabaseError.hint,
+          });
+        });
+        if (!cancelled) {
+          setConfigError('Failed to load booking preview data from Supabase.');
+          setLoadingConfig(false);
+        }
+        return;
+      }
+
+      const bookingSettings = bookingSettingsResult.data as BeBookingSettingsRow | null;
+      const termsUrl = bookingSettings?.terms_url || site.terms_url || '';
+
+      if (!cancelled) {
+        setBeSiteId(site.id);
+        setBookingEngineConfig({
+          ...emptySupabaseBookingEngineConfig,
+          siteSettings: {
+            ...mapSiteSettings(site),
+            termsUrl,
+            defaultLanguage: bookingSettings?.default_language || site.default_language || 'English',
+          },
+          groups: ((groupsResult.data || []) as BeGroupRow[]).map(mapGroup),
+          cars: ((carsResult.data || []) as BeVehicleCategoryRow[]).map(mapCar),
+          features: ((featuresResult.data || []) as BeFeatureRow[]).map(mapFeature),
+          pricingSeasons: ((pricingResult.data || []) as BePricingSeasonRow[]).map(mapPricingSeason),
+          locations: ((locationsResult.data || []) as BeLocationRow[]).map(mapLocation),
+          extras: ((extrasResult.data || []) as BeExtraRow[]).map(mapExtra),
+          coupons: ((couponsResult.data || []) as BeCouponRow[]).map(mapCoupon),
+          paymentMethods: ((paymentMethodsResult.data || []) as BePaymentMethodRow[]).map(mapPaymentMethod),
+          checkoutFields: ((checkoutFieldsResult.data || []) as BeCheckoutFieldRow[]).map(mapCheckoutField),
+        });
+        setLoadingConfig(false);
+      }
+    };
+
+    void loadSupabasePreviewConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!locationOptions.length) return;
+
+    setSearch((current) => {
+      const nextPickupLocation = locationOptions.includes(current.pickupLocation)
+        ? current.pickupLocation
+        : locationOptions[0];
+      const nextReturnLocation =
+        current.returnLocation === 'Same as pickup' || locationOptions.includes(current.returnLocation)
+          ? current.returnLocation
+          : 'Same as pickup';
+
+      if (
+        current.pickupLocation === nextPickupLocation &&
+        current.returnLocation === nextReturnLocation
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        pickupLocation: nextPickupLocation,
+        returnLocation: nextReturnLocation,
+      };
+    });
+  }, [locationOptions]);
+
+  useEffect(() => {
+    if (!activePaymentMethods.length) return;
+
+    setPaymentMethod((current) => {
+      const nextPaymentMethod = activePaymentMethods.some((method) => method.name === current)
+        ? current
+        : activePaymentMethods[0].name;
+
+      return current === nextPaymentMethod ? current : nextPaymentMethod;
+    });
+  }, [activePaymentMethods]);
 
   const rentalDays = useMemo(
     () => getRentalDays(search.pickupDate, search.returnDate),
@@ -334,15 +798,14 @@ export default function PublicBookingPreview() {
     }));
   };
 
-  const submitReservation = () => {
+  const submitReservation = async () => {
     setSubmitAttempted(true);
-    if (!selectedCar || !acceptTerms || requiredFieldsMissing) return;
-    const customerEmailTemplateId =
-      selectedCar.mode === 'Open' ? 'customerRequestReceived' : 'customerOnRequestReceived';
-    const customerEmailTemplateLabel =
-      customerEmailTemplateId === 'customerRequestReceived'
-        ? 'Customer Reservation Received'
-        : 'Customer On Request Received';
+    setSubmitError('');
+    if (!selectedCar || !acceptTerms || requiredFieldsMissing || submittingReservation) return;
+    if (!beSiteId) {
+      setSubmitError('Booking site is not loaded. Please refresh and try again.');
+      return;
+    }
 
     const selectedExtras = activeExtras
       .filter((extra) => (extras[extra.id] || 0) > 0)
@@ -358,60 +821,67 @@ export default function PublicBookingPreview() {
         };
       });
 
-    const reservation = addBookingEngineReservation({
-      customerName: customer.fullName.trim(),
-      full_name: customer.fullName.trim(),
+    const reservationId = `ACR-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(
+      1000 + Math.random() * 9000,
+    )}`;
+    const couponPayload = appliedCoupon
+      ? {
+          code: appliedCoupon.code,
+          discountType: appliedCoupon.discountType,
+          discountValue: appliedCoupon.discountValue,
+          discount: couponDiscount,
+        }
+      : null;
+    const payload = {
+      site_id: beSiteId,
+      reservation_id: reservationId,
+      customer_name: customer.fullName.trim(),
       email: customer.email.trim(),
-      phone: customer.phone.trim(),
-      countryCode: customer.countryCode,
-      country_code: customer.countryCode,
-      fullPhone: `${customer.countryCode} ${customer.phone}`.trim(),
-      full_phone: `${customer.countryCode} ${customer.phone}`.trim(),
-      dateOfBirth: customer.dateOfBirth,
-      date_of_birth: customer.dateOfBirth,
-      hotelRoom: customer.hotelRoom.trim(),
-      hotelVillaApartment: customer.hotelRoom.trim(),
-      hotel_villa_apartment: customer.hotelRoom.trim(),
-      flightNumber: customer.flightNumber.trim(),
-      flight_number: customer.flightNumber.trim(),
-      notes: customer.notes.trim(),
-      pickupLocation: search.pickupLocation,
-      returnLocation: effectiveReturnLocation,
-      pickupDate: search.pickupDate,
-      pickupTime: search.pickupTime,
-      returnDate: search.returnDate,
-      returnTime: search.returnTime,
-      carName: selectedCar.name,
-      groupCode: selectedCar.groupCode,
-      rentalDays,
-      rentalAmount: baseRental,
+      phone: `${customer.countryCode} ${customer.phone}`.trim(),
+      pickup_location: search.pickupLocation,
+      return_location: effectiveReturnLocation,
+      pickup_date: search.pickupDate,
+      pickup_time: search.pickupTime,
+      return_date: search.returnDate,
+      return_time: search.returnTime,
+      vehicle_category: `${selectedCar.name} / Group ${selectedCar.groupCode}`,
       extras: selectedExtras,
-      couponCode: appliedCoupon?.code || '',
-      couponDiscount,
-      customFields: visibleCheckoutFields
-        .filter((field) => !BUILT_IN_CHECKOUT_FIELD_IDS.has(field.id))
-        .map((field) => ({
-          id: field.id,
-          label: field.label,
-          fieldType: field.fieldType,
-          value: customFieldValues[field.id] || '',
-        })),
-      paymentMethod,
-      total: selectedCar.priceOnRequest ? 0 : finalTotal,
-      customerEmailTemplateId,
-      customerEmailTemplateLabel,
-      adminEmailPreviewCreated: true,
-      customerEmailPreviewCreated: true,
-      emailStatus: 'Preview only / Not sent',
-    });
+      coupon: couponPayload,
+      payment_method: paymentMethod,
+      total_price: selectedCar.priceOnRequest ? 0 : finalTotal,
+      status: selectedCar.mode === 'Open' ? 'PENDING' : 'ON_REQUEST',
+    };
 
-    setSubmittedReservationId(reservation.id);
+    setSubmittingReservation(true);
+    console.log('PUBLIC BOOKING RESERVATION INSERT PAYLOAD', payload);
+    const { data, error } = await supabase
+      .from('be_reservations')
+      .insert(payload)
+      .select('id, reservation_id')
+      .single();
+
+    console.log('PUBLIC BOOKING RESERVATION INSERT RESULT', data);
+
+    if (error) {
+      console.error('PUBLIC BOOKING RESERVATION INSERT ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setSubmitError('Reservation could not be saved. Please try again.');
+      setSubmittingReservation(false);
+      return;
+    }
+
+    setSubmittedReservationId(data?.reservation_id || data?.id || reservationId);
+    setSubmittingReservation(false);
     setStep('success');
   };
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto bg-[#f5f8fb] text-slate-950">
-      <header className="border-b border-slate-200 bg-white">
+    <div className="h-full min-h-0 overflow-y-auto bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#f8fafc_34%,#eef2f7_100%)] text-slate-950">
+      <header className="border-b border-slate-200/80 bg-white/95 shadow-sm backdrop-blur">
         <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-10">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-[#073f5d] text-white shadow-sm">
@@ -429,7 +899,7 @@ export default function PublicBookingPreview() {
               <p className="text-lg font-black text-[#073f5d]">
                 {bookingEngineConfig.siteSettings.companyName || 'AUTOCLUB RHODES'}
               </p>
-              <p className="text-xs font-semibold text-slate-500">Easy island car rental</p>
+              <p className="text-xs font-semibold text-slate-500">Premium car rental in Rhodes</p>
             </div>
           </div>
           <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
@@ -447,8 +917,8 @@ export default function PublicBookingPreview() {
         </div>
       </header>
 
-      <div className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-4xl items-start justify-between px-4 py-4 sm:px-6">
+      <div className="border-b border-slate-200/80 bg-white/85 backdrop-blur">
+        <div className="mx-auto flex max-w-4xl items-start justify-between px-4 py-3 sm:px-6">
           {STEP_ITEMS.map((item, itemIndex) => {
             const isComplete = currentStepIndex > item.index;
             const isActive = currentStepIndex === item.index;
@@ -478,20 +948,30 @@ export default function PublicBookingPreview() {
         </div>
       </div>
 
-      <main className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+      <main className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6 lg:px-8 lg:py-5">
+        {loadingConfig && (
+          <div className="mb-4 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-black text-cyan-900">
+            Loading booking engine data from Supabase...
+          </div>
+        )}
+        {configError && (
+          <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-black text-rose-800">
+            {configError}
+          </div>
+        )}
         {step === 'search' && (
           <section className="mx-auto max-w-6xl">
             <div className="mb-4 max-w-2xl">
               <span className="mb-2 inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1 text-xs font-black uppercase text-[#087f9c]">
                 <Sparkles className="h-3.5 w-3.5" /> Rhodes made easy
               </span>
-              <h1 className="text-3xl font-black text-[#073f5d] sm:text-4xl lg:text-5xl">Find your car in Rhodes</h1>
+              <h1 className="text-3xl font-black tracking-tight text-[#073f5d] sm:text-4xl lg:text-5xl">Find your car in Rhodes</h1>
               <p className="mt-2 text-base font-medium text-slate-600 sm:text-lg">
                 Transparent prices, full insurance and friendly local support.
               </p>
             </div>
 
-            <div className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-[0_18px_46px_rgba(15,23,42,0.11)] sm:p-5 lg:p-6">
+            <div className="rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-[0_24px_70px_rgba(7,63,93,0.14)] sm:p-5 lg:p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <SelectField label="Pickup Location" icon={<MapPin className="h-4 w-4" />} value={search.pickupLocation} options={locationOptions} onChange={(value) => setSearch((current) => ({ ...current, pickupLocation: value }))} />
                 <SelectField label="Return Location" icon={<MapPin className="h-4 w-4" />} value={search.returnLocation} options={returnLocationOptions} onChange={(value) => setSearch((current) => ({ ...current, returnLocation: value }))} />
@@ -530,7 +1010,7 @@ export default function PublicBookingPreview() {
                 <button type="button" onClick={() => setStep('search')} className="mb-3 inline-flex items-center gap-2 text-sm font-bold text-[#087f9c] hover:text-[#073f5d]">
                   <ArrowLeft className="h-4 w-4" /> Change search
                 </button>
-                <h1 className="text-3xl font-black text-[#073f5d]">Choose your car</h1>
+                <h1 className="text-3xl font-black tracking-tight text-[#073f5d]">Choose your car</h1>
                 <p className="mt-1 text-sm font-medium text-slate-600">
                   {search.pickupLocation} · {formatDisplayDate(search.pickupDate)} to {formatDisplayDate(search.returnDate)} · {rentalDays} days
                 </p>
@@ -542,7 +1022,7 @@ export default function PublicBookingPreview() {
 
             <div className="grid items-stretch gap-4 lg:grid-cols-3">
               {visibleCars.map((car) => (
-                <article key={car.id} className="flex h-full flex-col overflow-hidden rounded-[20px] border border-slate-200/90 bg-white shadow-[0_14px_38px_rgba(15,23,42,0.09)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_20px_52px_rgba(15,23,42,0.13)]">
+                <article key={car.id} className="flex h-full flex-col overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_18px_48px_rgba(7,63,93,0.1)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_26px_70px_rgba(7,63,93,0.16)]">
                   <div className={`relative flex h-40 items-center justify-center overflow-hidden bg-gradient-to-br sm:h-44 ${car.accent}`}>
                     <div className="absolute left-4 top-4 rounded-full border border-white/90 bg-white/95 px-3 py-1 text-xs font-black text-[#073f5d] shadow-sm">Group {car.groupCode}</div>
                     {car.imageUrl ? (
@@ -608,7 +1088,7 @@ export default function PublicBookingPreview() {
             </button>
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
               <div className="order-2 flex flex-col gap-4 xl:order-1">
-                <div className="order-2 rounded-[20px] border border-slate-200 bg-white p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)] sm:p-5">
+                <div className="order-2 rounded-[22px] border border-slate-200 bg-white p-4 shadow-[0_14px_36px_rgba(7,63,93,0.08)] sm:p-5">
                   <h1 className="text-2xl font-black text-[#073f5d]">Complete your reservation</h1>
                   <p className="mt-1 text-sm text-slate-500">Tell us who will be driving.</p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -683,7 +1163,7 @@ export default function PublicBookingPreview() {
                   )}
                 </div>
 
-                <div className="order-1 rounded-[20px] border border-slate-200 bg-white p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)] sm:p-5">
+                <div className="order-1 rounded-[22px] border border-slate-200 bg-white p-4 shadow-[0_14px_36px_rgba(7,63,93,0.08)] sm:p-5">
                   <h2 className="text-xl font-black text-[#073f5d]">Add extras</h2>
                   <p className="mt-1 text-sm text-slate-500">Make your trip more comfortable with optional equipment.</p>
                   <div className="mt-4 grid gap-3 lg:grid-cols-3">
@@ -713,7 +1193,7 @@ export default function PublicBookingPreview() {
                   </div>
                 </div>
 
-                <div className="order-3 rounded-[20px] border border-slate-200 bg-white p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)] sm:p-5">
+                <div className="order-3 rounded-[22px] border border-slate-200 bg-white p-4 shadow-[0_14px_36px_rgba(7,63,93,0.08)] sm:p-5">
                   <h2 className="font-black text-[#073f5d]">Payment method</h2>
                   <p className="mt-1 text-sm text-slate-500">Choose how you would prefer to complete payment.</p>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -728,7 +1208,7 @@ export default function PublicBookingPreview() {
 
               </div>
 
-              <aside className="order-2 h-fit rounded-[20px] border border-slate-200 bg-white p-4 shadow-[0_18px_46px_rgba(15,23,42,0.11)] xl:order-2 xl:sticky xl:top-4">
+              <aside className="order-2 h-fit rounded-[24px] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(7,63,93,0.16)] xl:order-2 xl:sticky xl:top-4">
                 <p className="text-xs font-black uppercase text-[#087f9c]">Reservation summary</p>
                 <div className={`mt-3 flex h-24 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br ${selectedCar.accent}`}>
                   {selectedCar.imageUrl ? (
@@ -807,8 +1287,13 @@ export default function PublicBookingPreview() {
                     Please accept the rental terms before continuing.
                   </p>
                 )}
-                <button type="button" aria-disabled={!acceptTerms || requiredFieldsMissing} onClick={submitReservation} className={`flex h-[54px] w-full items-center justify-center gap-2 rounded-xl px-6 text-base font-black text-white shadow-lg transition hover:-translate-y-0.5 ${selectedCar.mode === 'Open' ? 'bg-emerald-600 shadow-emerald-900/20 hover:bg-emerald-700' : 'bg-[#0891b2] shadow-cyan-900/20 hover:bg-[#087f9c]'}`}>
-                  {selectedCar.mode === 'Open' ? 'Confirm Booking' : 'Send Request'} <ArrowRight className="h-5 w-5" />
+                {submitError && (
+                  <p className="mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
+                    {submitError}
+                  </p>
+                )}
+                <button type="button" disabled={submittingReservation} aria-disabled={!acceptTerms || requiredFieldsMissing || submittingReservation} onClick={submitReservation} className={`flex h-[54px] w-full items-center justify-center gap-2 rounded-xl px-6 text-base font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70 ${selectedCar.mode === 'Open' ? 'bg-emerald-600 shadow-emerald-900/20 hover:bg-emerald-700' : 'bg-[#0891b2] shadow-cyan-900/20 hover:bg-[#087f9c]'}`}>
+                  {submittingReservation ? 'Saving...' : selectedCar.mode === 'Open' ? 'Confirm Booking' : 'Send Request'} <ArrowRight className="h-5 w-5" />
                 </button>
                 <p className="mt-2 text-center text-xs text-slate-400">Prototype only · no payment will be taken</p>
                 <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-xs font-bold leading-5 text-emerald-800">
@@ -820,11 +1305,11 @@ export default function PublicBookingPreview() {
         )}
 
         {step === 'success' && selectedCar && (
-          <section className="mx-auto max-w-3xl py-6 text-center sm:py-12">
-            <div className="rounded-[28px] border border-slate-200 bg-white px-5 py-10 shadow-[0_28px_80px_rgba(15,23,42,0.14)] sm:px-12 sm:py-12">
+          <section className="mx-auto max-w-3xl py-6 text-center sm:py-10">
+            <div className="rounded-[30px] border border-slate-200 bg-white px-5 py-9 shadow-[0_30px_90px_rgba(7,63,93,0.18)] sm:px-12 sm:py-11">
               <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-8 border-emerald-50 bg-emerald-100 text-emerald-600"><CheckCircle2 className="h-10 w-10" /></div>
               <p className="mt-5 text-sm font-black uppercase text-emerald-700">Reservation Received</p>
-              <h1 className="mt-2 text-3xl font-black text-[#073f5d] sm:text-4xl">Thank you!</h1>
+              <h1 className="mt-2 text-3xl font-black tracking-tight text-[#073f5d] sm:text-4xl">Your reservation is received</h1>
               <p className="mt-5 text-sm font-bold text-slate-500">Reservation Code</p>
               <p className="mx-auto mt-2 max-w-sm rounded-2xl bg-[#073f5d] px-5 py-4 font-mono text-xl font-black tracking-[0.08em] text-white shadow-lg shadow-slate-900/15">
                 {submittedReservationId || 'ACR-DEMO-0001'}

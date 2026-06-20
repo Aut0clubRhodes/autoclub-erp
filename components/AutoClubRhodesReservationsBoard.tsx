@@ -14,9 +14,6 @@ import {
   X,
 } from 'lucide-react';
 import {
-  loadBookingEngineReservations,
-  saveBookingEngineReservations,
-  subscribeBookingEngineReservations,
   type BookingEngineReservationStatus,
   type BookingEngineWebsiteReservation,
 } from '@/lib/bookingEngineReservationsStore';
@@ -25,6 +22,7 @@ import {
   subscribeBookingEngineConfig,
   type BookingEngineEmailTemplateId,
 } from '@/lib/bookingEngineLocalConfig';
+import { supabase } from '@/lib/supabaseClient';
 
 type ReservationStatus = BookingEngineReservationStatus;
 type EmailTemplateId = BookingEngineEmailTemplateId;
@@ -44,7 +42,36 @@ type ReservationSortState = {
   direction: 'asc' | 'desc';
 };
 
-type WebsiteReservation = BookingEngineWebsiteReservation;
+type WebsiteReservation = BookingEngineWebsiteReservation & {
+  supabaseId: string;
+  rawStatus: string;
+};
+
+type BeReservationRow = {
+  id: string;
+  site_id: string;
+  reservation_id?: string | null;
+  reservation_code?: string | null;
+  customer_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  pickup_location?: string | null;
+  return_location?: string | null;
+  pickup_date?: string | null;
+  pickup_time?: string | null;
+  return_date?: string | null;
+  return_time?: string | null;
+  vehicle_category?: string | null;
+  extras?: BookingEngineWebsiteReservation['extras'] | null;
+  coupon?: { code?: string; discount?: number } | null;
+  payment_method?: string | null;
+  total_price?: string | number | null;
+  status?: string | null;
+  notes?: string | null;
+  flight_number?: string | null;
+  hotel_villa_apartment?: string | null;
+  created_at?: string | null;
+};
 
 const statusStyles: Record<ReservationStatus, string> = {
   'New Request': 'border-sky-200 bg-sky-50 text-sky-800',
@@ -75,6 +102,112 @@ const formatDate = (value: string) => {
 
 const formatMoney = (value: number) =>
   new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(value);
+
+const mapDbStatusToBoardStatus = (status?: string | null): ReservationStatus => {
+  const normalized = (status || '').toUpperCase();
+  if (normalized === 'CANCELLED') return 'Cancelled';
+  if (normalized === 'PROCESSED' || normalized === 'READY' || normalized === 'CONFIRMED') {
+    return 'Ready';
+  }
+  if (normalized === 'ON_REQUEST' || normalized === 'UNDER_REVIEW') return 'Under Review';
+  return 'New Request';
+};
+
+const mapBoardStatusToDbStatus = (status: ReservationStatus, processed: boolean) => {
+  if (status === 'Cancelled') return 'CANCELLED';
+  if (processed || status === 'Ready') return 'PROCESSED';
+  if (status === 'Under Review') return 'ON_REQUEST';
+  return 'PENDING';
+};
+
+const isProcessedDbStatus = (status?: string | null) => {
+  const normalized = (status || '').toUpperCase();
+  return normalized === 'PROCESSED' || normalized === 'READY' || normalized === 'CONFIRMED' || normalized === 'CANCELLED';
+};
+
+const parseVehicleCategory = (value?: string | null) => {
+  const text = value || '';
+  const [carName, groupPart] = text.split(' / Group ');
+  return {
+    carName: (carName || text).trim(),
+    groupCode: (groupPart || '').trim(),
+  };
+};
+
+const reservationPayload = (reservation: WebsiteReservation, status = reservation.rawStatus) => ({
+  reservation_id: reservation.id,
+  customer_name: reservation.customerName.trim(),
+  email: reservation.email.trim(),
+  phone: (reservation.fullPhone || reservation.phone).trim(),
+  pickup_location: reservation.pickupLocation.trim(),
+  return_location: reservation.returnLocation.trim(),
+  pickup_date: reservation.pickupDate,
+  pickup_time: reservation.pickupTime,
+  return_date: reservation.returnDate,
+  return_time: reservation.returnTime,
+  vehicle_category: `${reservation.carName.trim()} / Group ${reservation.groupCode.trim().toUpperCase()}`,
+  extras: reservation.extras,
+  coupon: reservation.couponCode
+    ? { code: reservation.couponCode, discount: reservation.couponDiscount }
+    : null,
+  payment_method: reservation.paymentMethod.trim(),
+  total_price: reservation.total,
+  status,
+  notes: reservation.notes.trim(),
+  flight_number: reservation.flightNumber.trim(),
+  hotel_villa_apartment: (reservation.hotelVillaApartment || reservation.hotelRoom).trim(),
+});
+
+const mapBeReservation = (row: BeReservationRow): WebsiteReservation => {
+  const status = row.status || 'PENDING';
+  const boardStatus = mapDbStatusToBoardStatus(status);
+  const processed = isProcessedDbStatus(status);
+  const vehicle = parseVehicleCategory(row.vehicle_category);
+  const extras = Array.isArray(row.extras) ? row.extras : [];
+  const coupon = row.coupon || null;
+
+  return {
+    supabaseId: row.id,
+    rawStatus: status,
+    id: row.reservation_id || row.reservation_code || row.id,
+    customerName: row.customer_name || '',
+    phone: row.phone || '',
+    countryCode: '',
+    fullPhone: row.phone || '',
+    email: row.email || '',
+    dateOfBirth: '',
+    hotelRoom: row.hotel_villa_apartment || '',
+    hotelVillaApartment: row.hotel_villa_apartment || '',
+    flightNumber: row.flight_number || '',
+    notes: row.notes || '',
+    pickupLocation: row.pickup_location || '',
+    returnLocation: row.return_location || '',
+    pickupDate: row.pickup_date || '',
+    pickupTime: row.pickup_time || '',
+    returnDate: row.return_date || '',
+    returnTime: row.return_time || '',
+    carName: vehicle.carName,
+    groupCode: vehicle.groupCode,
+    rentalDays: 1,
+    rentalAmount: Number(row.total_price || 0),
+    extras,
+    couponCode: coupon?.code || '',
+    couponDiscount: Number(coupon?.discount || 0),
+    customFields: [],
+    paymentMethod: row.payment_method || '',
+    total: Number(row.total_price || 0),
+    status: boardStatus,
+    createdAt: row.created_at || new Date().toISOString(),
+    processed,
+    customerEmailTemplateId:
+      boardStatus === 'Under Review' ? 'customerOnRequestReceived' : 'customerBookingConfirmed',
+    customerEmailTemplateLabel:
+      boardStatus === 'Under Review' ? 'Customer On Request Received' : 'Customer Booking Confirmed',
+    adminEmailPreviewCreated: true,
+    customerEmailPreviewCreated: true,
+    emailStatus: 'Preview only / Not sent',
+  };
+};
 
 const replaceEmailVariables = (template: string, reservation: WebsiteReservation) => {
   const replacements: Record<string, string> = {
@@ -143,9 +276,10 @@ const sortReservations = (
   });
 
 export default function AutoClubRhodesReservationsBoard() {
-  const [reservations, setReservations] = useState<WebsiteReservation[]>(() =>
-    loadBookingEngineReservations(),
-  );
+  const [reservations, setReservations] = useState<WebsiteReservation[]>([]);
+  const [beSiteId, setBeSiteId] = useState('');
+  const [reservationsLoading, setReservationsLoading] = useState(true);
+  const [reservationsError, setReservationsError] = useState('');
   const [editingReservationId, setEditingReservationId] = useState<string | null>(null);
   const [reservationDraft, setReservationDraft] = useState<WebsiteReservation | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -163,13 +297,64 @@ export default function AutoClubRhodesReservationsBoard() {
     direction: 'desc',
   });
 
-  useEffect(
-    () =>
-      subscribeBookingEngineReservations(() => {
-        setReservations(loadBookingEngineReservations());
-      }),
-    [],
-  );
+  const loadSupabaseReservations = async () => {
+    setReservationsLoading(true);
+    setReservationsError('');
+
+    const { data: sites, error: siteError } = await supabase
+      .from('be_sites')
+      .select('id, domain')
+      .order('domain', { ascending: true });
+
+    if (siteError) {
+      console.error('Website reservations site load failed:', {
+        message: siteError.message,
+        code: siteError.code,
+        details: siteError.details,
+        hint: siteError.hint,
+      });
+      setReservationsError('Failed to load Booking Engine site from Supabase.');
+      setReservationsLoading(false);
+      return;
+    }
+
+    const site = ((sites || []) as Array<{ id: string; domain: string | null }>).find(
+      (item) => item.domain === 'autoclub-rhodes.com',
+    );
+
+    if (!site?.id) {
+      setReservationsError('No Booking Engine site found for autoclub-rhodes.com.');
+      setReservationsLoading(false);
+      return;
+    }
+
+    setBeSiteId(site.id);
+
+    const { data, error } = await supabase
+      .from('be_reservations')
+      .select('*')
+      .eq('site_id', site.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Website reservations load failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setReservationsError('Failed to load reservations from Supabase.');
+      setReservationsLoading(false);
+      return;
+    }
+
+    setReservations(((data || []) as BeReservationRow[]).map(mapBeReservation));
+    setReservationsLoading(false);
+  };
+
+  useEffect(() => {
+    void loadSupabaseReservations();
+  }, []);
 
   useEffect(
     () =>
@@ -203,17 +388,35 @@ export default function AutoClubRhodesReservationsBoard() {
     cancelled: reservations.filter((reservation) => reservation.status === 'Cancelled').length,
   };
 
-  const updateReservation = (
+  const updateReservation = async (
     reservationId: string,
     patch: Partial<Pick<WebsiteReservation, 'status' | 'processed'>>,
   ) => {
-    setReservations((current) => {
-      const nextReservations = current.map((reservation) =>
-        reservation.id === reservationId ? { ...reservation, ...patch } : reservation,
-      );
-      saveBookingEngineReservations(nextReservations);
-      return nextReservations;
-    });
+    const reservation = reservations.find((item) => item.id === reservationId);
+    if (!reservation || !beSiteId) return;
+
+    const nextStatus = patch.status || reservation.status;
+    const nextProcessed = patch.processed ?? reservation.processed;
+    const dbStatus = mapBoardStatusToDbStatus(nextStatus, nextProcessed);
+
+    const { error } = await supabase
+      .from('be_reservations')
+      .update({ status: dbStatus })
+      .eq('id', reservation.supabaseId)
+      .eq('site_id', beSiteId);
+
+    if (error) {
+      console.error('Website reservation status update failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setReservationsError('Failed to update reservation in Supabase.');
+      return;
+    }
+
+    await loadSupabaseReservations();
   };
 
   const openEditor = (reservation: WebsiteReservation) => {
@@ -226,43 +429,74 @@ export default function AutoClubRhodesReservationsBoard() {
     setReservationDraft(null);
   };
 
-  const saveEditedReservation = () => {
-    if (!editingReservationId || !reservationDraft?.customerName.trim()) return;
+  const saveEditedReservation = async () => {
+    if (!editingReservationId || !reservationDraft?.customerName.trim() || !beSiteId) return;
 
-    setReservations((current) => {
-      const nextReservations = current.map((reservation) =>
-        reservation.id === editingReservationId
-          ? {
-              ...reservationDraft,
-              customerName: reservationDraft.customerName.trim(),
-              phone: reservationDraft.phone.trim(),
-              fullPhone: reservationDraft.fullPhone?.trim() || reservationDraft.phone.trim(),
-              countryCode: reservationDraft.countryCode?.trim() || '',
-              email: reservationDraft.email.trim(),
-              dateOfBirth: reservationDraft.dateOfBirth?.trim() || '',
-              hotelVillaApartment: reservationDraft.hotelVillaApartment?.trim() || reservationDraft.hotelRoom.trim(),
-              hotelRoom: reservationDraft.hotelRoom.trim(),
-              carName: reservationDraft.carName.trim(),
-              groupCode: reservationDraft.groupCode.trim().toUpperCase(),
-              pickupLocation: reservationDraft.pickupLocation.trim(),
-              returnLocation: reservationDraft.returnLocation.trim(),
-              paymentMethod: reservationDraft.paymentMethod.trim(),
-              notes: reservationDraft.notes.trim(),
-            }
-          : reservation,
-      );
-      saveBookingEngineReservations(nextReservations);
-      return nextReservations;
-    });
+    const dbStatus = mapBoardStatusToDbStatus(reservationDraft.status, reservationDraft.processed);
+    const payload = reservationPayload(
+      {
+        ...reservationDraft,
+        customerName: reservationDraft.customerName.trim(),
+        phone: reservationDraft.phone.trim(),
+        fullPhone: reservationDraft.fullPhone?.trim() || reservationDraft.phone.trim(),
+        countryCode: reservationDraft.countryCode?.trim() || '',
+        email: reservationDraft.email.trim(),
+        dateOfBirth: reservationDraft.dateOfBirth?.trim() || '',
+        hotelVillaApartment: reservationDraft.hotelVillaApartment?.trim() || reservationDraft.hotelRoom.trim(),
+        hotelRoom: reservationDraft.hotelRoom.trim(),
+        carName: reservationDraft.carName.trim(),
+        groupCode: reservationDraft.groupCode.trim().toUpperCase(),
+        pickupLocation: reservationDraft.pickupLocation.trim(),
+        returnLocation: reservationDraft.returnLocation.trim(),
+        paymentMethod: reservationDraft.paymentMethod.trim(),
+        notes: reservationDraft.notes.trim(),
+      },
+      dbStatus,
+    );
+
+    const { error } = await supabase
+      .from('be_reservations')
+      .update(payload)
+      .eq('id', reservationDraft.supabaseId)
+      .eq('site_id', beSiteId);
+
+    if (error) {
+      console.error('Website reservation save failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setReservationsError('Failed to save reservation to Supabase.');
+      return;
+    }
+
+    await loadSupabaseReservations();
     closeEditor();
   };
 
-  const deleteReservation = (reservationId: string) => {
-    setReservations((current) => {
-      const nextReservations = current.filter((reservation) => reservation.id !== reservationId);
-      saveBookingEngineReservations(nextReservations);
-      return nextReservations;
-    });
+  const deleteReservation = async (reservationId: string) => {
+    const reservation = reservations.find((item) => item.id === reservationId);
+    if (!reservation || !beSiteId) return;
+
+    const { error } = await supabase
+      .from('be_reservations')
+      .delete()
+      .eq('id', reservation.supabaseId)
+      .eq('site_id', beSiteId);
+
+    if (error) {
+      console.error('Website reservation delete failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setReservationsError('Failed to delete reservation from Supabase.');
+      return;
+    }
+
+    await loadSupabaseReservations();
     closeEditor();
     setPendingDeleteId(null);
   };
@@ -303,7 +537,7 @@ export default function AutoClubRhodesReservationsBoard() {
           </h2>
         </div>
         <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-cyan-800">
-          Local preview
+          Supabase live
         </span>
       </header>
 
@@ -329,6 +563,26 @@ export default function AutoClubRhodesReservationsBoard() {
       )}
 
       <div className="min-h-0 flex-1 space-y-3 overflow-auto p-3">
+        {reservationsLoading && (
+          <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-black text-cyan-900">
+            Loading website reservations from Supabase...
+          </div>
+        )}
+        {reservationsError && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-black text-rose-800">
+            <span>{reservationsError}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setReservationsError('');
+                void loadSupabaseReservations();
+              }}
+              className="rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-black text-rose-700"
+            >
+              Retry
+            </button>
+          </div>
+        )}
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <SectionHeading
             title="Νέες κρατήσεις από website"
@@ -418,7 +672,7 @@ export default function AutoClubRhodesReservationsBoard() {
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <SectionHeading
             title="Περασμένες κρατήσεις"
-            description="Reservations already accepted, processed or cancelled in this local preview."
+            description="Reservations already accepted, processed or cancelled in Supabase."
             count={processedReservations.length}
           />
 
@@ -571,7 +825,7 @@ function ReservationEditor({
         <div>
           <p className="font-mono text-xs font-black text-cyan-700">{draft.id}</p>
           <h3 className="mt-1 text-xl font-black text-slate-950">View / Edit reservation</h3>
-          <p className="mt-1 text-xs text-slate-500">Local state only.</p>
+          <p className="mt-1 text-xs text-slate-500">Loaded from Supabase.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -758,7 +1012,7 @@ function ReservationEditor({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-black text-slate-900">Submitted extras</p>
-                <p className="mt-0.5 text-xs text-slate-500">Stored with the local website reservation.</p>
+                <p className="mt-0.5 text-xs text-slate-500">Stored with the Supabase website reservation.</p>
               </div>
               <span className="text-sm font-black text-slate-900">
                 {formatMoney(draft.extras.reduce((sum, extra) => sum + extra.total, 0))}
@@ -1307,7 +1561,7 @@ function DeleteConfirmation({
             Are you sure you want to delete this reservation?
           </h3>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            This removes the local preview record only.
+            This removes the Supabase website reservation.
           </p>
         </div>
         <footer className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">

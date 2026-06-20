@@ -708,6 +708,7 @@ export default function BookingEngineAdmin() {
   const [groupsError, setGroupsError] = useState('');
   const [cars, setCars] = useState<BookingEngineCar[]>([]);
   const [carsLoading, setCarsLoading] = useState(false);
+  const [carsSaving, setCarsSaving] = useState(false);
   const [carsError, setCarsError] = useState('');
   const [locations, setLocations] = useState<BookingLocation[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
@@ -1533,29 +1534,42 @@ export default function BookingEngineAdmin() {
   const saveCar = async () => {
     const name = carDraft.name.trim();
     const groupCode = carDraft.groupCode;
-    if (!name || !groupCode || !beSiteId) {
+    if (!name || !groupCode || !beSiteId || carsSaving) {
       if (!beSiteId) setCarsError('Failed to load cars from Supabase');
       return;
     }
 
     const payload = carPayload({ ...carDraft, name, groupCode }, beSiteId);
-    const { error } = editingCarId
-      ? await supabase.from('be_vehicle_categories').update(payload).eq('id', editingCarId)
+    console.log('CAR SAVE PAYLOAD', payload);
+    setCarsSaving(true);
+    setCarsError('');
+
+    const result = editingCarId
+      ? await supabase
+          .from('be_vehicle_categories')
+          .update(payload)
+          .eq('id', editingCarId)
+          .eq('site_id', beSiteId)
       : await supabase.from('be_vehicle_categories').insert(payload);
+    const { data, error } = result;
+
+    console.log('CAR SAVE RESULT', data);
 
     if (error) {
-      console.error('Booking Engine car save failed:', {
+      console.error('CAR SAVE ERROR', {
         message: error.message,
         code: error.code,
         details: error.details,
         hint: error.hint,
       });
       setCarsError('Failed to save car to Supabase');
+      setCarsSaving(false);
       return;
     }
 
     closeCarModal();
     await loadSupabaseCars(beSiteId);
+    setCarsSaving(false);
   };
 
   const deleteCar = async (carId: string) => {
@@ -1564,7 +1578,11 @@ export default function BookingEngineAdmin() {
       return;
     }
 
-    const { error } = await supabase.from('be_vehicle_categories').delete().eq('id', carId);
+    const { error } = await supabase
+      .from('be_vehicle_categories')
+      .delete()
+      .eq('id', carId)
+      .eq('site_id', beSiteId);
 
     if (error) {
       console.error('Booking Engine car delete failed:', {
@@ -1590,6 +1608,7 @@ export default function BookingEngineAdmin() {
     const { error } = await supabase
       .from('be_vehicle_categories')
       .update({ status })
+      .eq('site_id', beSiteId)
       .in('id', carIds);
 
     if (error) {
@@ -2745,6 +2764,7 @@ export default function BookingEngineAdmin() {
         <CarModal
           draft={carDraft}
           editing={Boolean(editingCarId)}
+          saving={carsSaving}
           activeGroups={activeGroups}
           activeLocations={activeLocations}
           features={features}
@@ -5004,6 +5024,7 @@ function GroupModal({
 function CarModal({
   draft,
   editing,
+  saving,
   activeGroups,
   activeLocations,
   features,
@@ -5015,6 +5036,7 @@ function CarModal({
 }: {
   draft: CarDraft;
   editing: boolean;
+  saving: boolean;
   activeGroups: BookingGroup[];
   activeLocations: BookingLocation[];
   features: BookingFeature[];
@@ -5031,11 +5053,11 @@ function CarModal({
       onClose={onClose}
       footer={
         <ModalActions
-          note="Local preview only. Nothing is uploaded or saved remotely."
+          note="Saved live to Supabase vehicle categories."
           onClose={onClose}
           onSave={onSave}
-          saveLabel={editing ? 'Save changes' : 'Add record'}
-          disabled={!draft.name.trim() || !draft.groupCode.trim()}
+          saveLabel={saving ? 'Saving...' : editing ? 'Save changes' : 'Add record'}
+          disabled={saving || !draft.name.trim() || !draft.groupCode.trim()}
         />
       }
     >
