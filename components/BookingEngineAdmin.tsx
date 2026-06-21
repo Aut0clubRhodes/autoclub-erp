@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import {
   CalendarRange,
   Car,
@@ -28,10 +28,11 @@ import {
   type BookingEngineEmailSettings,
   type BookingEngineEmailTemplateId,
   type CheckoutFieldType,
-  loadBookingEngineConfig,
+  normalizeBookingEngineCheckoutFields,
   resetBookingEngineConfig,
   saveBookingEngineConfig,
 } from '@/lib/bookingEngineLocalConfig';
+import { bookingEngineEmailTemplateOrder } from '@/lib/bookingEngineEmailEngine';
 import { supabase } from '@/lib/supabaseClient';
 
 type AdminTabId =
@@ -176,6 +177,19 @@ type BeCouponRow = {
   usage_limit?: string | number | null;
   usageLimit?: string | number | null;
   status?: SeasonStatus | string | null;
+};
+
+type BePaymentMethodRow = {
+  id: string | number;
+  name?: string | null;
+  type?: string | null;
+  description?: string | null;
+  deposit_required?: boolean | null;
+  depositRequired?: boolean | null;
+  deposit_amount?: string | number | null;
+  depositAmount?: string | number | null;
+  status?: string | null;
+  active?: boolean | null;
 };
 
 type BeBookingSettingsRow = {
@@ -455,25 +469,12 @@ const initialSiteSettings: SiteSettings = {
   internalNotes: '',
 };
 
-const lockedEmailTemplateIds: BookingEngineEmailTemplateId[] = [
-  'adminNewReservation',
-  'customerBookingConfirmed',
-  'customerOnRequestReceived',
-  'reviewRequest',
-  'paymentReminder',
-  'customEmail',
-];
+const lockedEmailTemplateIds: BookingEngineEmailTemplateId[] = bookingEngineEmailTemplateOrder;
 
 const initialEmailSettings: BookingEmailSettings = {
   adminEmail: '',
   templates: (() => {
     const templates = { ...bookingEngineLocalConfig.emailSettings.templates };
-    templates.customerRequestReceived = {
-      ...templates.customerRequestReceived,
-      active: false,
-      subject: '',
-      message: '',
-    };
     lockedEmailTemplateIds.forEach((templateId) => {
       templates[templateId] = {
         ...templates[templateId],
@@ -486,18 +487,19 @@ const initialEmailSettings: BookingEmailSettings = {
 };
 
 const emailTemplateVariables = [
-  '{customer_name}',
-  '{reservation_id}',
-  '{car_name}',
-  '{group}',
-  '{pickup_date}',
-  '{pickup_time}',
-  '{return_date}',
-  '{return_time}',
-  '{pickup_location}',
-  '{return_location}',
-  '{total_price}',
-  '{payment_method}',
+  '{{customer_name}}',
+  '{{reservation_id}}',
+  '{{car_name}}',
+  '{{group}}',
+  '{{pickup_date}}',
+  '{{pickup_time}}',
+  '{{return_date}}',
+  '{{return_time}}',
+  '{{pickup_location}}',
+  '{{return_location}}',
+  '{{total_price}}',
+  '{{payment_method}}',
+  '{{payment_link}}',
 ];
 
 const sampleGroups: BookingGroup[] = [
@@ -634,7 +636,7 @@ const sampleCoupons: BookingCoupon[] = [
   },
 ];
 
-const samplePaymentMethods: BookingPaymentMethod[] = [
+const defaultPaymentMethods: BookingPaymentMethod[] = [
   {
     id: 'payment-arrival',
     name: 'Pay on Arrival',
@@ -649,6 +651,24 @@ const samplePaymentMethods: BookingPaymentMethod[] = [
     name: 'Payment Link',
     type: 'Payment Link',
     description: 'A secure payment link is sent to the customer.',
+    depositRequired: false,
+    depositAmount: '',
+    status: 'Active',
+  },
+  {
+    id: 'payment-card-delivery',
+    name: 'Card on Delivery',
+    type: 'Card',
+    description: 'Customer pays by card when the vehicle is delivered.',
+    depositRequired: false,
+    depositAmount: '',
+    status: 'Active',
+  },
+  {
+    id: 'payment-bank-transfer',
+    name: 'Bank Transfer',
+    type: 'Bank Transfer',
+    description: 'Customer pays by bank transfer.',
     depositRequired: false,
     depositAmount: '',
     status: 'Active',
@@ -685,22 +705,19 @@ const createDefaultPricingTiers = (): PricingTier[] => [
   { id: localId('pricing-tier'), fromDays: '2', toDays: '3', pricePerDay: '' },
   { id: localId('pricing-tier'), fromDays: '4', toDays: '7', pricePerDay: '' },
 ];
-const initialCheckoutFields: CheckoutFieldSetting[] = [
-  { id: 'fullName', name: 'Full Name', fieldType: 'Text', enabled: true, required: true, label: 'Full Name', builtIn: true },
-  { id: 'email', name: 'Email', fieldType: 'Email', enabled: true, required: true, label: 'Email', builtIn: true },
-  { id: 'dateOfBirth', name: 'Date of Birth', fieldType: 'Text', enabled: true, required: true, label: 'Date of Birth', builtIn: true },
-  { id: 'whatsapp', name: 'Phone / WhatsApp', fieldType: 'Phone', enabled: true, required: true, label: 'Phone / WhatsApp', builtIn: true },
-  { id: 'hotelRoom', name: 'Hotel / Villa / Apartment', fieldType: 'Text', enabled: true, required: false, label: 'Hotel / Villa / Apartment', builtIn: true },
-  { id: 'flightNumber', name: 'Flight Number', fieldType: 'Text', enabled: true, required: false, label: 'Flight Number', builtIn: true },
-  { id: 'notes', name: 'Notes', fieldType: 'Textarea', enabled: true, required: false, label: 'Notes', builtIn: true },
-];
+const checkoutFieldDeleteKeys: Record<string, string[]> = {
+  full_name: ['full_name', 'fullName'],
+  phone: ['phone', 'whatsapp'],
+  date_of_birth: ['date_of_birth', 'dateOfBirth'],
+  accommodation_name: ['accommodation_name', 'hotelRoom'],
+  flight_number: ['flight_number', 'flightNumber'],
+};
 const formatDateOnly = (value: string) => {
   const [year, month, day] = value.split('-');
   return year && month && day ? `${day}/${month}/${year}` : value;
 };
 
 export default function BookingEngineAdmin() {
-  const initialConfig = useMemo(() => loadBookingEngineConfig(), []);
   const [activeTab, setActiveTab] = useState<AdminTabId>(getStoredBookingEngineActiveTab);
   const [groups, setGroups] = useState<BookingGroup[]>([]);
   const [beSiteId, setBeSiteId] = useState<string | null>(null);
@@ -725,7 +742,11 @@ export default function BookingEngineAdmin() {
   const [coupons, setCoupons] = useState<BookingCoupon[]>([]);
   const [couponsLoading, setCouponsLoading] = useState(false);
   const [couponsError, setCouponsError] = useState('');
-  const [paymentMethods, setPaymentMethods] = useState<BookingPaymentMethod[]>(initialConfig.paymentMethods);
+  const [paymentMethods, setPaymentMethods] = useState<BookingPaymentMethod[]>([]);
+  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
+  const [paymentMethodsSaving, setPaymentMethodsSaving] = useState(false);
+  const [paymentMethodsError, setPaymentMethodsError] = useState('');
+  const [paymentMethodsMessage, setPaymentMethodsMessage] = useState('');
 
   const [carModalOpen, setCarModalOpen] = useState(false);
   const [editingCarId, setEditingCarId] = useState<string | null>(null);
@@ -1036,6 +1057,63 @@ export default function BookingEngineAdmin() {
     setCouponsLoading(false);
   };
 
+  const mapBePaymentMethod = (row: BePaymentMethodRow): BookingPaymentMethod => {
+    const normalizedType = (row.type || '').trim().toLowerCase();
+    const type: PaymentMethodType =
+      normalizedType === 'bank transfer' || normalizedType === 'bank_transfer'
+        ? 'Bank Transfer'
+        : normalizedType === 'payment link' || normalizedType === 'payment_link'
+          ? 'Payment Link'
+          : normalizedType === 'card' || normalizedType === 'card on delivery' || normalizedType === 'card_on_delivery'
+            ? 'Card'
+            : normalizedType === 'custom'
+              ? 'Custom'
+              : 'Pay on Arrival';
+    const depositRequired = row.deposit_required ?? row.depositRequired ?? false;
+    const depositAmount = row.deposit_amount ?? row.depositAmount;
+    const isActive =
+      typeof row.active === 'boolean'
+        ? row.active
+        : (row.status || 'Active').trim().toLowerCase() !== 'inactive';
+
+    return {
+      id: String(row.id),
+      name: (row.name || '').trim(),
+      type,
+      description: row.description || '',
+      depositRequired: Boolean(depositRequired),
+      depositAmount: depositAmount === null || depositAmount === undefined ? '' : String(depositAmount),
+      status: isActive ? 'Active' : 'Inactive',
+    };
+  };
+
+  const loadSupabasePaymentMethods = async (siteId: string) => {
+    setPaymentMethodsLoading(true);
+    setPaymentMethodsError('');
+
+    const { data, error } = await supabase
+      .from('be_payment_methods')
+      .select('*')
+      .eq('site_id', siteId)
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('PAYMENT METHODS LOAD ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setPaymentMethods([]);
+      setPaymentMethodsError('Failed to load payment methods from Supabase');
+      setPaymentMethodsLoading(false);
+      return;
+    }
+
+    setPaymentMethods((data || []).map((row) => mapBePaymentMethod(row as BePaymentMethodRow)));
+    setPaymentMethodsLoading(false);
+  };
+
   const mapBeSiteSettings = (row: BeSiteRow): SiteSettings => {
     const defaultLanguage = row.default_language;
     const status = row.status;
@@ -1255,7 +1333,12 @@ export default function BookingEngineAdmin() {
       return;
     }
 
-    setCheckoutFields((data || []).map((row) => mapBeCheckoutField(row as BeCheckoutFieldRow)));
+    setCheckoutFields(
+      normalizeBookingEngineCheckoutFields(
+        (data || []).map((row) => mapBeCheckoutField(row as BeCheckoutFieldRow)),
+        false,
+      ),
+    );
     setCheckoutFieldsLoading(false);
   };
 
@@ -1430,6 +1513,8 @@ export default function BookingEngineAdmin() {
       setExtrasLoading(false);
       setCoupons([]);
       setCouponsLoading(false);
+      setPaymentMethods([]);
+      setPaymentMethodsLoading(false);
       setBookingSettingsLoading(false);
       setCheckoutFields([]);
       setCheckoutFieldsLoading(false);
@@ -1445,6 +1530,7 @@ export default function BookingEngineAdmin() {
     void loadSupabaseFeatures(beSiteId);
     void loadSupabaseExtras(beSiteId);
     void loadSupabaseCoupons(beSiteId);
+    void loadSupabasePaymentMethods(beSiteId);
     void loadSupabaseBookingSettings(beSiteId);
     void loadSupabaseCheckoutFields(beSiteId);
     void loadSupabaseSiteSettings(beSiteId);
@@ -1480,8 +1566,7 @@ export default function BookingEngineAdmin() {
   ]);
 
   const resetDemoData = () => {
-    const nextConfig = resetBookingEngineConfig();
-    setPaymentMethods(nextConfig.paymentMethods);
+    resetBookingEngineConfig();
     setSiteSettingsMessage('');
   };
 
@@ -2246,33 +2331,137 @@ export default function BookingEngineAdmin() {
     setPaymentMethodDraft(emptyPaymentMethodDraft);
   };
 
-  const savePaymentMethod = () => {
+  const paymentMethodPayload = (draft: PaymentMethodDraft, siteId: string) => ({
+    site_id: siteId,
+    name: draft.name.trim(),
+    type: draft.type,
+    description: draft.description.trim(),
+    deposit_required: draft.depositRequired,
+    deposit_amount:
+      draft.depositRequired && draft.depositAmount !== ''
+        ? Number(draft.depositAmount)
+        : null,
+    status: draft.status,
+  });
+
+  const savePaymentMethod = async () => {
     const name = paymentMethodDraft.name.trim();
-    if (!name) return;
+    if (!name || !beSiteId || paymentMethodsSaving) return;
 
-    const nextDraft = {
-      ...paymentMethodDraft,
-      name,
-      description: paymentMethodDraft.description.trim(),
-      depositAmount: paymentMethodDraft.depositRequired ? paymentMethodDraft.depositAmount : '',
-    };
+    const payload = paymentMethodPayload({ ...paymentMethodDraft, name }, beSiteId);
+    setPaymentMethodsSaving(true);
+    setPaymentMethodsError('');
+    setPaymentMethodsMessage('');
+    console.log('PAYMENT METHOD SAVE PAYLOAD', payload);
 
-    setPaymentMethods((current) =>
-      editingPaymentMethodId
-        ? current.map((paymentMethod) =>
-            paymentMethod.id === editingPaymentMethodId
-              ? { id: editingPaymentMethodId, ...nextDraft }
-              : paymentMethod,
-          )
-        : [...current, { id: localId('payment-method'), ...nextDraft }],
-    );
+    const { data, error } = editingPaymentMethodId
+      ? await supabase
+          .from('be_payment_methods')
+          .update(payload)
+          .eq('id', editingPaymentMethodId)
+          .eq('site_id', beSiteId)
+          .select()
+      : await supabase.from('be_payment_methods').insert(payload).select();
+
+    console.log('PAYMENT METHOD SAVE RESULT', data);
+
+    if (error) {
+      console.error('PAYMENT METHOD SAVE ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setPaymentMethodsError('Failed to save payment method to Supabase');
+      setPaymentMethodsSaving(false);
+      return;
+    }
+
     closePaymentMethodModal();
+    await loadSupabasePaymentMethods(beSiteId);
+    setPaymentMethodsMessage('Payment method saved to Supabase.');
+    setPaymentMethodsSaving(false);
   };
 
-  const deletePaymentMethod = (paymentMethodId: string) => {
-    setPaymentMethods((current) =>
-      current.filter((paymentMethod) => paymentMethod.id !== paymentMethodId),
+  const deletePaymentMethod = async (paymentMethodId: string) => {
+    if (!beSiteId) return;
+
+    setPaymentMethodsError('');
+    setPaymentMethodsMessage('');
+    console.log('PAYMENT METHOD DELETE ID', paymentMethodId);
+    const { data, error } = await supabase
+      .from('be_payment_methods')
+      .delete()
+      .eq('id', paymentMethodId)
+      .eq('site_id', beSiteId)
+      .select();
+
+    console.log('PAYMENT METHOD DELETE RESULT', data);
+
+    if (error) {
+      console.error('PAYMENT METHOD DELETE ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setPaymentMethodsError('Failed to delete payment method from Supabase');
+      return;
+    }
+
+    await loadSupabasePaymentMethods(beSiteId);
+    setPaymentMethodsMessage('Payment method deleted from Supabase.');
+  };
+
+  const restoreDefaultPaymentMethods = async () => {
+    if (!beSiteId || paymentMethodsSaving) return;
+
+    const existingNames = new Set(paymentMethods.map((method) => method.name.trim().toLowerCase()));
+    const missingMethods = defaultPaymentMethods.filter(
+      (method) => !existingNames.has(method.name.toLowerCase()),
     );
+
+    if (missingMethods.length === 0) {
+      setPaymentMethodsMessage('All default payment methods already exist.');
+      return;
+    }
+
+    const payload = missingMethods.map((method) =>
+      paymentMethodPayload(
+        {
+          name: method.name,
+          type: method.type,
+          description: method.description,
+          depositRequired: method.depositRequired,
+          depositAmount: method.depositAmount,
+          status: method.status,
+        },
+        beSiteId,
+      ),
+    );
+    setPaymentMethodsSaving(true);
+    setPaymentMethodsError('');
+    setPaymentMethodsMessage('');
+    console.log('PAYMENT METHODS RESTORE PAYLOAD', payload);
+
+    const { data, error } = await supabase.from('be_payment_methods').insert(payload).select();
+    console.log('PAYMENT METHODS RESTORE RESULT', data);
+
+    if (error) {
+      console.error('PAYMENT METHODS RESTORE ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setPaymentMethodsError('Failed to restore default payment methods');
+      setPaymentMethodsSaving(false);
+      return;
+    }
+
+    await loadSupabasePaymentMethods(beSiteId);
+    setPaymentMethodsMessage('Missing default payment methods restored.');
+    setPaymentMethodsSaving(false);
   };
 
   const emailTemplatePayload = (
@@ -2416,8 +2605,14 @@ export default function BookingEngineAdmin() {
   };
 
   const deleteCheckoutField = async (field: CheckoutFieldSetting) => {
-    if (!beSiteId || field.builtIn) {
-      if (!beSiteId) setCheckoutFieldsError('Failed to load checkout fields from Supabase');
+    if (field.id.startsWith('checkout-field-')) {
+      setCheckoutFields((current) => current.filter((item) => item.id !== field.id));
+      setCheckoutFieldsMessage('');
+      return;
+    }
+
+    if (!beSiteId) {
+      setCheckoutFieldsError('Failed to load checkout fields from Supabase');
       return;
     }
 
@@ -2426,7 +2621,7 @@ export default function BookingEngineAdmin() {
       .from('be_checkout_fields')
       .delete()
       .eq('site_id', beSiteId)
-      .eq('field_key', field.id)
+      .in('field_key', checkoutFieldDeleteKeys[field.id] || [field.id])
       .select();
 
     console.log('CHECKOUT FIELD DELETE RESULT', data);
@@ -2664,9 +2859,14 @@ export default function BookingEngineAdmin() {
           {activeTab === 'payments' && (
             <PaymentMethodsPanel
               paymentMethods={paymentMethods}
+              loading={paymentMethodsLoading}
+              saving={paymentMethodsSaving}
+              error={paymentMethodsError}
+              message={paymentMethodsMessage}
               onAdd={openNewPaymentMethodModal}
               onEdit={openEditPaymentMethodModal}
               onDelete={deletePaymentMethod}
+              onRestoreDefaults={restoreDefaultPaymentMethods}
             />
           )}
 
@@ -2674,7 +2874,7 @@ export default function BookingEngineAdmin() {
             <BookingSettingsPanel
               settings={bookingEngineSettings}
               adminEmail={emailSettings.adminEmail}
-              sendAdminCopy={emailSettings.templates.adminNewReservation.active}
+              sendAdminCopy={emailSettings.templates.admin_new_confirmed_reservation.active}
               savedMessage={bookingSettingsMessage}
               loading={bookingSettingsLoading}
               error={bookingSettingsError}
@@ -2693,8 +2893,8 @@ export default function BookingEngineAdmin() {
                   ...current,
                   templates: {
                     ...current.templates,
-                    adminNewReservation: {
-                      ...current.templates.adminNewReservation,
+                    admin_new_confirmed_reservation: {
+                      ...current.templates.admin_new_confirmed_reservation,
                       active: adminNotificationActive,
                     },
                   },
@@ -2850,6 +3050,7 @@ export default function BookingEngineAdmin() {
           onDraftChange={setPaymentMethodDraft}
           onClose={closePaymentMethodModal}
           onSave={savePaymentMethod}
+          saving={paymentMethodsSaving}
         />
       )}
       <style jsx global>{`
@@ -3679,23 +3880,58 @@ function CouponsPanel({
 
 function PaymentMethodsPanel({
   paymentMethods,
+  loading,
+  saving,
+  error,
+  message,
   onAdd,
   onEdit,
   onDelete,
+  onRestoreDefaults,
 }: {
   paymentMethods: BookingPaymentMethod[];
+  loading: boolean;
+  saving: boolean;
+  error: string;
+  message: string;
   onAdd: () => void;
   onEdit: (paymentMethod: BookingPaymentMethod) => void;
-  onDelete: (paymentMethodId: string) => void;
+  onDelete: (paymentMethodId: string) => void | Promise<void>;
+  onRestoreDefaults: () => void | Promise<void>;
 }) {
   return (
     <section className="min-w-[880px]">
       <PanelHeading
         title="Payment methods"
-        description="Local checkout payment choices for the future booking engine."
+        description="Supabase payment choices shown in the public booking checkout."
         buttonLabel="Add Payment Method"
         onAdd={onAdd}
       />
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={onRestoreDefaults}
+          disabled={loading || saving}
+          className="rounded-lg border border-cyan-700 bg-white px-3 py-2 text-xs font-black text-cyan-800 transition hover:bg-cyan-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Restore Default Payment Methods
+        </button>
+        {message && (
+          <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
+            {message}
+          </span>
+        )}
+      </div>
+      {error && (
+        <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-800">
+          {error}
+        </div>
+      )}
+      {loading && (
+        <div className="mb-3 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800">
+          Loading payment methods from Supabase...
+        </div>
+      )}
       <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a111b]">
         <div className="grid grid-cols-[minmax(180px,1fr)_170px_minmax(260px,1.4fr)_180px_110px_90px] border-b border-white/[0.08] bg-white/[0.035] px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-500">
           <span>Name</span>
@@ -4045,24 +4281,25 @@ function CheckoutFieldsPanel({
       )}
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid grid-cols-[minmax(180px,0.8fr)_110px_110px_minmax(260px,1.2fr)_130px] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-black uppercase tracking-[0.08em] text-slate-600">
+        <div className="grid grid-cols-[minmax(150px,0.8fr)_88px_92px_minmax(210px,1.1fr)_140px_82px] gap-2.5 border-b border-slate-200 bg-slate-50 px-3.5 py-2 text-[10px] font-black uppercase tracking-[0.06em] text-slate-600">
           <span>Customer field</span>
           <span>Enabled</span>
           <span>Required</span>
           <span>Custom label</span>
+          <span>Type</span>
           <span className="text-right">Actions</span>
         </div>
         <div className="divide-y divide-slate-200">
           {fields.map((field) => (
             <Fragment key={field.id}>
-              <div className="grid grid-cols-[minmax(180px,0.8fr)_110px_110px_minmax(260px,1.2fr)_130px] items-center gap-4 px-5 py-4">
+              <div className="grid grid-cols-[minmax(150px,0.8fr)_88px_92px_minmax(210px,1.1fr)_140px_82px] items-center gap-2.5 px-3.5 py-2">
                 <div>
-                  <p className="text-sm font-black text-slate-950">{field.name}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    {field.builtIn ? 'Built-in field' : `Custom field key: ${field.id}`}
+                  <p className="text-xs font-black text-slate-950">{field.name}</p>
+                  <p className="mt-0.5 truncate font-mono text-[9px] text-slate-500">
+                    {field.id}
                   </p>
                 </div>
-                <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
                   <input
                     type="checkbox"
                     checked={field.enabled}
@@ -4077,7 +4314,7 @@ function CheckoutFieldsPanel({
                   />
                   Show
                 </label>
-                <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
                   <input
                     type="checkbox"
                     checked={field.required}
@@ -4089,53 +4326,44 @@ function CheckoutFieldsPanel({
                 </label>
                 <input
                   value={field.label}
-                  disabled={!field.enabled}
                   onChange={(event) =>
                     updateField(field.id, {
                       label: event.target.value,
                       name: field.builtIn ? field.name : event.target.value || 'Custom Field',
                     })
                   }
-                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 disabled:bg-slate-100 disabled:text-slate-400"
+                  className="h-8 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
                 />
+                <select
+                  value={field.fieldType}
+                  disabled={Boolean(field.builtIn)}
+                  title={field.builtIn ? 'Core field type is fixed for checkout matching.' : 'Change field type'}
+                  onChange={(event) =>
+                    updateField(field.id, {
+                      fieldType: event.target.value as CheckoutFieldType,
+                      options: event.target.value === 'Select' ? field.options || [] : [],
+                    })
+                  }
+                  className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs font-bold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 disabled:bg-slate-100 disabled:text-slate-500"
+                >
+                  {['Text', 'Textarea', 'Number', 'Email', 'Phone', 'Select'].map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
                 <div className="flex justify-end">
-                  {!field.builtIn ? (
-                    <button
-                      type="button"
-                      onClick={() => deleteCustomField(field.id)}
-                      className="rounded-lg border border-rose-600 bg-rose-600 px-3 py-2 text-xs font-black text-white transition hover:bg-rose-700"
-                    >
-                      Delete
-                    </button>
-                  ) : (
-                    <span className="text-xs font-bold text-slate-400">Locked</span>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => deleteCustomField(field.id)}
+                    className="h-8 rounded-md border border-rose-600 bg-rose-600 px-2.5 text-[10px] font-black text-white transition hover:bg-rose-700"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
-              {!field.builtIn && (
-                <div className="grid gap-3 bg-slate-50 px-5 pb-4 pt-0 sm:grid-cols-[180px_1fr]">
-                  <label className="block">
-                    <FieldLabel>Field Type</FieldLabel>
-                    <select
-                      value={field.fieldType}
-                      onChange={(event) =>
-                        updateField(field.id, {
-                          fieldType: event.target.value as CheckoutFieldType,
-                          options: event.target.value === 'Select' ? field.options || [] : [],
-                        })
-                      }
-                      className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                    >
-                      {['Text', 'Textarea', 'Number', 'Email', 'Phone', 'Select'].map((type) => (
-                        <option key={type} value={type}>
-                          {type}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {field.fieldType === 'Select' && (
+              {field.fieldType === 'Select' && field.id !== 'country' && (
+                <div className="bg-slate-50 px-3.5 pb-2.5 pt-1">
                     <label className="block">
-                      <FieldLabel>Options</FieldLabel>
+                      <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">Options</span>
                       <input
                         value={(field.options || []).join(', ')}
                         onChange={(event) =>
@@ -4147,10 +4375,9 @@ function CheckoutFieldsPanel({
                           })
                         }
                         placeholder="Option 1, Option 2, Option 3"
-                        className="mt-1.5 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                        className="mt-1 h-8 w-full rounded-md border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
                       />
                     </label>
-                  )}
                 </div>
               )}
             </Fragment>
@@ -4437,52 +4664,65 @@ function EmailsPanel({
     Partial<Record<EmailTemplateFieldKey, HTMLInputElement | HTMLTextAreaElement>>
   >({});
   const focusedTemplateFieldRef = useRef<EmailTemplateFieldKey | null>(null);
-  const activeMessageFieldRef = useRef<EmailTemplateFieldKey>('adminNewReservation:message');
+  const activeMessageFieldRef = useRef<EmailTemplateFieldKey>('admin_new_confirmed_reservation:message');
   const [manualPreviewMessage, setManualPreviewMessage] = useState('');
   const [previewTemplateId, setPreviewTemplateId] =
     useState<BookingEngineEmailTemplateId | null>(null);
   const [openTemplateId, setOpenTemplateId] = useState<BookingEngineEmailTemplateId | null>(null);
   const templateOrder: BookingEngineEmailTemplateId[] = [
-    'adminNewReservation',
-    'customerBookingConfirmed',
-    'customerOnRequestReceived',
-    'reviewRequest',
-    'paymentReminder',
+    'admin_new_confirmed_reservation',
+    'customer_confirmed_reservation',
+    'admin_new_onrequest_reservation',
+    'customer_onrequest_received',
+    'customer_confirmed_after_review',
+    'customer_payment_request',
+    'customer_reminder',
+    'customer_cancellation',
     'customEmail',
   ];
   const templateMeta: Record<
     BookingEngineEmailTemplateId,
     { purpose: string; badge: string; icon: LucideIcon }
   > = {
-    adminNewReservation: {
-      purpose: 'Admin receives every new website reservation preview.',
+    admin_new_confirmed_reservation: {
+      purpose: 'Admin receives every new confirmed website reservation.',
       badge: 'Automatic',
       icon: Mail,
     },
-    customerRequestReceived: {
-      purpose: 'Legacy hidden template. OPEN now uses booking confirmation.',
-      badge: 'Hidden',
-      icon: Mail,
-    },
-    customerBookingConfirmed: {
-      purpose: 'OPEN automatic. ON REQUEST uses it when admin confirms later.',
-      badge: 'Automatic / Confirm',
+    customer_confirmed_reservation: {
+      purpose: 'Customer receives this automatically for OPEN cars.',
+      badge: 'Automatic',
       icon: Check,
     },
-    customerOnRequestReceived: {
+    admin_new_onrequest_reservation: {
+      purpose: 'Admin receives every new ON REQUEST website reservation.',
+      badge: 'Automatic',
+      icon: Mail,
+    },
+    customer_onrequest_received: {
       purpose: 'Customer receives this automatically for ON REQUEST cars.',
       badge: 'Automatic',
       icon: CalendarRange,
     },
-    reviewRequest: {
-      purpose: 'Sent automatically one day after return.',
-      badge: 'Automatic +1 day',
-      icon: Mail,
+    customer_confirmed_after_review: {
+      purpose: 'Sent when admin confirms an ON REQUEST reservation.',
+      badge: 'Confirm action',
+      icon: Check,
     },
-    paymentReminder: {
-      purpose: 'Manual payment reminder template for reservation follow-up.',
+    customer_payment_request: {
+      purpose: 'Manual payment link/request template.',
       badge: 'Manual',
       icon: CreditCard,
+    },
+    customer_reminder: {
+      purpose: 'Manual reservation reminder template.',
+      badge: 'Manual',
+      icon: Mail,
+    },
+    customer_cancellation: {
+      purpose: 'Sent when a reservation is cancelled.',
+      badge: 'Automatic',
+      icon: Mail,
     },
     customEmail: {
       purpose: 'Manual reusable message for special cases.',
@@ -4543,7 +4783,7 @@ function EmailsPanel({
   };
 
   const showManualPreview = (label: string) => {
-    setManualPreviewMessage(`${label}: manual preview only — email provider not connected yet.`);
+    setManualPreviewMessage(`${label}: manual preview only - live sends run from reservation events.`);
   };
 
   return (
@@ -4701,7 +4941,7 @@ function EmailsPanel({
                         Save
                       </button>
                       <span className="text-[11px] font-semibold text-slate-500">
-                        Preview only - sending is not connected.
+                        Manual preview only - live sends run through Make events.
                       </span>
                     </div>
                   </div>
@@ -4735,9 +4975,9 @@ function EmailsPanel({
             ))}
           </div>
           <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
-            <p className="text-xs font-bold text-amber-900">Local preview only</p>
+            <p className="text-xs font-bold text-amber-900">Supabase templates + Make webhook</p>
             <p className="mt-1 text-[11px] leading-5 text-slate-600">
-              Templates are stored in Supabase. Sending is not connected yet.
+              Templates are stored in Supabase. Reservation events send through the Make email webhook.
             </p>
           </div>
           {loading && (
@@ -4789,34 +5029,32 @@ const sampleEmailReservation = {
   returnLocation: 'Rhodes Airport',
   totalPrice: '€280.00',
   paymentMethod: 'Pay on Arrival',
+  paymentLink: 'https://pay.example.com/ACR-DEMO-0001',
 };
 
-const renderSampleTemplate = (template: string) =>
-  template
-    .split('{customer_name}')
-    .join(sampleEmailReservation.customerName)
-    .split('{reservation_id}')
-    .join(sampleEmailReservation.reservationId)
-    .split('{car_name}')
-    .join(sampleEmailReservation.carName)
-    .split('{group}')
-    .join(sampleEmailReservation.group)
-    .split('{pickup_date}')
-    .join(sampleEmailReservation.pickupDate)
-    .split('{pickup_time}')
-    .join(sampleEmailReservation.pickupTime)
-    .split('{return_date}')
-    .join(sampleEmailReservation.returnDate)
-    .split('{return_time}')
-    .join(sampleEmailReservation.returnTime)
-    .split('{pickup_location}')
-    .join(sampleEmailReservation.pickupLocation)
-    .split('{return_location}')
-    .join(sampleEmailReservation.returnLocation)
-    .split('{total_price}')
-    .join(sampleEmailReservation.totalPrice)
-    .split('{payment_method}')
-    .join(sampleEmailReservation.paymentMethod);
+const renderSampleTemplate = (template: string) => {
+  const replacements: Record<string, string> = {
+    customer_name: sampleEmailReservation.customerName,
+    reservation_id: sampleEmailReservation.reservationId,
+    car_name: sampleEmailReservation.carName,
+    group: sampleEmailReservation.group,
+    pickup_date: sampleEmailReservation.pickupDate,
+    pickup_time: sampleEmailReservation.pickupTime,
+    return_date: sampleEmailReservation.returnDate,
+    return_time: sampleEmailReservation.returnTime,
+    pickup_location: sampleEmailReservation.pickupLocation,
+    return_location: sampleEmailReservation.returnLocation,
+    total_price: sampleEmailReservation.totalPrice,
+    payment_method: sampleEmailReservation.paymentMethod,
+    payment_link: sampleEmailReservation.paymentLink,
+  };
+
+  return Object.entries(replacements).reduce(
+    (message, [key, value]) =>
+      message.split(`{{${key}}}`).join(value).split(`{${key}}`).join(value),
+    template,
+  );
+};
 
 function EmailTemplatePreviewModal({
   template,
@@ -4836,7 +5074,9 @@ function EmailTemplatePreviewModal({
   const [subject, setSubject] = useState(renderSampleTemplate(template.subject));
   const [message, setMessage] = useState(renderSampleTemplate(template.message));
   const recipient =
-    template.id === 'adminNewReservation' ? adminEmail || 'reservations@autoclub-rhodes.com' : 'maria.demo@example.com';
+    template.id === 'admin_new_confirmed_reservation' || template.id === 'admin_new_onrequest_reservation'
+      ? adminEmail || 'reservations@autoclub-rhodes.com'
+      : 'maria.demo@example.com';
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/45 p-5 backdrop-blur-sm">
@@ -5875,12 +6115,14 @@ function CouponModal({
 function PaymentMethodModal({
   draft,
   editing,
+  saving,
   onDraftChange,
   onClose,
   onSave,
 }: {
   draft: PaymentMethodDraft;
   editing: boolean;
+  saving: boolean;
   onDraftChange: (
     draft: PaymentMethodDraft | ((current: PaymentMethodDraft) => PaymentMethodDraft)
   ) => void;
@@ -5897,11 +6139,11 @@ function PaymentMethodModal({
       maxWidth="max-w-2xl"
       footer={
         <ModalActions
-          note="Local UI only. No payment provider or website checkout is connected."
+          note="Saved to Supabase and shown in the public checkout when active."
           onClose={onClose}
           onSave={onSave}
-          saveLabel={editing ? 'Save changes' : 'Add payment method'}
-          disabled={saveDisabled}
+          saveLabel={saving ? 'Saving...' : editing ? 'Save changes' : 'Add payment method'}
+          disabled={saveDisabled || saving}
         />
       }
     >
@@ -6124,7 +6366,7 @@ function ManualEmailButton({ label, onClick }: { label: string; onClick: () => v
         <Mail className="h-3.5 w-3.5" />
         {label}
       </button>
-      <span className="text-[11px] font-semibold text-slate-500">Manual preview only · not connected yet</span>
+      <span className="text-[11px] font-semibold text-slate-500">Manual preview only · Make sends from reservation events</span>
     </div>
   );
 }

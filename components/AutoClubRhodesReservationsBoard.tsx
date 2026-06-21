@@ -19,9 +19,17 @@ import {
 } from '@/lib/bookingEngineReservationsStore';
 import {
   loadBookingEngineConfig,
-  subscribeBookingEngineConfig,
   type BookingEngineEmailTemplateId,
 } from '@/lib/bookingEngineLocalConfig';
+import {
+  buildBookingEmailEventPayload,
+  buildBookingEmailHtml,
+  normalizeSupabaseEmailTemplates,
+  renderBookingEmailTemplate,
+  sendBookingEngineEmailEvent,
+  type BookingEngineEmailEventType,
+  type BookingEngineEmailTemplateRow,
+} from '@/lib/bookingEngineEmailEngine';
 import { supabase } from '@/lib/supabaseClient';
 
 type ReservationStatus = BookingEngineReservationStatus;
@@ -55,6 +63,10 @@ type BeReservationRow = {
   customer_name?: string | null;
   email?: string | null;
   phone?: string | null;
+  country?: string | null;
+  country_code?: string | null;
+  date_of_birth?: string | null;
+  accommodation_name?: string | null;
   pickup_location?: string | null;
   return_location?: string | null;
   pickup_date?: string | null;
@@ -81,18 +93,19 @@ const statusStyles: Record<ReservationStatus, string> = {
 };
 
 const emailVariables = [
-  '{customer_name}',
-  '{reservation_id}',
-  '{car_name}',
-  '{group}',
-  '{pickup_date}',
-  '{pickup_time}',
-  '{return_date}',
-  '{return_time}',
-  '{pickup_location}',
-  '{return_location}',
-  '{total_price}',
-  '{payment_method}',
+  '{{customer_name}}',
+  '{{reservation_id}}',
+  '{{car_name}}',
+  '{{group}}',
+  '{{pickup_date}}',
+  '{{pickup_time}}',
+  '{{return_date}}',
+  '{{return_time}}',
+  '{{pickup_location}}',
+  '{{return_location}}',
+  '{{total_price}}',
+  '{{payment_method}}',
+  '{{payment_link}}',
 ];
 
 const formatDate = (value: string) => {
@@ -139,6 +152,10 @@ const reservationPayload = (reservation: WebsiteReservation, status = reservatio
   customer_name: reservation.customerName.trim(),
   email: reservation.email.trim(),
   phone: (reservation.fullPhone || reservation.phone).trim(),
+  country: reservation.country?.trim() || '',
+  country_code: reservation.countryCode.trim(),
+  date_of_birth: reservation.dateOfBirth || null,
+  accommodation_name: reservation.accommodationName?.trim() || '',
   pickup_location: reservation.pickupLocation.trim(),
   return_location: reservation.returnLocation.trim(),
   pickup_date: reservation.pickupDate,
@@ -155,7 +172,9 @@ const reservationPayload = (reservation: WebsiteReservation, status = reservatio
   status,
   notes: reservation.notes.trim(),
   flight_number: reservation.flightNumber.trim(),
-  hotel_villa_apartment: (reservation.hotelVillaApartment || reservation.hotelRoom).trim(),
+  hotel_villa_apartment: (
+    reservation.accommodationName || reservation.hotelVillaApartment || reservation.hotelRoom
+  ).trim(),
 });
 
 const mapBeReservation = (row: BeReservationRow): WebsiteReservation => {
@@ -171,11 +190,13 @@ const mapBeReservation = (row: BeReservationRow): WebsiteReservation => {
     rawStatus: status,
     id: row.reservation_id || row.reservation_code || row.id,
     customerName: row.customer_name || '',
+    country: row.country || '',
     phone: row.phone || '',
-    countryCode: '',
+    countryCode: row.country_code || '',
     fullPhone: row.phone || '',
     email: row.email || '',
-    dateOfBirth: '',
+    dateOfBirth: row.date_of_birth || '',
+    accommodationName: row.accommodation_name || row.hotel_villa_apartment || '',
     hotelRoom: row.hotel_villa_apartment || '',
     hotelVillaApartment: row.hotel_villa_apartment || '',
     flightNumber: row.flight_number || '',
@@ -200,7 +221,7 @@ const mapBeReservation = (row: BeReservationRow): WebsiteReservation => {
     createdAt: row.created_at || new Date().toISOString(),
     processed,
     customerEmailTemplateId:
-      boardStatus === 'Under Review' ? 'customerOnRequestReceived' : 'customerBookingConfirmed',
+      boardStatus === 'Under Review' ? 'customer_onrequest_received' : 'customer_confirmed_reservation',
     customerEmailTemplateLabel:
       boardStatus === 'Under Review' ? 'Customer On Request Received' : 'Customer Booking Confirmed',
     adminEmailPreviewCreated: true,
@@ -209,27 +230,33 @@ const mapBeReservation = (row: BeReservationRow): WebsiteReservation => {
   };
 };
 
-const replaceEmailVariables = (template: string, reservation: WebsiteReservation) => {
-  const replacements: Record<string, string> = {
-    '{customer_name}': reservation.customerName,
-    '{reservation_id}': reservation.id,
-    '{car_name}': reservation.carName,
-    '{group}': reservation.groupCode,
-    '{pickup_date}': formatDate(reservation.pickupDate),
-    '{pickup_time}': reservation.pickupTime,
-    '{return_date}': formatDate(reservation.returnDate),
-    '{return_time}': reservation.returnTime,
-    '{pickup_location}': reservation.pickupLocation,
-    '{return_location}': reservation.returnLocation,
-    '{total_price}': formatMoney(reservation.total),
-    '{payment_method}': reservation.paymentMethod,
-  };
+const toEmailReservationContext = (reservation: WebsiteReservation) => ({
+  reservationId: reservation.id,
+  customerName: reservation.customerName,
+  email: reservation.email,
+  phone: reservation.fullPhone || reservation.phone,
+  country: reservation.country || '',
+  countryCode: reservation.countryCode || '',
+  dateOfBirth: reservation.dateOfBirth || '',
+  accommodationName:
+    reservation.accommodationName || reservation.hotelVillaApartment || reservation.hotelRoom,
+  flightNumber: reservation.flightNumber,
+  notes: reservation.notes,
+  carName: reservation.carName,
+  group: reservation.groupCode,
+  pickupDate: formatDate(reservation.pickupDate),
+  pickupTime: reservation.pickupTime,
+  returnDate: formatDate(reservation.returnDate),
+  returnTime: reservation.returnTime,
+  pickupLocation: reservation.pickupLocation,
+  returnLocation: reservation.returnLocation,
+  totalPrice: formatMoney(reservation.total),
+  paymentMethod: reservation.paymentMethod,
+  paymentLink: '',
+});
 
-  return Object.entries(replacements).reduce(
-    (message, [variable, value]) => message.split(variable).join(value || ''),
-    template,
-  );
-};
+const replaceEmailVariables = (template: string, reservation: WebsiteReservation) =>
+  renderBookingEmailTemplate(template, toEmailReservationContext(reservation));
 
 const getReservationSortValue = (
   reservation: WebsiteReservation,
@@ -275,6 +302,16 @@ const sortReservations = (
     return sort.direction === 'asc' ? comparison : -comparison;
   });
 
+const getEmailEventTypeForTemplate = (
+  templateId: EmailTemplateId,
+): BookingEngineEmailEventType => {
+  if (templateId === 'customer_payment_request') return 'payment_request';
+  if (templateId === 'customer_reminder') return 'reminder';
+  if (templateId === 'customer_cancellation') return 'cancellation';
+  if (templateId === 'customer_onrequest_received') return 'reservation_onrequest';
+  return 'reservation_confirmed_customer';
+};
+
 export default function AutoClubRhodesReservationsBoard() {
   const [reservations, setReservations] = useState<WebsiteReservation[]>([]);
   const [beSiteId, setBeSiteId] = useState('');
@@ -286,7 +323,7 @@ export default function AutoClubRhodesReservationsBoard() {
   const [emailFeedback, setEmailFeedback] = useState('');
   const [emailReservationId, setEmailReservationId] = useState<string | null>(null);
   const [emailInitialTemplate, setEmailInitialTemplate] =
-    useState<EmailTemplateId>('customerRequestReceived');
+    useState<EmailTemplateId>('customer_confirmed_reservation');
   const [bookingEngineConfig, setBookingEngineConfig] = useState(() => loadBookingEngineConfig());
   const [newRequestsSort, setNewRequestsSort] = useState<ReservationSortState>({
     key: 'customer',
@@ -303,7 +340,7 @@ export default function AutoClubRhodesReservationsBoard() {
 
     const { data: sites, error: siteError } = await supabase
       .from('be_sites')
-      .select('id, domain')
+      .select('*')
       .order('domain', { ascending: true });
 
     if (siteError) {
@@ -318,7 +355,7 @@ export default function AutoClubRhodesReservationsBoard() {
       return;
     }
 
-    const site = ((sites || []) as Array<{ id: string; domain: string | null }>).find(
+    const site = ((sites || []) as Array<Record<string, string | null>>).find(
       (item) => item.domain === 'autoclub-rhodes.com',
     );
 
@@ -329,6 +366,37 @@ export default function AutoClubRhodesReservationsBoard() {
     }
 
     setBeSiteId(site.id);
+
+    const { data: emailRows, error: emailError } = await supabase
+      .from('be_email_templates')
+      .select('*')
+      .eq('site_id', site.id)
+      .order('template_key', { ascending: true });
+
+    if (emailError) {
+      console.error('Website reservations email templates load failed:', {
+        message: emailError.message,
+        code: emailError.code,
+        details: emailError.details,
+        hint: emailError.hint,
+      });
+    } else {
+      setBookingEngineConfig((current) => ({
+        ...current,
+        siteSettings: {
+          ...current.siteSettings,
+          companyName: site.name || current.siteSettings.companyName || 'AutoClub Rhodes',
+          adminEmail: site.admin_email || '',
+          bookingNotificationEmail: site.booking_notification_email || site.admin_email || '',
+          logoImage: site.logo_image || '',
+          whatsappNumber: site.whatsapp_number || '',
+        },
+        emailSettings: normalizeSupabaseEmailTemplates(
+          (emailRows || []) as BookingEngineEmailTemplateRow[],
+          site.booking_notification_email || site.admin_email || '',
+        ),
+      }));
+    }
 
     const { data, error } = await supabase
       .from('be_reservations')
@@ -356,14 +424,6 @@ export default function AutoClubRhodesReservationsBoard() {
     void loadSupabaseReservations();
   }, []);
 
-  useEffect(
-    () =>
-      subscribeBookingEngineConfig(() => {
-        setBookingEngineConfig(loadBookingEngineConfig());
-      }),
-    [],
-  );
-
   const newReservations = useMemo(
     () =>
       sortReservations(
@@ -386,6 +446,31 @@ export default function AutoClubRhodesReservationsBoard() {
     underReview: newReservations.filter((reservation) => reservation.status === 'Under Review').length,
     processed: processedReservations.length,
     cancelled: reservations.filter((reservation) => reservation.status === 'Cancelled').length,
+  };
+
+  const sendReservationEmailEvent = async (
+    reservation: WebsiteReservation,
+    eventType: BookingEngineEmailEventType,
+  ) => {
+    if (!beSiteId) return;
+
+    const payload = buildBookingEmailEventPayload({
+      eventType,
+      templates: bookingEngineConfig.emailSettings.templates,
+      site: {
+        siteId: beSiteId,
+        siteName: bookingEngineConfig.siteSettings.companyName || 'AutoClub Rhodes',
+        adminEmail:
+          bookingEngineConfig.siteSettings.bookingNotificationEmail ||
+          bookingEngineConfig.siteSettings.adminEmail ||
+          bookingEngineConfig.emailSettings.adminEmail,
+        logoImage: bookingEngineConfig.siteSettings.logoImage,
+        whatsappNumber: bookingEngineConfig.siteSettings.whatsappNumber,
+      },
+      reservation: toEmailReservationContext(reservation),
+    });
+
+    await sendBookingEngineEmailEvent(payload);
   };
 
   const updateReservation = async (
@@ -416,6 +501,14 @@ export default function AutoClubRhodesReservationsBoard() {
       return;
     }
 
+    if (
+      reservation.rawStatus.toUpperCase() === 'ON_REQUEST' &&
+      nextProcessed &&
+      nextStatus === 'Ready'
+    ) {
+      await sendReservationEmailEvent(reservation, 'reservation_confirmed_customer');
+    }
+
     await loadSupabaseReservations();
   };
 
@@ -437,12 +530,20 @@ export default function AutoClubRhodesReservationsBoard() {
       {
         ...reservationDraft,
         customerName: reservationDraft.customerName.trim(),
+        country: reservationDraft.country?.trim() || '',
         phone: reservationDraft.phone.trim(),
         fullPhone: reservationDraft.fullPhone?.trim() || reservationDraft.phone.trim(),
         countryCode: reservationDraft.countryCode?.trim() || '',
         email: reservationDraft.email.trim(),
         dateOfBirth: reservationDraft.dateOfBirth?.trim() || '',
-        hotelVillaApartment: reservationDraft.hotelVillaApartment?.trim() || reservationDraft.hotelRoom.trim(),
+        accommodationName:
+          reservationDraft.accommodationName?.trim() ||
+          reservationDraft.hotelVillaApartment?.trim() ||
+          reservationDraft.hotelRoom.trim(),
+        hotelVillaApartment:
+          reservationDraft.accommodationName?.trim() ||
+          reservationDraft.hotelVillaApartment?.trim() ||
+          reservationDraft.hotelRoom.trim(),
         hotelRoom: reservationDraft.hotelRoom.trim(),
         carName: reservationDraft.carName.trim(),
         groupCode: reservationDraft.groupCode.trim().toUpperCase(),
@@ -496,6 +597,7 @@ export default function AutoClubRhodesReservationsBoard() {
       return;
     }
 
+    await sendReservationEmailEvent(reservation, 'cancellation');
     await loadSupabaseReservations();
     closeEditor();
     setPendingDeleteId(null);
@@ -507,7 +609,7 @@ export default function AutoClubRhodesReservationsBoard() {
   ) => {
     const reservation = reservations.find((item) => item.id === reservationId);
     setEmailReservationId(reservationId);
-    setEmailInitialTemplate(template || reservation?.customerEmailTemplateId || 'customerRequestReceived');
+    setEmailInitialTemplate(template || reservation?.customerEmailTemplateId || 'customer_confirmed_reservation');
     setEmailFeedback('');
   };
 
@@ -768,7 +870,7 @@ export default function AutoClubRhodesReservationsBoard() {
           onSave={saveEditedReservation}
           onDelete={() => setPendingDeleteId(reservationDraft.id)}
           onEmail={(template) => openEmailComposer(reservationDraft.id, template)}
-          onEmailPlaceholder={() => setEmailFeedback('Email sending not connected yet.')}
+          onEmailPlaceholder={() => setEmailFeedback('Use the email composer to send through the Make webhook.')}
         />
       )}
 
@@ -781,6 +883,61 @@ export default function AutoClubRhodesReservationsBoard() {
           siteName={bookingEngineConfig.siteSettings.companyName || 'AutoClub Rhodes'}
           logoImage={bookingEngineConfig.siteSettings.logoImage}
           onClose={() => setEmailReservationId(null)}
+          onSend={async ({ recipient, subject, message, templateId }) => {
+            const eventType = getEmailEventTypeForTemplate(templateId);
+            const emailContext = toEmailReservationContext(emailReservation);
+            const siteContext = {
+              siteId: beSiteId,
+              siteName: bookingEngineConfig.siteSettings.companyName || 'AutoClub Rhodes',
+              adminEmail:
+                bookingEngineConfig.siteSettings.bookingNotificationEmail ||
+                bookingEngineConfig.siteSettings.adminEmail ||
+                bookingEngineConfig.emailSettings.adminEmail,
+              logoImage: bookingEngineConfig.siteSettings.logoImage,
+              whatsappNumber: bookingEngineConfig.siteSettings.whatsappNumber,
+            };
+
+            await sendBookingEngineEmailEvent({
+              event_type: eventType,
+              reservation_id: emailContext.reservationId,
+              site_id: beSiteId,
+              full_name: emailContext.customerName,
+              customer_name: emailContext.customerName,
+              email: emailContext.email,
+              phone: emailContext.phone,
+              country: emailContext.country || '',
+              country_code: emailContext.countryCode || '',
+              date_of_birth: emailContext.dateOfBirth || '',
+              accommodation_name: emailContext.accommodationName || '',
+              flight_number: emailContext.flightNumber || '',
+              notes: emailContext.notes || '',
+              to: recipient,
+              subject,
+              html_body: buildBookingEmailHtml({
+                site: siteContext,
+                reservation: emailContext,
+                message,
+              }),
+              emails: [
+                {
+                  to: recipient,
+                  subject,
+                  html_body: buildBookingEmailHtml({
+                    site: siteContext,
+                    reservation: emailContext,
+                    message,
+                  }),
+                  text_body: message,
+                  template_key: templateId,
+                  template_label: bookingEngineConfig.emailSettings.templates[templateId]?.label || templateId,
+                  recipient_type: 'customer',
+                },
+              ],
+              reservation: emailContext,
+            });
+            setEmailFeedback('Email webhook triggered. Check Make for delivery status.');
+            setEmailReservationId(null);
+          }}
           onFeedback={(message) => {
             setEmailFeedback(message);
             setEmailReservationId(null);
@@ -856,6 +1013,11 @@ function ReservationEditor({
             className="md:col-span-2"
           />
           <EditorField
+            label="Country"
+            value={draft.country || ''}
+            onChange={(country) => updateDraft({ country })}
+          />
+          <EditorField
             label="Phone"
             value={draft.phone}
             onChange={(phone) => updateDraft({ phone, fullPhone: `${draft.countryCode || ''} ${phone}`.trim() })}
@@ -887,16 +1049,20 @@ function ReservationEditor({
             onChange={(dateOfBirth) => updateDraft({ dateOfBirth })}
           />
           <EditorField
-            label="Hotel / Villa / Apartment"
-            value={draft.hotelVillaApartment || draft.hotelRoom}
-            onChange={(hotelVillaApartment) =>
-              updateDraft({ hotelVillaApartment, hotelRoom: hotelVillaApartment })
-            }
-          />
-          <EditorField
             label="Flight Number"
             value={draft.flightNumber}
             onChange={(flightNumber) => updateDraft({ flightNumber })}
+          />
+          <EditorField
+            label="Hotel / Villa / Apartment"
+            value={draft.accommodationName || draft.hotelVillaApartment || draft.hotelRoom}
+            onChange={(accommodationName) =>
+              updateDraft({
+                accommodationName,
+                hotelVillaApartment: accommodationName,
+                hotelRoom: accommodationName,
+              })
+            }
           />
           <EditorField
             label="Car"
@@ -1061,7 +1227,7 @@ function ReservationEditor({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-black text-slate-900">Email preview flow</p>
-                <p className="mt-0.5 text-xs text-slate-500">Preview only. Email provider is not connected yet.</p>
+                <p className="mt-0.5 text-xs text-slate-500">Supabase templates. Sends run through the Make email webhook.</p>
               </div>
               <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black text-amber-800">
                 {draft.emailStatus}
@@ -1112,7 +1278,7 @@ function ReservationEditor({
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => onEmail(draft.customerEmailTemplateId || 'customerRequestReceived')}
+                onClick={() => onEmail(draft.customerEmailTemplateId || 'customer_confirmed_reservation')}
                 className="inline-flex h-9 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-3 text-xs font-black text-white transition hover:bg-cyan-800"
               >
                 <Mail className="h-4 w-4" />
@@ -1124,7 +1290,7 @@ function ReservationEditor({
                 className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-700 bg-emerald-700 px-3 text-xs font-black text-white transition hover:bg-emerald-800"
               >
                 <Mail className="h-4 w-4" />
-                Send email placeholder
+                Send email via composer
               </button>
             </div>
           </section>
@@ -1341,6 +1507,7 @@ function EmailComposerModal({
   siteName,
   logoImage,
   onClose,
+  onSend,
   onFeedback,
 }: {
   reservation: WebsiteReservation;
@@ -1349,18 +1516,26 @@ function EmailComposerModal({
   siteName: string;
   logoImage: string;
   onClose: () => void;
+  onSend: (payload: {
+    recipient: string;
+    subject: string;
+    message: string;
+    templateId: EmailTemplateId;
+  }) => void | Promise<void>;
   onFeedback: (message: string) => void;
 }) {
   const customerTemplateOrder: EmailTemplateId[] = [
-    'customerRequestReceived',
-    'customerOnRequestReceived',
-    'customerBookingConfirmed',
-    'paymentReminder',
+    'customer_confirmed_reservation',
+    'customer_onrequest_received',
+    'customer_confirmed_after_review',
+    'customer_payment_request',
+    'customer_reminder',
+    'customer_cancellation',
     'customEmail',
   ];
   const safeInitialTemplate = customerTemplateOrder.includes(initialTemplate)
     ? initialTemplate
-    : 'customerRequestReceived';
+    : 'customer_confirmed_reservation';
   const initialContent = templates[safeInitialTemplate];
   const [templateId, setTemplateId] = useState<EmailTemplateId>(safeInitialTemplate);
   const [recipient, setRecipient] = useState(reservation.email);
@@ -1421,7 +1596,7 @@ function EmailComposerModal({
               <p className="font-mono text-xs font-black text-cyan-700">{reservation.id}</p>
               <h3 className="mt-1 text-xl font-black text-slate-950">Email composer</h3>
               <p className="mt-1 text-xs text-slate-500">
-                {siteName} · Car rental in Rhodes · Local preview only
+                {siteName} · Car rental in Rhodes · Make email webhook
               </p>
             </div>
           </div>
@@ -1527,11 +1702,11 @@ function EmailComposerModal({
           </button>
           <button
             type="button"
-            onClick={() => onFeedback('Email sending not connected yet.')}
+            onClick={() => onSend({ recipient, subject, message, templateId })}
             className="inline-flex h-10 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-4 text-sm font-black text-white transition hover:bg-cyan-800"
           >
             <Mail className="h-4 w-4" />
-            Send email placeholder
+            Send email
           </button>
         </footer>
       </div>

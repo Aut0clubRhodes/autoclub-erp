@@ -24,11 +24,13 @@ export type BookingEngineReservationCustomField = {
 export type BookingEngineWebsiteReservation = {
   id: string;
   customerName: string;
+  country?: string;
   phone: string;
   countryCode: string;
   fullPhone: string;
   email: string;
   dateOfBirth: string;
+  accommodationName?: string;
   hotelRoom: string;
   hotelVillaApartment: string;
   flightNumber: string;
@@ -105,8 +107,8 @@ const defaultReservations: BookingEngineWebsiteReservation[] = [
     notes: 'Infant seat requested.',
     createdAt: '2026-06-15T10:47:00.000Z',
     processed: false,
-    customerEmailTemplateId: 'customerRequestReceived',
-    customerEmailTemplateLabel: 'Customer Reservation Received',
+    customerEmailTemplateId: 'customer_onrequest_received',
+    customerEmailTemplateLabel: 'Customer On Request Received',
     adminEmailPreviewCreated: true,
     customerEmailPreviewCreated: true,
     emailStatus: 'Not sent / Preview only',
@@ -142,8 +144,8 @@ const defaultReservations: BookingEngineWebsiteReservation[] = [
     notes: 'Flight FR 9821.',
     createdAt: '2026-06-15T10:42:00.000Z',
     processed: false,
-    customerEmailTemplateId: 'customerRequestReceived',
-    customerEmailTemplateLabel: 'Customer Reservation Received',
+    customerEmailTemplateId: 'customer_onrequest_received',
+    customerEmailTemplateLabel: 'Customer On Request Received',
     adminEmailPreviewCreated: true,
     customerEmailPreviewCreated: true,
     emailStatus: 'Not sent / Preview only',
@@ -179,7 +181,7 @@ const defaultReservations: BookingEngineWebsiteReservation[] = [
     notes: 'Availability review requested.',
     createdAt: '2026-06-14T10:38:00.000Z',
     processed: false,
-    customerEmailTemplateId: 'customerOnRequestReceived',
+    customerEmailTemplateId: 'customer_onrequest_received',
     customerEmailTemplateLabel: 'Customer On Request Received',
     adminEmailPreviewCreated: true,
     customerEmailPreviewCreated: true,
@@ -216,7 +218,7 @@ const defaultReservations: BookingEngineWebsiteReservation[] = [
     notes: 'Payment completed.',
     createdAt: '2026-06-13T10:31:00.000Z',
     processed: true,
-    customerEmailTemplateId: 'customerBookingConfirmed',
+    customerEmailTemplateId: 'customer_confirmed_reservation',
     customerEmailTemplateLabel: 'Customer Booking Confirmed',
     adminEmailPreviewCreated: true,
     customerEmailPreviewCreated: true,
@@ -253,8 +255,8 @@ const defaultReservations: BookingEngineWebsiteReservation[] = [
     notes: 'Cancelled due to flight changes.',
     createdAt: '2026-06-12T10:26:00.000Z',
     processed: true,
-    customerEmailTemplateId: 'customerRequestReceived',
-    customerEmailTemplateLabel: 'Customer Reservation Received',
+    customerEmailTemplateId: 'customer_onrequest_received',
+    customerEmailTemplateLabel: 'Customer On Request Received',
     adminEmailPreviewCreated: true,
     customerEmailPreviewCreated: true,
     emailStatus: 'Not sent / Preview only',
@@ -294,7 +296,7 @@ const normalizeReservation = (reservation: Partial<BookingEngineWebsiteReservati
   status: reservation.status || 'New Request',
   createdAt: reservation.createdAt || new Date().toISOString(),
   processed: Boolean(reservation.processed),
-  customerEmailTemplateId: reservation.customerEmailTemplateId || 'customerRequestReceived',
+  customerEmailTemplateId: reservation.customerEmailTemplateId || 'customer_onrequest_received',
   customerEmailTemplateLabel:
     reservation.customerEmailTemplateLabel === 'Customer Request Received'
       ? 'Customer Reservation Received'

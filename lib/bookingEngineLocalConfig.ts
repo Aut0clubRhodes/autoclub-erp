@@ -4,22 +4,25 @@ export type LocationType = 'airport' | 'town' | 'hotel' | 'custom';
 export type ExtraPricingMode = 'Per Day' | 'Per Booking' | 'Free';
 export type PaymentMethodType = 'Pay on Arrival' | 'Bank Transfer' | 'Payment Link' | 'Card' | 'Custom';
 export type CheckoutFieldId =
-  | 'fullName'
+  | 'full_name'
   | 'email'
-  | 'dateOfBirth'
-  | 'whatsapp'
-  | 'hotelRoom'
-  | 'flightNumber'
+  | 'country'
+  | 'phone'
+  | 'date_of_birth'
+  | 'accommodation_name'
+  | 'flight_number'
   | 'notes'
   | string;
 export type CheckoutFieldType = 'Text' | 'Textarea' | 'Number' | 'Email' | 'Phone' | 'Select';
 export type BookingEngineEmailTemplateId =
-  | 'adminNewReservation'
-  | 'customerRequestReceived'
-  | 'customerOnRequestReceived'
-  | 'customerBookingConfirmed'
-  | 'reviewRequest'
-  | 'paymentReminder'
+  | 'admin_new_confirmed_reservation'
+  | 'customer_confirmed_reservation'
+  | 'admin_new_onrequest_reservation'
+  | 'customer_onrequest_received'
+  | 'customer_confirmed_after_review'
+  | 'customer_payment_request'
+  | 'customer_reminder'
+  | 'customer_cancellation'
   | 'customEmail';
 
 export type BookingEngineEmailTemplate = {
@@ -145,6 +148,57 @@ export type BookingEngineCheckoutField = {
   label: string;
   options?: string[];
   builtIn?: boolean;
+};
+
+export const BOOKING_ENGINE_CORE_CHECKOUT_FIELDS: BookingEngineCheckoutField[] = [
+  { id: 'full_name', name: 'Full Name', fieldType: 'Text', enabled: true, required: true, label: 'Full Name', builtIn: true },
+  { id: 'email', name: 'Email', fieldType: 'Email', enabled: true, required: true, label: 'Email', builtIn: true },
+  { id: 'country', name: 'Country', fieldType: 'Select', enabled: true, required: true, label: 'Country', options: [], builtIn: true },
+  { id: 'phone', name: 'WhatsApp Phone', fieldType: 'Phone', enabled: true, required: true, label: 'WhatsApp Phone', builtIn: true },
+  { id: 'date_of_birth', name: 'Date of Birth', fieldType: 'Text', enabled: true, required: true, label: 'Date of Birth', builtIn: true },
+  { id: 'flight_number', name: 'Flight Number', fieldType: 'Text', enabled: true, required: false, label: 'Flight Number', builtIn: true },
+  { id: 'accommodation_name', name: 'Hotel / Villa / Apartment', fieldType: 'Text', enabled: true, required: false, label: 'Hotel / Villa / Apartment', builtIn: true },
+  { id: 'notes', name: 'Notes', fieldType: 'Textarea', enabled: true, required: false, label: 'Notes', builtIn: true },
+];
+
+const LEGACY_CHECKOUT_FIELD_KEYS: Record<string, CheckoutFieldId> = {
+  fullName: 'full_name',
+  whatsapp: 'phone',
+  dateOfBirth: 'date_of_birth',
+  hotelRoom: 'accommodation_name',
+  flightNumber: 'flight_number',
+};
+
+export const normalizeBookingEngineCheckoutFields = (
+  fields: BookingEngineCheckoutField[] = [],
+  includeMissingCoreFields = true,
+): BookingEngineCheckoutField[] => {
+  const savedById = new Map<string, BookingEngineCheckoutField>();
+  fields.filter((field) => field.id !== 'accommodation_type').forEach((field) => {
+    const normalizedId = LEGACY_CHECKOUT_FIELD_KEYS[field.id] || field.id;
+    const existing = savedById.get(normalizedId);
+    const usesStableKey = field.id === normalizedId;
+    if (!existing || usesStableKey) {
+      savedById.set(normalizedId, { ...field, id: normalizedId });
+    }
+  });
+  const coreFields = BOOKING_ENGINE_CORE_CHECKOUT_FIELDS.flatMap((coreField) => {
+    const savedField = savedById.get(coreField.id);
+    if (!savedField && !includeMissingCoreFields) return [];
+    return [{
+      ...coreField,
+      ...(savedField || {}),
+      id: coreField.id,
+      name: coreField.name,
+      fieldType: coreField.fieldType,
+      options: coreField.options,
+      builtIn: true,
+    }];
+  });
+  const coreIds = new Set(coreFields.map((field) => field.id));
+  const customFields = Array.from(savedById.values()).filter((field) => !coreIds.has(field.id));
+
+  return [...coreFields, ...customFields];
 };
 
 export type BookingEngineLocalConfig = {
@@ -368,65 +422,73 @@ export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
       status: 'Active',
     },
   ],
-  checkoutFields: [
-    { id: 'fullName', name: 'Full Name', fieldType: 'Text', enabled: true, required: true, label: 'Full Name', builtIn: true },
-    { id: 'email', name: 'Email', fieldType: 'Email', enabled: true, required: true, label: 'Email', builtIn: true },
-    { id: 'dateOfBirth', name: 'Date of Birth', fieldType: 'Text', enabled: true, required: true, label: 'Date of Birth', builtIn: true },
-    { id: 'whatsapp', name: 'Phone / WhatsApp', fieldType: 'Phone', enabled: true, required: true, label: 'Phone / WhatsApp', builtIn: true },
-    { id: 'hotelRoom', name: 'Hotel / Villa / Apartment', fieldType: 'Text', enabled: true, required: false, label: 'Hotel / Villa / Apartment', builtIn: true },
-    { id: 'flightNumber', name: 'Flight Number', fieldType: 'Text', enabled: true, required: false, label: 'Flight Number', builtIn: true },
-    { id: 'notes', name: 'Notes', fieldType: 'Textarea', enabled: true, required: false, label: 'Notes', builtIn: true },
-  ],
+  checkoutFields: BOOKING_ENGINE_CORE_CHECKOUT_FIELDS,
   emailSettings: {
     adminEmail: '',
     templates: {
-      adminNewReservation: {
-        id: 'adminNewReservation',
-        label: 'Admin New Reservation Notification',
+      admin_new_confirmed_reservation: {
+        id: 'admin_new_confirmed_reservation',
+        label: 'Admin New Confirmed Reservation Notification',
         active: true,
-        subject: 'New website reservation {reservation_id}',
+        subject: 'New confirmed website reservation {{reservation_id}}',
         message:
-          'New reservation received.\n\nCustomer: {customer_name}\nCar: {car_name} (Group {group})\nPickup: {pickup_date} {pickup_time} from {pickup_location}\nReturn: {return_date} {return_time} to {return_location}\nTotal: {total_price}\nPayment: {payment_method}',
+          'New confirmed reservation received.\n\nCustomer: {{customer_name}}\nCar: {{car_name}} (Group {{group}})\nPickup: {{pickup_date}} {{pickup_time}} from {{pickup_location}}\nReturn: {{return_date}} {{return_time}} to {{return_location}}\nTotal: {{total_price}}\nPayment: {{payment_method}}',
       },
-      customerRequestReceived: {
-        id: 'customerRequestReceived',
-        label: 'Customer Reservation Received',
-        active: true,
-        subject: 'We received your AutoClub Rhodes reservation request',
-        message:
-          'Hello {customer_name},\n\nThank you for choosing AutoClub Rhodes. We received your request for {car_name} (Group {group}).\n\nPickup: {pickup_date} at {pickup_time}, {pickup_location}\nReturn: {return_date} at {return_time}, {return_location}\nTotal: {total_price}\n\nWe will review your request and send confirmation by email.',
-      },
-      customerOnRequestReceived: {
-        id: 'customerOnRequestReceived',
-        label: 'Customer On Request Received',
-        active: true,
-        subject: 'Your AutoClub Rhodes on-request reservation was received',
-        message:
-          'Hello {customer_name},\n\nYour on-request reservation for {car_name} (Group {group}) has been received.\n\nPickup: {pickup_date} at {pickup_time}, {pickup_location}\nReturn: {return_date} at {return_time}, {return_location}\n\nWe will check availability and contact you shortly.',
-      },
-      customerBookingConfirmed: {
-        id: 'customerBookingConfirmed',
+      customer_confirmed_reservation: {
+        id: 'customer_confirmed_reservation',
         label: 'Customer Booking Confirmed',
         active: true,
         subject: 'Your AutoClub Rhodes booking is confirmed',
         message:
-          'Hello {customer_name},\n\nYour booking {reservation_id} for {car_name} is confirmed.\n\nPickup: {pickup_date} at {pickup_time}, {pickup_location}\nReturn: {return_date} at {return_time}, {return_location}\nTotal: {total_price}\nPayment method: {payment_method}',
+          'Hello {{customer_name}},\n\nYour booking {{reservation_id}} for {{car_name}} is confirmed.\n\nPickup: {{pickup_date}} at {{pickup_time}}, {{pickup_location}}\nReturn: {{return_date}} at {{return_time}}, {{return_location}}\nTotal: {{total_price}}\nPayment method: {{payment_method}}',
       },
-      reviewRequest: {
-        id: 'reviewRequest',
+      admin_new_onrequest_reservation: {
+        id: 'admin_new_onrequest_reservation',
+        label: 'Admin New On Request Reservation Notification',
+        active: true,
+        subject: 'New on-request website reservation {{reservation_id}}',
+        message:
+          'New on-request reservation received.\n\nCustomer: {{customer_name}}\nCar: {{car_name}} (Group {{group}})\nPickup: {{pickup_date}} {{pickup_time}} from {{pickup_location}}\nReturn: {{return_date}} {{return_time}} to {{return_location}}\nTotal: {{total_price}}\nPayment: {{payment_method}}',
+      },
+      customer_onrequest_received: {
+        id: 'customer_onrequest_received',
+        label: 'Customer On Request Received',
+        active: true,
+        subject: 'Your AutoClub Rhodes on-request reservation was received',
+        message:
+          'Hello {{customer_name}},\n\nYour on-request reservation for {{car_name}} (Group {{group}}) has been received.\n\nPickup: {{pickup_date}} at {{pickup_time}}, {{pickup_location}}\nReturn: {{return_date}} at {{return_time}}, {{return_location}}\n\nWe will check availability and contact you shortly.',
+      },
+      customer_confirmed_after_review: {
+        id: 'customer_confirmed_after_review',
+        label: 'Customer Confirmed After Review',
+        active: true,
+        subject: 'Your AutoClub Rhodes request is confirmed',
+        message:
+          'Hello {{customer_name}},\n\nGood news - your request {{reservation_id}} is now confirmed.\n\nCar: {{car_name}} (Group {{group}})\nPickup: {{pickup_date}} at {{pickup_time}}, {{pickup_location}}\nReturn: {{return_date}} at {{return_time}}, {{return_location}}\nTotal: {{total_price}}\nPayment method: {{payment_method}}',
+      },
+      customer_payment_request: {
+        id: 'customer_payment_request',
+        label: 'Payment Reminder',
+        active: true,
+        subject: 'Payment request for reservation {{reservation_id}}',
+        message:
+          'Hello {{customer_name}},\n\nPlease complete payment for reservation {{reservation_id}}.\nTotal: {{total_price}}\nPayment method: {{payment_method}}\n\nPayment link: {{payment_link}}\n\nThank you, AutoClub Rhodes',
+      },
+      customer_reminder: {
+        id: 'customer_reminder',
         label: 'Review Request',
         active: true,
         subject: 'How was your AutoClub Rhodes rental?',
         message:
-          'Hello {customer_name},\n\nThank you for choosing AutoClub Rhodes for reservation {reservation_id}.\n\nWe hope you enjoyed your rental with {car_name}. We would really appreciate your review and feedback.',
+          'Hello {{customer_name}},\n\nThank you for choosing AutoClub Rhodes for reservation {{reservation_id}}.\n\nWe hope you enjoyed your rental with {{car_name}}. We would really appreciate your review and feedback.',
       },
-      paymentReminder: {
-        id: 'paymentReminder',
-        label: 'Payment Reminder',
+      customer_cancellation: {
+        id: 'customer_cancellation',
+        label: 'Cancellation',
         active: true,
-        subject: 'Payment reminder for reservation {reservation_id}',
+        subject: 'Your AutoClub Rhodes reservation {{reservation_id}} was cancelled',
         message:
-          'Hello {customer_name},\n\nThis is a payment reminder for reservation {reservation_id}.\nTotal: {total_price}\nPayment method: {payment_method}\n\nThank you, AutoClub Rhodes',
+          'Hello {{customer_name}},\n\nYour reservation {{reservation_id}} has been cancelled.\n\nIf this was not expected, please contact AutoClub Rhodes.',
       },
       customEmail: {
         id: 'customEmail',
@@ -453,85 +515,19 @@ const normalizeEmailSettings = (
 
   return {
     adminEmail: settings?.adminEmail || bookingEngineLocalConfig.emailSettings.adminEmail,
-    templates: {
-      adminNewReservation: {
-        ...defaultTemplates.adminNewReservation,
-        ...(savedTemplates.adminNewReservation || {}),
-        id: defaultTemplates.adminNewReservation.id,
-        label: defaultTemplates.adminNewReservation.label,
-      },
-      customerRequestReceived: {
-        ...defaultTemplates.customerRequestReceived,
-        ...(savedTemplates.customerRequestReceived || {}),
-        id: defaultTemplates.customerRequestReceived.id,
-        label: defaultTemplates.customerRequestReceived.label,
-      },
-      customerOnRequestReceived: {
-        ...defaultTemplates.customerOnRequestReceived,
-        ...(savedTemplates.customerOnRequestReceived || {}),
-        id: defaultTemplates.customerOnRequestReceived.id,
-        label: defaultTemplates.customerOnRequestReceived.label,
-      },
-      customerBookingConfirmed: {
-        ...defaultTemplates.customerBookingConfirmed,
-        ...(savedTemplates.customerBookingConfirmed || {}),
-        id: defaultTemplates.customerBookingConfirmed.id,
-        label: defaultTemplates.customerBookingConfirmed.label,
-      },
-      reviewRequest: {
-        ...defaultTemplates.reviewRequest,
-        ...(savedTemplates.reviewRequest || {}),
-        id: defaultTemplates.reviewRequest.id,
-        label: defaultTemplates.reviewRequest.label,
-      },
-      paymentReminder: {
-        ...defaultTemplates.paymentReminder,
-        ...(savedTemplates.paymentReminder || {}),
-        id: defaultTemplates.paymentReminder.id,
-        label: defaultTemplates.paymentReminder.label,
-      },
-      customEmail: {
-        ...defaultTemplates.customEmail,
-        ...(savedTemplates.customEmail || {}),
-        id: defaultTemplates.customEmail.id,
-        label: defaultTemplates.customEmail.label,
-      },
-    },
+    templates: (Object.keys(defaultTemplates) as BookingEngineEmailTemplateId[]).reduce(
+      (templates, templateId) => ({
+        ...templates,
+        [templateId]: {
+          ...defaultTemplates[templateId],
+          ...(savedTemplates[templateId] || {}),
+          id: defaultTemplates[templateId].id,
+          label: defaultTemplates[templateId].label,
+        },
+      }),
+      {} as BookingEngineEmailSettings['templates'],
+    ),
   };
-};
-
-const normalizeCheckoutFields = (
-  fields?: BookingEngineCheckoutField[],
-): BookingEngineCheckoutField[] => {
-  const savedFields = Array.isArray(fields) ? fields : [];
-  const savedById = new Map(savedFields.map((field) => [field.id, field]));
-  const builtInFields = bookingEngineLocalConfig.checkoutFields.map((defaultField) => {
-    const savedField = savedById.get(defaultField.id);
-    return {
-      ...defaultField,
-      ...(savedField || {}),
-      id: defaultField.id,
-      fieldType: defaultField.fieldType,
-      builtIn: true,
-      name: defaultField.name,
-      label:
-        savedField?.label === 'WhatsApp'
-          ? 'Phone / WhatsApp'
-          : savedField?.label === 'Hotel / Room'
-            ? 'Hotel / Villa / Apartment'
-            : savedField?.label || defaultField.label,
-    };
-  });
-  const customFields = savedFields
-    .filter((field) => !bookingEngineLocalConfig.checkoutFields.some((builtIn) => builtIn.id === field.id))
-    .map((field) => ({
-      options: [],
-      builtIn: false,
-      ...field,
-      fieldType: field.fieldType || ('Text' as CheckoutFieldType),
-    }));
-
-  return [...builtInFields, ...customFields];
 };
 
 const normalizeBookingEngineConfig = (config: Partial<BookingEngineLocalConfig>): BookingEngineLocalConfig => ({
@@ -549,7 +545,7 @@ const normalizeBookingEngineConfig = (config: Partial<BookingEngineLocalConfig>)
   paymentMethods: Array.isArray(config.paymentMethods)
     ? config.paymentMethods
     : bookingEngineLocalConfig.paymentMethods,
-  checkoutFields: normalizeCheckoutFields(config.checkoutFields),
+  checkoutFields: normalizeBookingEngineCheckoutFields(config.checkoutFields),
   pricingSeasons: Array.isArray(config.pricingSeasons)
     ? config.pricingSeasons.map((season) => ({ ...season, status: season.status || 'Active' }))
     : bookingEngineLocalConfig.pricingSeasons,

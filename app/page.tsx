@@ -99,7 +99,13 @@ type OpenWindow = {
   title: string;
   zIndex: number;
   isMinimized?: boolean;
+  isMaximized?: boolean;
 };
+
+const isDefaultMaximizedWindow = (windowId: WindowId) =>
+  windowId === 'Κρατήσεις' ||
+  windowId === 'Booking Engine Admin' ||
+  windowId === 'Public Booking Preview';
 
 type TopMenuEntry =
   | { label: string; windowId: string }
@@ -367,6 +373,7 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<AppRole | null>(null);
+  const activeSessionUserIdRef = useRef<string | null>(null);
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-width: 1023px)').matches;
@@ -555,10 +562,11 @@ export default function Home() {
       return data?.role === 'admin' ? 'admin' : 'bookings';
     };
 
-    const applySession = async (session: AuthSession) => {
+    const applySession = async (session: AuthSession, blockAppWhileLoading: boolean) => {
       if (!mounted) return;
 
       if (!session?.user) {
+        activeSessionUserIdRef.current = null;
         setUserEmail(null);
         setUserRole(null);
         setOpenWindows([]);
@@ -566,23 +574,30 @@ export default function Home() {
         return;
       }
 
-      setAuthLoading(true);
+      if (blockAppWhileLoading) {
+        setAuthLoading(true);
+      }
       const role = await loadProfileRole(session.user.id);
       if (!mounted) return;
 
+      activeSessionUserIdRef.current = session.user.id;
       setUserEmail(session.user.email ?? null);
       setUserRole(role);
       setAuthLoading(false);
     };
 
     supabase.auth.getSession().then(({ data }) => {
-      void applySession(data.session as AuthSession);
+      void applySession(data.session as AuthSession, true);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      void applySession(session as AuthSession);
+      const nextUserId = session?.user?.id || null;
+      const currentUserId = activeSessionUserIdRef.current;
+      const isInitialOrIdentityChange = !currentUserId || currentUserId !== nextUserId;
+
+      void applySession(session as AuthSession, isInitialOrIdentityChange);
     });
 
     return () => {
@@ -1300,7 +1315,16 @@ const handleSaveSupplierPayment = async () => {
           );
         }
 
-        return [...currentWindows, { id: windowId, title, zIndex: nextZIndex, isMinimized: false }];
+        return [
+          ...currentWindows,
+          {
+            id: windowId,
+            title,
+            zIndex: nextZIndex,
+            isMinimized: false,
+            isMaximized: isDefaultMaximizedWindow(windowId),
+          },
+        ];
       });
       return nextZIndex;
     });
@@ -1887,6 +1911,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     return knownWindows.includes(value as WindowId) ? (value as WindowId) : null;
   };
 
+  const setWindowMaximized = (windowId: WindowId, isMaximized: boolean) => {
+    setOpenWindows((currentWindows) =>
+      currentWindows.map((windowItem) =>
+        windowItem.id === windowId ? { ...windowItem, isMaximized } : windowItem
+      )
+    );
+  };
+
   useEffect(() => {
     if (workspaceHydrated || authLoading || !userEmail || !userRole) {
       return;
@@ -1921,6 +1953,10 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           title: windowItem.title || getWindowTitleForId(resolvedId),
           zIndex: Number.isFinite(Number(windowItem.zIndex)) ? Number(windowItem.zIndex) : 51 + index,
           isMinimized: Boolean(windowItem.isMinimized),
+          isMaximized:
+            typeof windowItem.isMaximized === 'boolean'
+              ? windowItem.isMaximized
+              : isDefaultMaximizedWindow(resolvedId),
         });
       });
 
@@ -2552,8 +2588,6 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
         {/* Floating Window */}
         {openWindows.map((windowItem) => {
-          if (windowItem.isMinimized) return null;
-
           return (
             <Window
               key={windowItem.id}
@@ -2561,9 +2595,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               onClose={() => closeWindow(windowItem.id)}
               onFocus={() => focusWindow(windowItem.id)}
               onMinimize={() => minimizeWindow(windowItem.id)}
+              hidden={Boolean(windowItem.isMinimized)}
+              maximized={windowItem.isMaximized ?? isDefaultMaximizedWindow(windowItem.id)}
+              onMaximizedChange={(isMaximized) =>
+                setWindowMaximized(windowItem.id, isMaximized)
+              }
               zIndex={windowItem.zIndex}
               titleActions={getWindowActions(windowItem.id)}
-              fullscreen={windowItem.id === 'Κρατήσεις' || windowItem.id === 'Booking Engine Admin' || windowItem.id === 'Public Booking Preview'}
+              fullscreen={isDefaultMaximizedWindow(windowItem.id)}
               compactHeader={windowItem.id === 'Κρατήσεις'}
               initialWidth={windowItem.id === 'Αναφορές' ? 1320 : undefined}
               initialHeight={windowItem.id === 'Αναφορές' ? 792 : windowItem.id === 'Πίνακας' ? 760 : undefined}

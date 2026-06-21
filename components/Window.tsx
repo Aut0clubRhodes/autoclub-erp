@@ -27,6 +27,9 @@ interface WindowProps {
   zIndex?: number;
   onFocus?: () => void;
   onMinimize?: () => void;
+  hidden?: boolean;
+  maximized?: boolean;
+  onMaximizedChange?: (maximized: boolean) => void;
 }
 
 export default function Window({
@@ -43,9 +46,13 @@ export default function Window({
   zIndex,
   onFocus,
   onMinimize,
+  hidden = false,
+  maximized,
+  onMaximizedChange,
 }: WindowProps) {
   const isAutoClubRhodesReservations = title.includes('AUTOCLUB-RHODES');
-  const [isMaximized, setIsMaximized] = useState(fullscreen);
+  const [internalIsMaximized, setInternalIsMaximized] = useState(fullscreen);
+  const isMaximized = maximized ?? internalIsMaximized;
   const [isMobileWindow, setIsMobileWindow] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-width: 768px)').matches;
@@ -75,8 +82,17 @@ export default function Window({
   } | null>(null);
 
   useEffect(() => {
-    setIsMaximized(fullscreen);
-  }, [fullscreen]);
+    if (maximized === undefined) {
+      setInternalIsMaximized(fullscreen);
+    }
+  }, [fullscreen, maximized]);
+
+  const updateMaximized = (nextMaximized: boolean) => {
+    if (maximized === undefined) {
+      setInternalIsMaximized(nextMaximized);
+    }
+    onMaximizedChange?.(nextMaximized);
+  };
 
   useEffect(() => {
     if (!isAutoClubRhodesReservations || isMobileWindow || fullscreen) return;
@@ -231,7 +247,8 @@ export default function Window({
   return (
     <div
       className="pointer-events-none fixed inset-0 z-50"
-      style={{ zIndex }}
+      aria-hidden={hidden}
+      style={{ zIndex, display: hidden ? 'none' : undefined }}
     >
       <div
         onMouseDown={onFocus}
@@ -297,7 +314,7 @@ export default function Window({
               onClick={(event) => {
                 event.stopPropagation();
                 onFocus?.();
-                setIsMaximized((current) => !current);
+                updateMaximized(!isMaximized);
               }}
               className={`hidden rounded-xl border border-transparent text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-slate-950 sm:block ${compactHeader ? 'px-2.5 py-1' : 'px-3 py-2'}`}
               aria-label={isMaximized ? 'Restore window' : 'Maximize window'}

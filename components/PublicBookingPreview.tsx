@@ -31,7 +31,14 @@ import {
   type BookingEngineSeasonPrice,
   type BookingEngineSiteSettings,
   type CheckoutFieldId,
+  normalizeBookingEngineCheckoutFields,
 } from '@/lib/bookingEngineLocalConfig';
+import {
+  buildBookingEmailEventPayload,
+  normalizeSupabaseEmailTemplates,
+  sendBookingEngineEmailEvent,
+  type BookingEngineEmailTemplateRow,
+} from '@/lib/bookingEngineEmailEngine';
 import { supabase } from '@/lib/supabaseClient';
 
 type PreviewStep = 'search' | 'results' | 'checkout' | 'success';
@@ -137,8 +144,11 @@ type BePaymentMethodRow = {
   type?: string | null;
   description?: string | null;
   deposit_required?: boolean | null;
+  depositRequired?: boolean | null;
   deposit_amount?: string | number | null;
+  depositAmount?: string | number | null;
   status?: string | null;
+  active?: boolean | null;
 };
 
 type BeCheckoutFieldRow = {
@@ -182,17 +192,18 @@ const STEP_INDEX: Record<PreviewStep, number> = {
 
 const CUSTOMER_FIELD_TYPES: Partial<Record<CheckoutFieldId, 'text' | 'email' | 'tel'>> = {
   email: 'email',
-  whatsapp: 'tel',
-  dateOfBirth: 'text',
+  phone: 'tel',
+  date_of_birth: 'text',
 };
 
 const BUILT_IN_CHECKOUT_FIELD_IDS = new Set([
-  'fullName',
+  'full_name',
   'email',
-  'dateOfBirth',
-  'whatsapp',
-  'hotelRoom',
-  'flightNumber',
+  'country',
+  'phone',
+  'date_of_birth',
+  'accommodation_name',
+  'flight_number',
   'notes',
 ]);
 
@@ -359,23 +370,34 @@ const mapCoupon = (row: BeCouponRow): BookingEngineCoupon => ({
   status: row.status === 'Inactive' ? 'Inactive' : 'Active',
 });
 
-const mapPaymentMethod = (row: BePaymentMethodRow): BookingEnginePaymentMethod => ({
-  id: String(row.id),
-  name: (row.name || '').trim(),
-  type:
-    row.type === 'Bank Transfer' ||
-    row.type === 'Payment Link' ||
-    row.type === 'Card' ||
-    row.type === 'Custom' ||
-    row.type === 'Pay on Arrival'
-      ? row.type
-      : 'Pay on Arrival',
-  description: row.description || '',
-  depositRequired: Boolean(row.deposit_required),
-  depositAmount:
-    row.deposit_amount === null || row.deposit_amount === undefined ? '' : String(row.deposit_amount),
-  status: row.status === 'Inactive' ? 'Inactive' : 'Active',
-});
+const mapPaymentMethod = (row: BePaymentMethodRow): BookingEnginePaymentMethod => {
+  const normalizedType = (row.type || '').trim().toLowerCase();
+  const depositRequired = row.deposit_required ?? row.depositRequired ?? false;
+  const depositAmount = row.deposit_amount ?? row.depositAmount;
+  const isActive =
+    typeof row.active === 'boolean'
+      ? row.active
+      : (row.status || 'Active').trim().toLowerCase() !== 'inactive';
+
+  return {
+    id: String(row.id),
+    name: (row.name || '').trim(),
+    type:
+      normalizedType === 'bank transfer' || normalizedType === 'bank_transfer'
+        ? 'Bank Transfer'
+        : normalizedType === 'payment link' || normalizedType === 'payment_link'
+          ? 'Payment Link'
+          : normalizedType === 'card' || normalizedType === 'card on delivery' || normalizedType === 'card_on_delivery'
+            ? 'Card'
+            : normalizedType === 'custom'
+              ? 'Custom'
+              : 'Pay on Arrival',
+    description: row.description || '',
+    depositRequired: Boolean(depositRequired),
+    depositAmount: depositAmount === null || depositAmount === undefined ? '' : String(depositAmount),
+    status: isActive ? 'Active' : 'Inactive',
+  };
+};
 
 const mapCheckoutField = (row: BeCheckoutFieldRow): BookingEngineCheckoutField => ({
   id: row.field_key || String(row.id),
@@ -495,20 +517,20 @@ export default function PublicBookingPreview() {
   const [customer, setCustomer] = useState({
     fullName: '',
     email: '',
+    country: 'Greece',
     dateOfBirth: '',
     countryCode: '+30',
     phone: '',
-    hotelRoom: '',
+    accommodationName: '',
     flightNumber: '',
     notes: '',
   });
-  const [countrySearch, setCountrySearch] = useState('');
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [extras, setExtras] = useState<Record<string, number>>({});
   const [couponCode, setCouponCode] = useState('');
   const [appliedCouponCode, setAppliedCouponCode] = useState('');
   const [couponFeedback, setCouponFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState(activePaymentMethods[0]?.name || 'Pay on Arrival');
+  const [paymentMethod, setPaymentMethod] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [submittedReservationId, setSubmittedReservationId] = useState('');
@@ -565,6 +587,7 @@ export default function PublicBookingPreview() {
         paymentMethodsResult,
         bookingSettingsResult,
         checkoutFieldsResult,
+        emailTemplatesResult,
       ] = await Promise.all([
         supabase.from('be_groups').select('*').eq('site_id', site.id).order('code', { ascending: true }),
         supabase.from('be_vehicle_categories').select('*').eq('site_id', site.id).order('name', { ascending: true }),
@@ -576,6 +599,7 @@ export default function PublicBookingPreview() {
         supabase.from('be_payment_methods').select('*').eq('site_id', site.id).order('name', { ascending: true }),
         supabase.from('be_booking_settings').select('*').eq('site_id', site.id).maybeSingle(),
         supabase.from('be_checkout_fields').select('*').eq('site_id', site.id).order('sort_order', { ascending: true }),
+        supabase.from('be_email_templates').select('*').eq('site_id', site.id).order('template_key', { ascending: true }),
       ]);
 
       const loadErrors = [
@@ -589,6 +613,7 @@ export default function PublicBookingPreview() {
         ['payment methods', paymentMethodsResult.error],
         ['booking settings', bookingSettingsResult.error],
         ['checkout fields', checkoutFieldsResult.error],
+        ['email templates', emailTemplatesResult.error],
       ].filter(([, error]) => error);
 
       if (loadErrors.length > 0) {
@@ -610,6 +635,10 @@ export default function PublicBookingPreview() {
 
       const bookingSettings = bookingSettingsResult.data as BeBookingSettingsRow | null;
       const termsUrl = bookingSettings?.terms_url || site.terms_url || '';
+      const emailSettings = normalizeSupabaseEmailTemplates(
+        (emailTemplatesResult.data || []) as BookingEngineEmailTemplateRow[],
+        site.booking_notification_email || site.admin_email || '',
+      );
 
       if (!cancelled) {
         setBeSiteId(site.id);
@@ -628,7 +657,11 @@ export default function PublicBookingPreview() {
           extras: ((extrasResult.data || []) as BeExtraRow[]).map(mapExtra),
           coupons: ((couponsResult.data || []) as BeCouponRow[]).map(mapCoupon),
           paymentMethods: ((paymentMethodsResult.data || []) as BePaymentMethodRow[]).map(mapPaymentMethod),
-          checkoutFields: ((checkoutFieldsResult.data || []) as BeCheckoutFieldRow[]).map(mapCheckoutField),
+          checkoutFields: normalizeBookingEngineCheckoutFields(
+            ((checkoutFieldsResult.data || []) as BeCheckoutFieldRow[]).map(mapCheckoutField),
+            false,
+          ),
+          emailSettings,
         });
         setLoadingConfig(false);
       }
@@ -669,7 +702,10 @@ export default function PublicBookingPreview() {
   }, [locationOptions]);
 
   useEffect(() => {
-    if (!activePaymentMethods.length) return;
+    if (!activePaymentMethods.length) {
+      setPaymentMethod('');
+      return;
+    }
 
     setPaymentMethod((current) => {
       const nextPaymentMethod = activePaymentMethods.some((method) => method.name === current)
@@ -698,24 +734,17 @@ export default function PublicBookingPreview() {
   const finalTotal = Math.max(0, baseRental + extrasTotal - couponDiscount);
   const effectiveReturnLocation =
     search.returnLocation === 'Same as pickup' ? search.pickupLocation : search.returnLocation;
-  const isAirportPickup = search.pickupLocation.toLowerCase().includes('airport');
-  const visibleCheckoutFields = checkoutFields.filter((field) => {
-    if (field.id === 'flightNumber') return isAirportPickup;
-    if (field.id === 'hotelRoom') return !isAirportPickup;
-    return true;
-  });
-  const isCheckoutFieldRequired = (field: BookingEngineCheckoutField) =>
-    field.required ||
-    field.id === 'dateOfBirth' ||
-    (isAirportPickup && field.id === 'flightNumber') ||
-    (!isAirportPickup && field.id === 'hotelRoom');
+  const visibleCheckoutFields = checkoutFields;
+  const isCheckoutFieldRequired = (field: BookingEngineCheckoutField) => field.required;
   const getBuiltInFieldValue = (fieldId: string) => {
-    if (fieldId === 'whatsapp') return customer.phone;
-    if (fieldId === 'hotelRoom') return customer.hotelRoom;
-    if (fieldId === 'dateOfBirth') return customer.dateOfBirth;
+    if (fieldId === 'full_name') return customer.fullName;
+    if (fieldId === 'phone') return customer.phone;
+    if (fieldId === 'date_of_birth') return customer.dateOfBirth;
+    if (fieldId === 'accommodation_name') return customer.accommodationName;
+    if (fieldId === 'flight_number') return customer.flightNumber;
     return String(customer[fieldId as keyof typeof customer] || '');
   };
-  const validationErrors = visibleCheckoutFields
+  const checkoutFieldValidationErrors = visibleCheckoutFields
     .filter((field) => isCheckoutFieldRequired(field))
     .filter((field) =>
       BUILT_IN_CHECKOUT_FIELD_IDS.has(field.id)
@@ -723,17 +752,12 @@ export default function PublicBookingPreview() {
         : !String(customFieldValues[field.id] || '').trim()
     )
     .map((field) => `${field.label} is required.`);
+  const validationErrors = paymentMethod
+    ? checkoutFieldValidationErrors
+    : [...checkoutFieldValidationErrors, 'Payment method is required.'];
   const requiredFieldsMissing = validationErrors.length > 0;
   const currentStepIndex = STEP_INDEX[step];
   const selectedPickupLocation = activeLocations.find((location) => location.name === search.pickupLocation);
-  const selectedCountry =
-    COUNTRY_DIAL_CODES.find((country) => country.dialCode === customer.countryCode) || COUNTRY_DIAL_CODES[0];
-  const filteredCountries = COUNTRY_DIAL_CODES.filter((country) => {
-    const query = countrySearch.trim().toLowerCase();
-    if (!query) return true;
-    return [country.name, country.iso, country.dialCode]
-      .some((value) => value.toLowerCase().includes(query));
-  });
   const visibleCars = bookingEngineConfig.cars
     .filter((car) => car.status !== 'Hidden')
     .filter((car) => !selectedPickupLocation || car.locationIds.includes(selectedPickupLocation.id))
@@ -838,6 +862,13 @@ export default function PublicBookingPreview() {
       customer_name: customer.fullName.trim(),
       email: customer.email.trim(),
       phone: `${customer.countryCode} ${customer.phone}`.trim(),
+      country: customer.country.trim(),
+      country_code: customer.countryCode.trim(),
+      date_of_birth: customer.dateOfBirth || null,
+      accommodation_name: customer.accommodationName.trim(),
+      hotel_villa_apartment: customer.accommodationName.trim(),
+      flight_number: customer.flightNumber.trim(),
+      notes: customer.notes.trim(),
       pickup_location: search.pickupLocation,
       return_location: effectiveReturnLocation,
       pickup_date: search.pickupDate,
@@ -874,7 +905,48 @@ export default function PublicBookingPreview() {
       return;
     }
 
-    setSubmittedReservationId(data?.reservation_id || data?.id || reservationId);
+    const savedReservationId = data?.reservation_id || data?.id || reservationId;
+    const emailEventPayload = buildBookingEmailEventPayload({
+      eventType: selectedCar.mode === 'Open' ? 'new_reservation_confirmed' : 'reservation_onrequest',
+      templates: bookingEngineConfig.emailSettings.templates,
+      site: {
+        siteId: beSiteId,
+        siteName: bookingEngineConfig.siteSettings.companyName || 'AutoClub Rhodes',
+        adminEmail:
+          bookingEngineConfig.siteSettings.bookingNotificationEmail ||
+          bookingEngineConfig.siteSettings.adminEmail ||
+          bookingEngineConfig.emailSettings.adminEmail,
+        logoImage: bookingEngineConfig.siteSettings.logoImage,
+        whatsappNumber: bookingEngineConfig.siteSettings.whatsappNumber,
+      },
+      reservation: {
+        reservationId: savedReservationId,
+        customerName: customer.fullName.trim(),
+        email: customer.email.trim(),
+        phone: `${customer.countryCode} ${customer.phone}`.trim(),
+        country: customer.country.trim(),
+        countryCode: customer.countryCode.trim(),
+        dateOfBirth: customer.dateOfBirth,
+        accommodationName: customer.accommodationName.trim(),
+        flightNumber: customer.flightNumber.trim(),
+        notes: customer.notes.trim(),
+        carName: selectedCar.name,
+        group: selectedCar.groupCode,
+        pickupDate: search.pickupDate,
+        pickupTime: search.pickupTime,
+        returnDate: search.returnDate,
+        returnTime: search.returnTime,
+        pickupLocation: search.pickupLocation,
+        returnLocation: effectiveReturnLocation,
+        totalPrice: selectedCar.priceOnRequest ? 'Price on request' : `€${finalTotal}`,
+        paymentMethod,
+      },
+    });
+
+    console.log('RESERVATION EMAIL WEBHOOK PAYLOAD', emailEventPayload);
+    await sendBookingEngineEmailEvent(emailEventPayload);
+
+    setSubmittedReservationId(savedReservationId);
     setSubmittingReservation(false);
     setStep('success');
   };
@@ -1103,29 +1175,54 @@ export default function PublicBookingPreview() {
                             setCustomFieldValues((current) => ({ ...current, [field.id]: value }))
                           }
                         />
-                      ) : field.id === 'whatsapp' ? (
+                      ) : field.id === 'country' ? (
+                        <label key={field.id} className="grid gap-1.5">
+                          <span className="text-xs font-black text-slate-700">
+                            {field.label}{isCheckoutFieldRequired(field) && <span className="ml-1 text-rose-600">*</span>}
+                          </span>
+                          <select
+                            value={customer.country}
+                            required={isCheckoutFieldRequired(field)}
+                            onChange={(event) => {
+                              const nextCountry = COUNTRY_DIAL_CODES.find(
+                                (country) => country.name === event.target.value,
+                              );
+                              setCustomer((current) => ({
+                                ...current,
+                                country: event.target.value,
+                                countryCode: nextCountry?.dialCode || current.countryCode,
+                              }));
+                            }}
+                            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#0891b2] focus:ring-2 focus:ring-cyan-100"
+                          >
+                            {COUNTRY_DIAL_CODES.map((country) => (
+                              <option key={`${country.iso}-${country.dialCode}`} value={country.name}>
+                                {country.flag} {country.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : field.id === 'phone' ? (
                         <PhoneCountryField
                           key={field.id}
                           label={field.label}
                           required={isCheckoutFieldRequired(field)}
+                          countryName={customer.country}
                           countryCode={customer.countryCode}
                           phone={customer.phone}
-                          selectedCountry={selectedCountry}
-                          countries={
-                            filteredCountries.some((country) => country.dialCode === customer.countryCode)
-                              ? filteredCountries
-                              : [selectedCountry, ...filteredCountries]
-                          }
-                          countrySearch={countrySearch}
-                          onCountrySearchChange={setCountrySearch}
-                          onCountryChange={(countryCode) =>
-                            setCustomer((current) => ({ ...current, countryCode }))
-                          }
+                          countries={COUNTRY_DIAL_CODES}
+                          onCountryChange={(nextCountry) => {
+                            setCustomer((current) => ({
+                              ...current,
+                              countryCode: nextCountry.dialCode,
+                              country: nextCountry.name,
+                            }));
+                          }}
                           onPhoneChange={(phone) => setCustomer((current) => ({ ...current, phone }))}
                         />
                       ) : field.id === 'notes' ? (
                         <label key={field.id} className="grid gap-1.5 sm:col-span-2">
-                          <span className="text-sm font-black text-slate-700">
+                          <span className="text-xs font-black text-slate-700">
                             {field.label}{isCheckoutFieldRequired(field) && <span className="ml-1 text-rose-600">*</span>}
                           </span>
                           <textarea
@@ -1133,7 +1230,7 @@ export default function PublicBookingPreview() {
                             required={isCheckoutFieldRequired(field)}
                             onChange={(event) => setCustomer((current) => ({ ...current, notes: event.target.value }))}
                             rows={2}
-                            className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-[#0891b2] focus:ring-4 focus:ring-cyan-100"
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-[#0891b2] focus:ring-2 focus:ring-cyan-100"
                             placeholder="Anything we should know?"
                           />
                         </label>
@@ -1141,13 +1238,23 @@ export default function PublicBookingPreview() {
                         <CustomerField
                           key={field.id}
                           label={field.label}
-                          type={field.id === 'dateOfBirth' ? 'date' : CUSTOMER_FIELD_TYPES[field.id]}
+                          type={field.id === 'date_of_birth' ? 'date' : CUSTOMER_FIELD_TYPES[field.id]}
                           required={isCheckoutFieldRequired(field)}
                           value={getBuiltInFieldValue(field.id)}
                           onChange={(value) =>
                             setCustomer((current) => ({
                               ...current,
-                              [field.id === 'hotelRoom' ? 'hotelRoom' : field.id]: value,
+                              [
+                                field.id === 'full_name'
+                                  ? 'fullName'
+                                  : field.id === 'date_of_birth'
+                                    ? 'dateOfBirth'
+                                    : field.id === 'accommodation_name'
+                                      ? 'accommodationName'
+                                      : field.id === 'flight_number'
+                                        ? 'flightNumber'
+                                        : field.id
+                              ]: value,
                             }))
                           }
                         />
@@ -1203,6 +1310,11 @@ export default function PublicBookingPreview() {
                         <CreditCard className="h-4 w-4" /> {method.name}
                       </label>
                     ))}
+                    {activePaymentMethods.length === 0 && (
+                      <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm font-bold text-amber-800 sm:col-span-2">
+                        No active payment methods are currently available.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -1368,10 +1480,10 @@ function InputField({ label, icon, type, value, onChange }: { label: string; ico
 function CustomerField({ label, type = 'text', required = false, value, onChange }: { label: string; type?: 'text' | 'email' | 'tel' | 'date'; required?: boolean; value: string; onChange: (value: string) => void }) {
   return (
     <label className="grid gap-1.5">
-      <span className="text-sm font-black text-slate-700">
+      <span className="text-xs font-black text-slate-700">
         {label}{required && <span className="ml-1 text-rose-600">*</span>}
       </span>
-      <input type={type} required={required} value={value} onChange={(event) => onChange(event.target.value)} className="min-h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition focus:border-[#0891b2] focus:ring-4 focus:ring-cyan-100" />
+      <input type={type} required={required} value={value} onChange={(event) => onChange(event.target.value)} className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-950 shadow-sm outline-none transition focus:border-[#0891b2] focus:ring-2 focus:ring-cyan-100" />
     </label>
   );
 }
@@ -1379,63 +1491,55 @@ function CustomerField({ label, type = 'text', required = false, value, onChange
 function PhoneCountryField({
   label,
   required,
+  countryName,
   countryCode,
   phone,
-  selectedCountry,
   countries,
-  countrySearch,
-  onCountrySearchChange,
   onCountryChange,
   onPhoneChange,
 }: {
   label: string;
   required: boolean;
+  countryName: string;
   countryCode: string;
   phone: string;
-  selectedCountry: CountryDialCode;
   countries: CountryDialCode[];
-  countrySearch: string;
-  onCountrySearchChange: (value: string) => void;
-  onCountryChange: (value: string) => void;
+  onCountryChange: (country: CountryDialCode) => void;
   onPhoneChange: (value: string) => void;
 }) {
+  const selectedValue = `${countryName}|${countryCode}`;
+
   return (
     <div className="grid gap-1.5 sm:col-span-2">
-      <span className="text-sm font-black text-slate-700">
+      <span className="text-xs font-black text-slate-700">
         {label}{required && <span className="ml-1 text-rose-600">*</span>}
       </span>
-      <div className="grid gap-2 sm:grid-cols-[minmax(220px,0.8fr)_minmax(0,1.2fr)]">
-        <div className="rounded-xl border border-slate-300 bg-white p-2 shadow-sm">
-          <input
-            value={countrySearch}
-            onChange={(event) => onCountrySearchChange(event.target.value)}
-            placeholder={`${selectedCountry.flag} ${selectedCountry.name} ${countryCode}`}
-            className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-950 outline-none focus:border-[#0891b2] focus:ring-2 focus:ring-cyan-100"
-          />
-          <select
-            value={countryCode}
-            onChange={(event) => onCountryChange(event.target.value)}
-            className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none focus:border-[#0891b2] focus:ring-2 focus:ring-cyan-100"
-          >
-            {countries.map((country) => (
-              <option key={`${country.iso}-${country.dialCode}`} value={country.dialCode}>
-                {country.flag} {country.name} {country.dialCode}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="grid grid-cols-[minmax(135px,0.9fr)_minmax(0,1.1fr)] gap-2">
+        <select
+          value={selectedValue}
+          onChange={(event) => {
+            const nextCountry = countries.find(
+              (country) => `${country.name}|${country.dialCode}` === event.target.value,
+            );
+            if (nextCountry) onCountryChange(nextCountry);
+          }}
+          className="h-10 min-w-0 rounded-lg border border-slate-300 bg-white px-2 text-xs font-black text-slate-950 shadow-sm outline-none focus:border-[#0891b2] focus:ring-2 focus:ring-cyan-100"
+        >
+          {countries.map((country) => (
+            <option key={`${country.iso}-${country.dialCode}`} value={`${country.name}|${country.dialCode}`}>
+              {country.iso} {country.name} {country.dialCode}
+            </option>
+          ))}
+        </select>
         <input
           type="tel"
           required={required}
           value={phone}
           onChange={(event) => onPhoneChange(event.target.value)}
           placeholder="Phone number"
-          className="min-h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition focus:border-[#0891b2] focus:ring-4 focus:ring-cyan-100"
+          className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-950 shadow-sm outline-none transition focus:border-[#0891b2] focus:ring-2 focus:ring-cyan-100"
         />
       </div>
-      <p className="text-xs font-semibold text-slate-500">
-        Saved as {countryCode} {phone || '...'}
-      </p>
     </div>
   );
 }
@@ -1452,7 +1556,7 @@ function CustomCheckoutField({
   onChange: (value: string) => void;
 }) {
   const commonClassName =
-    'min-h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-950 shadow-sm outline-none transition focus:border-[#0891b2] focus:ring-4 focus:ring-cyan-100';
+    'h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-950 shadow-sm outline-none transition focus:border-[#0891b2] focus:ring-2 focus:ring-cyan-100';
   const inputType =
     field.fieldType === 'Email'
       ? 'email'
@@ -1464,7 +1568,7 @@ function CustomCheckoutField({
 
   return (
     <label className={`grid gap-1.5 ${field.fieldType === 'Textarea' ? 'sm:col-span-2' : ''}`}>
-      <span className="text-sm font-black text-slate-700">
+      <span className="text-xs font-black text-slate-700">
         {field.label}
         {required && <span className="ml-1 text-rose-600">*</span>}
       </span>
