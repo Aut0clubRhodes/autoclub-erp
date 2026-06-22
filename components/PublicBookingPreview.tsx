@@ -174,6 +174,7 @@ type BeBookingSettingsRow = {
   show_marketing_consent?: boolean | null;
   terms_url?: string | null;
   new_reservation_status?: string | null;
+  minimum_rental_days?: string | number | null;
 };
 
 const STEP_ITEMS: Array<{ id: PreviewStep; label: string; index: number }> = [
@@ -286,6 +287,18 @@ const emptySupabaseBookingEngineConfig: BookingEngineLocalConfig = {
 const isBookingMode = (value: string | null | undefined): value is BookingMode =>
   value === 'Open' || value === 'On Request' || value === 'Hidden';
 
+const normalizeBookingMode = (
+  value: string | null | undefined,
+  fallback: BookingMode = 'Open',
+): BookingMode => {
+  if (isBookingMode(value)) return value;
+  const normalized = (value || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+  if (normalized === 'on request') return 'On Request';
+  if (normalized === 'hidden') return 'Hidden';
+  if (normalized === 'open') return 'Open';
+  return fallback;
+};
+
 const mapSiteSettings = (row: BeSiteRow): BookingEngineSiteSettings => ({
   companyName: (row.name || '').trim(),
   domain: (row.domain || '').trim(),
@@ -317,7 +330,7 @@ const mapCar = (row: BeVehicleCategoryRow): BookingEngineCarConfig => ({
   description: row.description || '',
   imageUrl: row.image_url || '',
   featureIds: Array.isArray(row.feature_ids) ? row.feature_ids : [],
-  status: isBookingMode(row.status) ? row.status : 'Open',
+  status: normalizeBookingMode(row.status),
   locationIds: Array.isArray(row.location_ids) ? row.location_ids : [],
 });
 
@@ -432,7 +445,7 @@ const mapPricingSeason = (row: BePricingSeasonRow): BookingEngineSeasonPrice => 
         pricePerDay: String(tier.pricePerDay || ''),
       }))
     : [],
-  websiteMode: isBookingMode(row.website_mode) ? row.website_mode : 'Open',
+  websiteMode: normalizeBookingMode(row.website_mode),
   status: row.status === 'Inactive' ? 'Inactive' : 'Active',
   notes: row.notes || '',
 });
@@ -447,6 +460,21 @@ function getRentalDays(pickupDate: string, returnDate: string) {
   const end = new Date(`${returnDate}T12:00:00`);
   const difference = Math.round((end.getTime() - start.getTime()) / 86_400_000);
   return Math.max(1, difference || 1);
+}
+
+function toLocalDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysToDateInput(value: string, days: number) {
+  if (!value) return '';
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  return toLocalDateInputValue(date);
 }
 
 function isDateInSeason(date: string, season: BookingEngineSeasonPrice) {
@@ -506,13 +534,18 @@ export default function PublicBookingPreview() {
     () => bookingEngineConfig.checkoutFields.filter((field) => field.enabled),
     [bookingEngineConfig.checkoutFields],
   );
-  const [search, setSearch] = useState({
-    pickupLocation: locationOptions[0] || 'Rhodes Airport',
-    returnLocation: 'Same as pickup',
-    pickupDate: '2026-06-20',
-    pickupTime: '10:00',
-    returnDate: '2026-06-24',
-    returnTime: '10:00',
+  const [minimumRentalDays, setMinimumRentalDays] = useState(3);
+  const [minimumRentalMessage, setMinimumRentalMessage] = useState('');
+  const [search, setSearch] = useState(() => {
+    const pickupDate = toLocalDateInputValue(new Date());
+    return {
+      pickupLocation: locationOptions[0] || 'Rhodes Airport',
+      returnLocation: 'Same as pickup',
+      pickupDate,
+      pickupTime: '10:00',
+      returnDate: addDaysToDateInput(pickupDate, 3),
+      returnTime: '10:00',
+    };
   });
   const [customer, setCustomer] = useState({
     fullName: '',
@@ -641,6 +674,9 @@ export default function PublicBookingPreview() {
       );
 
       if (!cancelled) {
+        setMinimumRentalDays(
+          Math.max(1, Number(bookingSettings?.minimum_rental_days) || 3),
+        );
         setBeSiteId(site.id);
         setBookingEngineConfig({
           ...emptySupabaseBookingEngineConfig,
@@ -700,6 +736,95 @@ export default function PublicBookingPreview() {
       };
     });
   }, [locationOptions]);
+
+  useEffect(() => {
+    if (!beSiteId) return;
+
+    const refreshCars = async () => {
+      const { data, error } = await supabase
+        .from('be_vehicle_categories')
+        .select('*')
+        .eq('site_id', beSiteId)
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('Public Booking Preview cars refresh failed:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
+        return;
+      }
+
+      const nextCars = ((data || []) as BeVehicleCategoryRow[]).map(mapCar);
+      setBookingEngineConfig((current) => ({ ...current, cars: nextCars }));
+      setSelectedCar((current) => {
+        if (!current) return current;
+        const refreshedCar = nextCars.find((car) => car.id === current.id);
+        if (!refreshedCar) return null;
+        const matchingSeason = bookingEngineConfig.pricingSeasons.find(
+          (season) =>
+            season.groupCode === refreshedCar.groupCode &&
+            season.status !== 'Inactive' &&
+            isDateInSeason(search.pickupDate, season),
+        );
+        const seasonMode = matchingSeason?.websiteMode || 'Open';
+        const mode =
+          refreshedCar.status === 'Hidden' || seasonMode === 'Hidden'
+            ? 'Hidden'
+            : current.priceOnRequest ||
+                refreshedCar.status === 'On Request' ||
+                seasonMode === 'On Request'
+              ? 'On Request'
+              : 'Open';
+        return { ...current, ...refreshedCar, mode };
+      });
+    };
+
+    const handleCarsUpdated = (event: Event) => {
+      const updatedSiteId = (event as CustomEvent<{ siteId?: string }>).detail?.siteId;
+      if (!updatedSiteId || updatedSiteId === beSiteId) void refreshCars();
+    };
+
+    window.addEventListener('booking-engine-cars-updated', handleCarsUpdated);
+    return () => window.removeEventListener('booking-engine-cars-updated', handleCarsUpdated);
+  }, [beSiteId, bookingEngineConfig.pricingSeasons, search.pickupDate]);
+
+  useEffect(() => {
+    setSearch((current) => {
+      const minimumReturnDate = addDaysToDateInput(current.pickupDate, minimumRentalDays);
+      if (!minimumReturnDate || current.returnDate >= minimumReturnDate) return current;
+      return { ...current, returnDate: minimumReturnDate };
+    });
+  }, [minimumRentalDays]);
+
+  const changePickupDate = (pickupDate: string) => {
+    setMinimumRentalMessage('');
+    setSearch((current) => {
+      const minimumReturnDate = addDaysToDateInput(pickupDate, minimumRentalDays);
+      return {
+        ...current,
+        pickupDate,
+        returnDate:
+          !current.returnDate || current.returnDate < minimumReturnDate
+            ? minimumReturnDate
+            : current.returnDate,
+      };
+    });
+  };
+
+  const changeReturnDate = (returnDate: string) => {
+    const minimumReturnDate = addDaysToDateInput(search.pickupDate, minimumRentalDays);
+    if (returnDate && returnDate < minimumReturnDate) {
+      setSearch((current) => ({ ...current, returnDate: minimumReturnDate }));
+      setMinimumRentalMessage(`Minimum rental period is ${minimumRentalDays} days.`);
+      return;
+    }
+
+    setMinimumRentalMessage('');
+    setSearch((current) => ({ ...current, returnDate }));
+  };
 
   useEffect(() => {
     if (!activePaymentMethods.length) {
@@ -771,6 +896,13 @@ export default function PublicBookingPreview() {
       );
       const seasonPrice = getSeasonPriceForDays(matchingSeason, rentalDays);
       const priceOnRequest = !matchingSeason || seasonPrice === null;
+      const seasonMode = matchingSeason?.websiteMode || 'Open';
+      const mode: BookingMode =
+        car.status === 'Hidden' || seasonMode === 'Hidden'
+          ? 'Hidden'
+          : priceOnRequest || car.status === 'On Request' || seasonMode === 'On Request'
+            ? 'On Request'
+            : 'Open';
       const featureNames = car.featureIds
         .map((featureId) => bookingEngineConfig.features.find((feature) => feature.id === featureId)?.name)
         .filter(Boolean)
@@ -782,7 +914,7 @@ export default function PublicBookingPreview() {
         featureNames,
         pricePerDay: seasonPrice || 0,
         priceOnRequest,
-        mode: priceOnRequest ? 'On Request' : matchingSeason.websiteMode || car.status,
+        mode,
         accent: carAccentByIndex[index % carAccentByIndex.length],
       };
     })
@@ -938,8 +1070,10 @@ export default function PublicBookingPreview() {
         returnTime: search.returnTime,
         pickupLocation: search.pickupLocation,
         returnLocation: effectiveReturnLocation,
+        rentalTotal: selectedCar.priceOnRequest ? 'Price on request' : `€${baseRental}`,
         totalPrice: selectedCar.priceOnRequest ? 'Price on request' : `€${finalTotal}`,
         paymentMethod,
+        extras: selectedExtras,
       },
     });
 
@@ -1049,11 +1183,16 @@ export default function PublicBookingPreview() {
                 <SelectField label="Return Location" icon={<MapPin className="h-4 w-4" />} value={search.returnLocation} options={returnLocationOptions} onChange={(value) => setSearch((current) => ({ ...current, returnLocation: value }))} />
               </div>
               <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <InputField label="Pickup Date" icon={<CalendarDays className="h-4 w-4" />} type="date" value={search.pickupDate} onChange={(value) => setSearch((current) => ({ ...current, pickupDate: value }))} />
+                <InputField label="Pickup Date" icon={<CalendarDays className="h-4 w-4" />} type="date" value={search.pickupDate} onChange={changePickupDate} />
                 <InputField label="Pickup Time" icon={<Clock3 className="h-4 w-4" />} type="time" value={search.pickupTime} onChange={(value) => setSearch((current) => ({ ...current, pickupTime: value }))} />
-                <InputField label="Return Date" icon={<CalendarDays className="h-4 w-4" />} type="date" value={search.returnDate} onChange={(value) => setSearch((current) => ({ ...current, returnDate: value }))} />
+                <InputField label="Return Date" icon={<CalendarDays className="h-4 w-4" />} type="date" value={search.returnDate} onChange={changeReturnDate} />
                 <InputField label="Return Time" icon={<Clock3 className="h-4 w-4" />} type="time" value={search.returnTime} onChange={(value) => setSearch((current) => ({ ...current, returnTime: value }))} />
               </div>
+              {minimumRentalMessage && (
+                <p className="mt-2 text-xs font-bold text-amber-700">
+                  {minimumRentalMessage}
+                </p>
+              )}
               <button type="button" onClick={() => setStep('results')} className="mt-5 flex h-[54px] w-full items-center justify-center gap-2 rounded-xl bg-[#073f5d] px-8 text-base font-black text-white shadow-[0_14px_32px_rgba(7,63,93,0.34)] transition hover:-translate-y-0.5 hover:bg-[#052f46]">
                 Search Cars <ArrowRight className="h-5 w-5" />
               </button>

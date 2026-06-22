@@ -43,9 +43,17 @@ export type BookingEngineEmailReservationContext = {
   returnTime: string;
   pickupLocation: string;
   returnLocation: string;
+  rentalTotal?: string;
   totalPrice: string;
   paymentMethod: string;
   paymentLink?: string;
+  extras?: Array<{
+    id?: string;
+    name: string;
+    quantity: number;
+    unitPrice?: number;
+    total?: number;
+  }>;
 };
 
 export type BookingEngineEmailSiteContext = {
@@ -99,6 +107,60 @@ export const normalizeSupabaseEmailTemplates = (
   };
 };
 
+const getExtraSubtotal = (
+  extra: NonNullable<BookingEngineEmailReservationContext['extras']>[number],
+) => {
+  if (Number.isFinite(Number(extra.total))) return Number(extra.total);
+  return Number(extra.unitPrice || 0) * Number(extra.quantity || 0);
+};
+
+const formatExtraAmount = (amount: number) =>
+  new Intl.NumberFormat('en-IE', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+
+export const renderBookingExtrasSummary = (
+  extras: BookingEngineEmailReservationContext['extras'] = [],
+) => {
+  if (!extras.length) return 'No extras selected';
+
+  const lines = extras.map((extra) =>
+    `${extra.name} x${extra.quantity} - ${formatExtraAmount(getExtraSubtotal(extra))}`,
+  );
+  const total = extras.reduce((sum, extra) => sum + getExtraSubtotal(extra), 0);
+
+  return `${lines.join('\n')}\n\nTotal extras: ${formatExtraAmount(total)}`;
+};
+
+export const renderBookingExtrasHtml = (
+  extras: BookingEngineEmailReservationContext['extras'] = [],
+) => {
+  if (!extras.length) {
+    return '<p style="margin:0;color:#53657a;font-size:14px;">No extras selected</p>';
+  }
+
+  const rows = extras
+    .map(
+      (extra) => `<tr>
+        <td style="padding:7px 9px;border-bottom:1px solid #d8e0ea;font-size:13px;font-weight:700;color:#102033;">${escapeHtml(extra.name)} x${extra.quantity}</td>
+        <td style="padding:7px 9px;border-bottom:1px solid #d8e0ea;text-align:right;font-size:13px;font-weight:800;color:#102033;">${escapeHtml(formatExtraAmount(getExtraSubtotal(extra)))}</td>
+      </tr>`,
+    )
+    .join('');
+  const total = extras.reduce((sum, extra) => sum + getExtraSubtotal(extra), 0);
+
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border:1px solid #d8e0ea;border-radius:10px;overflow:hidden;">
+    ${rows}
+    <tr>
+      <td style="padding:8px 9px;background:#f3f6fa;font-size:12px;font-weight:900;color:#102033;">Total extras</td>
+      <td style="padding:8px 9px;background:#f3f6fa;text-align:right;font-size:13px;font-weight:900;color:#102033;">${escapeHtml(formatExtraAmount(total))}</td>
+    </tr>
+  </table>`;
+};
+
 export const renderBookingEmailTemplate = (
   template: string,
   reservation: BookingEngineEmailReservationContext,
@@ -117,6 +179,7 @@ export const renderBookingEmailTemplate = (
     total_price: reservation.totalPrice,
     payment_method: reservation.paymentMethod,
     payment_link: reservation.paymentLink || '',
+    extras_summary: renderBookingExtrasSummary(reservation.extras),
   };
 
   return Object.entries(replacements).reduce((message, [key, value]) => {
@@ -126,6 +189,28 @@ export const renderBookingEmailTemplate = (
       .split(`{${key}}`)
       .join(value || '');
   }, template);
+};
+
+export const getBookingEmailIntro = (templateId: BookingEngineEmailTemplateId) => {
+  switch (templateId) {
+    case 'admin_new_confirmed_reservation':
+      return 'New confirmed reservation received.';
+    case 'admin_new_onrequest_reservation':
+      return 'A new website request is waiting for availability review.';
+    case 'customer_onrequest_received':
+      return 'Our team will review availability and contact you shortly.';
+    case 'customer_confirmed_reservation':
+    case 'customer_confirmed_after_review':
+      return 'Your booking is confirmed.';
+    case 'customer_payment_request':
+      return 'Your payment request is ready.';
+    case 'customer_reminder':
+      return 'A reminder for your upcoming AutoClub Rhodes booking.';
+    case 'customer_cancellation':
+      return 'Your reservation has been cancelled.';
+    default:
+      return 'An update about your AutoClub Rhodes reservation.';
+  }
 };
 
 const escapeHtml = (value: string) =>
@@ -139,62 +224,116 @@ const escapeHtml = (value: string) =>
 export const buildBookingEmailHtml = ({
   site,
   reservation,
-  message,
+  intro,
+  templateId,
 }: {
   site: BookingEngineEmailSiteContext;
   reservation: BookingEngineEmailReservationContext;
-  message: string;
+  intro: string;
+  templateId?: BookingEngineEmailTemplateId;
 }) => {
-  const safeMessage = escapeHtml(message).replace(/\n/g, '<br />');
-  const rows = [
-    ['Reservation', reservation.reservationId],
+  const isAdminNotification =
+    templateId === 'admin_new_confirmed_reservation' ||
+    templateId === 'admin_new_onrequest_reservation';
+  const isAdminOnRequest = templateId === 'admin_new_onrequest_reservation';
+  const isCustomerOnRequest = templateId === 'customer_onrequest_received';
+  const isOnRequest = isAdminOnRequest || isCustomerOnRequest;
+  const emailTitle = isAdminOnRequest
+    ? 'New On Request Reservation'
+    : isCustomerOnRequest
+      ? 'Reservation Request Received'
+      : isAdminNotification
+        ? 'New Website Reservation'
+        : '';
+  const extrasTotal = (reservation.extras || []).reduce(
+    (sum, extra) => sum + getExtraSubtotal(extra),
+    0,
+  );
+  const customerRows = [
     ['Customer', reservation.customerName],
-    ['Country', reservation.country || ''],
+    ['Email', reservation.email],
     ['WhatsApp', reservation.phone],
+    ['Country', reservation.country || ''],
     ['Date of birth', reservation.dateOfBirth || ''],
     ['Hotel / Villa / Apartment', reservation.accommodationName || ''],
     ['Flight number', reservation.flightNumber || ''],
-    ['Car', `${reservation.carName} / Group ${reservation.group}`],
-    ['Pickup', `${reservation.pickupDate} ${reservation.pickupTime} - ${reservation.pickupLocation}`],
-    ['Return', `${reservation.returnDate} ${reservation.returnTime} - ${reservation.returnLocation}`],
-    ['Total', reservation.totalPrice],
-    ['Payment', reservation.paymentMethod],
-  ];
+  ].filter(([, value]) => String(value || '').trim());
+  const reservationRows = [
+    ['Reservation', reservation.reservationId],
+    ['Car', reservation.carName],
+    ['Group', reservation.group],
+    ['Pickup', `${reservation.pickupDate} ${reservation.pickupTime}`],
+    ['Pickup location', reservation.pickupLocation],
+    ['Return', `${reservation.returnDate} ${reservation.returnTime}`],
+    ['Return location', reservation.returnLocation],
+    ['Notes', reservation.notes?.trim() || ''],
+  ].filter(([, value]) => String(value || '').trim());
+  const paymentRows = [
+    ['Rental total', reservation.rentalTotal || reservation.totalPrice],
+    ['Extras total', formatExtraAmount(extrasTotal)],
+    ['Final total', reservation.totalPrice],
+    ['Payment method', reservation.paymentMethod],
+  ].filter(([, value]) => String(value || '').trim());
+  const allRows = [...customerRows, ...reservationRows];
+  const renderRows = (rows: string[][]) => rows
+    .map(
+      ([label, value]) => `<tr>
+        <td style="width:36%;padding:7px 9px;background:#f3f6fa;border-bottom:1px solid #d8e0ea;font-size:10px;font-weight:900;text-transform:uppercase;color:#53657a;">${escapeHtml(label)}</td>
+        <td style="padding:7px 9px;border-bottom:1px solid #d8e0ea;font-size:13px;font-weight:700;color:#102033;">${escapeHtml(value || '')}</td>
+      </tr>`,
+    )
+    .join('');
+  const renderSection = (title: string, rows: string[][]) => `
+    <div style="margin-top:12px;">
+      <div style="margin-bottom:6px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#53657a;">${escapeHtml(title)}</div>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border:1px solid #d8e0ea;border-radius:12px;overflow:hidden;">
+        ${renderRows(rows)}
+      </table>
+    </div>`;
 
   return `<!doctype html>
 <html>
   <body style="margin:0;background:#eef2f7;font-family:Arial,Helvetica,sans-serif;color:#102033;">
-    <div style="max-width:680px;margin:0 auto;padding:24px 14px;">
-      <div style="background:#ffffff;border:1px solid #d8e0ea;border-radius:18px;overflow:hidden;box-shadow:0 18px 45px rgba(15,23,42,0.10);">
-        <div style="padding:22px 24px;background:#073f5d;color:#ffffff;">
-          <div style="display:flex;align-items:center;gap:14px;">
+    <div style="max-width:640px;margin:0 auto;padding:12px 8px;">
+      <div style="background:#ffffff;border:1px solid #d8e0ea;border-radius:14px;overflow:hidden;box-shadow:0 12px 32px rgba(15,23,42,0.09);">
+        <div style="padding:14px 16px;background:#073f5d;color:#ffffff;">
+          <div style="display:flex;align-items:center;gap:11px;">
             ${
               site.logoImage
-                ? `<img src="${escapeHtml(site.logoImage)}" alt="${escapeHtml(site.siteName)}" style="width:52px;height:52px;border-radius:12px;background:#ffffff;object-fit:contain;padding:4px;" />`
-                : `<div style="width:52px;height:52px;border-radius:12px;background:#ffffff;color:#073f5d;display:inline-flex;align-items:center;justify-content:center;font-weight:900;">AC</div>`
+                ? `<img src="${escapeHtml(site.logoImage)}" alt="${escapeHtml(site.siteName)}" style="width:44px;height:44px;border-radius:10px;background:#ffffff;object-fit:contain;padding:3px;" />`
+                : `<div style="width:44px;height:44px;border-radius:10px;background:#ffffff;color:#073f5d;display:inline-flex;align-items:center;justify-content:center;font-weight:900;">AC</div>`
             }
             <div>
-              <div style="font-size:20px;font-weight:900;line-height:1.1;">${escapeHtml(site.siteName)}</div>
-              <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9ee7f5;margin-top:4px;">Car rental in Rhodes</div>
+              <div style="font-size:18px;font-weight:900;line-height:1.1;">${escapeHtml(site.siteName)}</div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9ee7f5;margin-top:3px;">Car rental in Rhodes</div>
             </div>
           </div>
         </div>
-        <div style="padding:26px 24px;">
-          <div style="font-size:15px;line-height:1.7;color:#26384d;">${safeMessage}</div>
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;border-collapse:collapse;border:1px solid #d8e0ea;border-radius:12px;overflow:hidden;">
-            ${rows
-              .map(
-                ([label, value]) => `<tr>
-                  <td style="width:36%;padding:11px 13px;background:#f3f6fa;border-bottom:1px solid #d8e0ea;font-size:12px;font-weight:900;text-transform:uppercase;color:#53657a;">${escapeHtml(label)}</td>
-                  <td style="padding:11px 13px;border-bottom:1px solid #d8e0ea;font-size:14px;font-weight:700;color:#102033;">${escapeHtml(value || '')}</td>
-                </tr>`,
-              )
-              .join('')}
-          </table>
+        <div style="padding:15px 16px;">
+          ${emailTitle ? `<h1 style="margin:0 0 7px;font-size:20px;line-height:1.25;color:#102033;">${escapeHtml(emailTitle)}</h1>` : ''}
+          ${
+            isOnRequest
+              ? `<div style="margin:0 0 11px;padding:10px 11px;border:1px solid #f59e0b;border-radius:10px;background:#fffbeb;color:#78350f;">
+                  ${isAdminOnRequest ? '<div style="display:inline-block;margin-bottom:5px;padding:3px 7px;border-radius:999px;background:#f59e0b;color:#ffffff;font-size:10px;font-weight:900;letter-spacing:.06em;">ON REQUEST — ACTION NEEDED</div>' : ''}
+                  <div style="font-size:13px;line-height:1.45;font-weight:800;">Your request has been received and is under review. This is not a confirmed reservation yet.</div>
+                </div>`
+              : ''
+          }
+          <p style="margin:0 0 11px;font-size:14px;line-height:1.45;font-weight:700;color:#26384d;">${escapeHtml(intro)}</p>
+          ${
+            isAdminNotification
+              ? `${renderSection('Customer details', customerRows)}${renderSection('Reservation details', reservationRows)}`
+              : `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border:1px solid #d8e0ea;border-radius:12px;overflow:hidden;">${renderRows(allRows)}</table>`
+          }
+          <div style="margin-top:12px;">
+            <div style="margin-bottom:6px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#53657a;">Extras</div>
+            ${renderBookingExtrasHtml(reservation.extras)}
+          </div>
+          ${renderSection('Total and payment', paymentRows)}
         </div>
-        <div style="padding:18px 24px;background:#f8fafc;border-top:1px solid #d8e0ea;font-size:12px;line-height:1.6;color:#53657a;">
-          <strong style="color:#102033;">${escapeHtml(site.siteName)}</strong><br />
-          For urgent changes, contact us${site.whatsappNumber ? ` on WhatsApp ${escapeHtml(site.whatsappNumber)}` : ' on WhatsApp'}.
+        <div style="padding:12px 16px;background:#f8fafc;border-top:1px solid #d8e0ea;font-size:11px;line-height:1.5;color:#53657a;">
+          <strong style="color:#102033;">AutoClub Rhodes</strong><br />
+          For urgent changes, contact us on WhatsApp +306948202397.
         </div>
       </div>
     </div>
@@ -242,13 +381,22 @@ export const buildBookingEmailEventPayload = ({
       if (!to) return null;
 
       const subject = renderBookingEmailTemplate(template.subject, reservation);
-      const message = renderBookingEmailTemplate(template.message, reservation);
+      const renderedMessage = renderBookingEmailTemplate(template.message, reservation);
+      const textBody =
+        template.message.includes('{{extras_summary}}') || template.message.includes('{extras_summary}')
+          ? renderedMessage
+          : `${renderedMessage}\n\nExtras:\n${renderBookingExtrasSummary(reservation.extras)}`;
 
       return {
         to,
         subject,
-        html_body: buildBookingEmailHtml({ site, reservation, message }),
-        text_body: message,
+        html_body: buildBookingEmailHtml({
+          site,
+          reservation,
+          intro: getBookingEmailIntro(key),
+          templateId: key,
+        }),
+        text_body: textBody,
         template_key: key,
         template_label: template.label,
         recipient_type: recipient,
@@ -282,6 +430,13 @@ export const buildBookingEmailEventPayload = ({
     accommodation_name: reservation.accommodationName || '',
     flight_number: reservation.flightNumber || '',
     notes: reservation.notes || '',
+    extras: reservation.extras || [],
+    extras_summary: renderBookingExtrasSummary(reservation.extras),
+    extras_summary_html: renderBookingExtrasHtml(reservation.extras),
+    extras_total: (reservation.extras || []).reduce(
+      (sum, extra) => sum + getExtraSubtotal(extra),
+      0,
+    ),
     to: firstEmail?.to || '',
     subject: firstEmail?.subject || '',
     html_body: firstEmail?.html_body || '',

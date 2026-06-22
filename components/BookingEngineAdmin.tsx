@@ -32,7 +32,12 @@ import {
   resetBookingEngineConfig,
   saveBookingEngineConfig,
 } from '@/lib/bookingEngineLocalConfig';
-import { bookingEngineEmailTemplateOrder } from '@/lib/bookingEngineEmailEngine';
+import {
+  bookingEngineEmailTemplateOrder,
+  buildBookingEmailHtml,
+  getBookingEmailIntro,
+  renderBookingExtrasSummary,
+} from '@/lib/bookingEngineEmailEngine';
 import { supabase } from '@/lib/supabaseClient';
 
 type AdminTabId =
@@ -202,6 +207,7 @@ type BeBookingSettingsRow = {
   show_marketing_consent?: boolean | null;
   terms_url?: string | null;
   new_reservation_status?: NewReservationStatus | string | null;
+  minimum_rental_days?: string | number | null;
 };
 
 type BeCheckoutFieldRow = {
@@ -308,6 +314,7 @@ type BookingEmailSettings = BookingEngineEmailSettings;
 type BookingEngineSettings = {
   advanceBookingActive: boolean;
   advanceBookingHours: string;
+  minimumRentalDays: string;
   defaultLanguage: BookingDefaultLanguage;
   requireRentalTerms: boolean;
   showMarketingConsent: boolean;
@@ -446,6 +453,7 @@ const emptyPaymentMethodDraft: PaymentMethodDraft = {
 const initialBookingEngineSettings: BookingEngineSettings = {
   advanceBookingActive: true,
   advanceBookingHours: '48',
+  minimumRentalDays: '3',
   defaultLanguage: 'English',
   requireRentalTerms: true,
   showMarketingConsent: true,
@@ -500,6 +508,7 @@ const emailTemplateVariables = [
   '{{total_price}}',
   '{{payment_method}}',
   '{{payment_link}}',
+  '{{extras_summary}}',
 ];
 
 const sampleGroups: BookingGroup[] = [
@@ -1237,6 +1246,10 @@ export default function BookingEngineAdmin() {
         row.advance_booking_hours === null || row.advance_booking_hours === undefined
           ? '48'
           : String(row.advance_booking_hours),
+      minimumRentalDays:
+        row.minimum_rental_days === null || row.minimum_rental_days === undefined
+          ? '3'
+          : String(row.minimum_rental_days),
       defaultLanguage:
         defaultLanguage === 'English' ||
         defaultLanguage === 'Italian' ||
@@ -1654,6 +1667,7 @@ export default function BookingEngineAdmin() {
 
     closeCarModal();
     await loadSupabaseCars(beSiteId);
+    window.dispatchEvent(new CustomEvent('booking-engine-cars-updated', { detail: { siteId: beSiteId } }));
     setCarsSaving(false);
   };
 
@@ -1681,6 +1695,7 @@ export default function BookingEngineAdmin() {
     }
 
     await loadSupabaseCars(beSiteId);
+    window.dispatchEvent(new CustomEvent('booking-engine-cars-updated', { detail: { siteId: beSiteId } }));
   };
 
   const updateCarStatuses = async (carIds: string[], status: CarStatus) => {
@@ -1708,6 +1723,7 @@ export default function BookingEngineAdmin() {
     }
 
     await loadSupabaseCars(beSiteId);
+    window.dispatchEvent(new CustomEvent('booking-engine-cars-updated', { detail: { siteId: beSiteId } }));
   };
 
   const openNewGroupModal = () => {
@@ -2514,6 +2530,7 @@ export default function BookingEngineAdmin() {
     site_id: siteId,
     advance_booking_active: settings.advanceBookingActive,
     advance_booking_hours: settings.advanceBookingHours,
+    minimum_rental_days: Math.max(1, Number(settings.minimumRentalDays) || 3),
     default_language: settings.defaultLanguage,
     require_rental_terms: settings.requireRentalTerms,
     show_marketing_consent: settings.showMarketingConsent,
@@ -2710,7 +2727,7 @@ export default function BookingEngineAdmin() {
 
   return (
     <div className="booking-engine-admin-light relative flex h-full min-h-[600px] overflow-hidden bg-slate-100 text-slate-900">
-      <aside className="booking-engine-admin-nav flex w-[250px] flex-shrink-0 flex-col border-r border-slate-200 bg-white p-4">
+      <aside className="booking-engine-admin-nav flex w-[230px] flex-shrink-0 flex-col border-r border-slate-200 bg-white p-3">
         <div className="border-b border-white/[0.06] px-2 pb-3 pt-1">
           <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-cyan-700">
             <Settings2 className="h-4 w-4 text-cyan-700" />
@@ -2719,7 +2736,7 @@ export default function BookingEngineAdmin() {
           <p className="mt-1 text-sm leading-5 text-slate-600">Booking engine setup workspace</p>
         </div>
 
-        <nav className="mt-3 space-y-1">
+        <nav className="mt-2.5 space-y-0.5">
           {adminTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -2729,7 +2746,7 @@ export default function BookingEngineAdmin() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex w-full items-center gap-3 rounded-lg border px-3.5 py-3 text-left text-sm font-bold transition ${
+                className={`flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-xs font-bold transition ${
                   isActive
                     ? 'border-cyan-300 bg-cyan-50 text-cyan-900 shadow-[inset_4px_0_0_#0891b2]'
                     : 'border-transparent text-slate-700 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-950'
@@ -2756,10 +2773,10 @@ export default function BookingEngineAdmin() {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="booking-engine-admin-header flex flex-shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-7 py-5">
+        <header className="booking-engine-admin-header flex flex-shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-3.5">
           <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-cyan-200 bg-cyan-50 text-cyan-700">
-              <CurrentIcon className="h-6 w-6" />
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700">
+              <CurrentIcon className="h-5 w-5" />
             </span>
             <div>
               <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-700">Booking Engine Admin</p>
@@ -2771,7 +2788,7 @@ export default function BookingEngineAdmin() {
           </span>
         </header>
 
-        <div className="booking-engine-admin-content min-h-0 flex-1 overflow-auto bg-slate-100 p-7">
+        <div className="booking-engine-admin-content min-h-0 flex-1 overflow-auto bg-slate-100 p-5">
           {activeTab === 'groups' && (
             <GroupsPanel
               groups={groups}
@@ -3056,7 +3073,7 @@ export default function BookingEngineAdmin() {
       <style jsx global>{`
         .booking-engine-admin-light {
           color: #172033;
-          font-size: 15px;
+          font-size: 14px;
         }
 
         .booking-engine-admin-light .booking-engine-admin-nav {
@@ -3064,8 +3081,8 @@ export default function BookingEngineAdmin() {
         }
 
         .booking-engine-admin-light .booking-engine-admin-nav button {
-          min-height: 46px;
-          font-size: 15px;
+          min-height: 38px;
+          font-size: 13px;
         }
 
         .booking-engine-admin-light [class*='bg-[#0a111b]'],
@@ -3115,11 +3132,11 @@ export default function BookingEngineAdmin() {
         .booking-engine-admin-light input,
         .booking-engine-admin-light select,
         .booking-engine-admin-light textarea {
-          min-height: 46px;
+          min-height: 40px;
           border-color: #cbd5e1 !important;
           background: #ffffff !important;
           color: #172033 !important;
-          font-size: 15px !important;
+          font-size: 14px !important;
           box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
         }
 
@@ -3142,41 +3159,41 @@ export default function BookingEngineAdmin() {
         }
 
         .booking-engine-admin-light [role='dialog'] > header {
-          padding: 20px 24px !important;
+          padding: 15px 18px !important;
         }
 
         .booking-engine-admin-light [role='dialog'] > div {
-          padding: 24px !important;
+          padding: 18px !important;
         }
 
         .booking-engine-admin-light [role='dialog'] > footer {
-          padding: 16px 24px !important;
+          padding: 12px 18px !important;
         }
 
         .booking-engine-admin-light [class*='grid-cols-'][class*='border-b'] {
-          min-height: 52px;
+          min-height: 44px;
           border-color: #e2e8f0 !important;
-          font-size: 14px !important;
+          font-size: 13px !important;
         }
 
         .booking-engine-admin-light .booking-engine-admin-content h3 {
-          font-size: 18px !important;
+          font-size: 17px !important;
         }
 
         .booking-engine-admin-light .booking-engine-admin-content [class*='uppercase'] {
-          font-size: 12px !important;
+          font-size: 11px !important;
           letter-spacing: 0.06em !important;
         }
 
         .booking-engine-admin-light [class*='grid-cols-'][class*='hover:bg'] {
-          min-height: 68px;
-          font-size: 14px !important;
+          min-height: 54px;
+          font-size: 13px !important;
         }
 
         .booking-engine-admin-light .booking-engine-admin-content button[title='Edit'],
         .booking-engine-admin-light .booking-engine-admin-content button[title='Delete local record'] {
-          width: 40px !important;
-          height: 40px !important;
+          width: 34px !important;
+          height: 34px !important;
           background: #ffffff !important;
         }
 
@@ -3191,11 +3208,11 @@ export default function BookingEngineAdmin() {
 
         .booking-engine-admin-light .booking-engine-admin-header > div:first-child > div h2 {
           color: #0f172a !important;
-          font-size: 26px !important;
+          font-size: 22px !important;
         }
 
         .booking-engine-admin-light button {
-          font-size: 14px;
+          font-size: 13px;
         }
 
         .booking-engine-admin-light [class*='hover:bg-white']:hover {
@@ -4085,6 +4102,22 @@ function BookingSettingsPanel({
         </BookingSettingCard>
 
         <BookingSettingCard
+          title="Minimum Rental Days"
+          description="Sets the shortest rental period customers may search and book."
+        >
+          <TextField
+            label="Minimum rental days"
+            value={settings.minimumRentalDays}
+            placeholder="3"
+            type="number"
+            onChange={(minimumRentalDays) => updateSettings({ minimumRentalDays })}
+          />
+          <p className="mt-2 text-xs font-semibold text-slate-500">
+            Return dates in Public Booking Preview are automatically corrected to this minimum.
+          </p>
+        </BookingSettingCard>
+
+        <BookingSettingCard
           title="Default Language"
           description="Initial language used by the future public booking experience."
         >
@@ -4788,7 +4821,7 @@ function EmailsPanel({
 
   return (
     <section className="min-w-[820px]">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2.5">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-lg font-black text-slate-950">Email templates</h3>
@@ -4828,7 +4861,7 @@ function EmailsPanel({
         </div>
       )}
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_230px]">
+      <div className="grid gap-2.5 xl:grid-cols-[minmax(0,1fr)_220px]">
         <div className="space-y-2.5">
           {templateOrder.map((templateId) => {
             const template = settings.templates[templateId];
@@ -4847,7 +4880,7 @@ function EmailsPanel({
                 <button
                   type="button"
                   onClick={() => setOpenTemplateId(isOpen ? null : templateId)}
-                  className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition hover:bg-slate-50"
+                  className="flex w-full items-center justify-between gap-2.5 px-3 py-2.5 text-left transition hover:bg-slate-50"
                 >
                   <span className="flex min-w-0 items-center gap-3">
                     <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700">
@@ -4855,7 +4888,7 @@ function EmailsPanel({
                     </span>
                     <span className="min-w-0">
                       <span className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-black text-slate-950">{template.label}</span>
+                        <span className="text-[13px] font-black text-slate-950">{template.label}</span>
                         <span
                           className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
                             meta.badge.includes('Manual')
@@ -4879,7 +4912,7 @@ function EmailsPanel({
                         event.stopPropagation();
                         updateTemplate(templateId, { active: !template.active });
                       }}
-                      className={`inline-flex h-8 items-center rounded-lg border px-2.5 text-xs font-black transition ${
+                      className={`inline-flex h-7 items-center rounded-md border px-2 text-[11px] font-black transition ${
                         template.active
                           ? 'border-emerald-600 bg-emerald-600 text-white'
                           : 'border-slate-300 bg-white text-slate-600'
@@ -4896,8 +4929,8 @@ function EmailsPanel({
                 </button>
 
                 {isOpen && (
-                  <div className="border-t border-slate-200 bg-slate-50/70 px-3.5 py-3">
-                    <div className="grid gap-3">
+                  <div className="border-t border-slate-200 bg-slate-50/70 px-3 py-2.5">
+                    <div className="grid gap-2.5">
                       <EmailTemplateField
                         fieldKey={subjectKey}
                         label="Subject template"
@@ -5027,12 +5060,17 @@ const sampleEmailReservation = {
   returnTime: '10:00',
   pickupLocation: 'Rhodes Airport',
   returnLocation: 'Rhodes Airport',
+  rentalTotal: '€262.00',
   totalPrice: '€280.00',
   paymentMethod: 'Pay on Arrival',
   paymentLink: 'https://pay.example.com/ACR-DEMO-0001',
+  extras: [
+    { name: 'Baby Seat', quantity: 1, unitPrice: 10, total: 10 },
+    { name: 'Booster Seat', quantity: 1, unitPrice: 8, total: 8 },
+  ],
 };
 
-const renderSampleTemplate = (template: string) => {
+const renderSampleTemplate = (template: string, appendExtrasFallback = false) => {
   const replacements: Record<string, string> = {
     customer_name: sampleEmailReservation.customerName,
     reservation_id: sampleEmailReservation.reservationId,
@@ -5047,13 +5085,24 @@ const renderSampleTemplate = (template: string) => {
     total_price: sampleEmailReservation.totalPrice,
     payment_method: sampleEmailReservation.paymentMethod,
     payment_link: sampleEmailReservation.paymentLink,
+    extras_summary: renderBookingExtrasSummary(sampleEmailReservation.extras),
   };
 
-  return Object.entries(replacements).reduce(
+  const renderedTemplate = Object.entries(replacements).reduce(
     (message, [key, value]) =>
       message.split(`{{${key}}}`).join(value).split(`{${key}}`).join(value),
     template,
   );
+
+  if (
+    !appendExtrasFallback ||
+    template.includes('{{extras_summary}}') ||
+    template.includes('{extras_summary}')
+  ) {
+    return renderedTemplate;
+  }
+
+  return `${renderedTemplate}\n\nExtras:\n${renderBookingExtrasSummary(sampleEmailReservation.extras)}`;
 };
 
 function EmailTemplatePreviewModal({
@@ -5072,11 +5121,32 @@ function EmailTemplatePreviewModal({
   onSave: (subject: string, message: string) => void;
 }) {
   const [subject, setSubject] = useState(renderSampleTemplate(template.subject));
-  const [message, setMessage] = useState(renderSampleTemplate(template.message));
+  const [message, setMessage] = useState(renderSampleTemplate(template.message, true));
   const recipient =
     template.id === 'admin_new_confirmed_reservation' || template.id === 'admin_new_onrequest_reservation'
       ? adminEmail || 'reservations@autoclub-rhodes.com'
       : 'maria.demo@example.com';
+  const previewHtml = buildBookingEmailHtml({
+    site: {
+      siteId: 'preview',
+      siteName,
+      adminEmail,
+      logoImage,
+    },
+    reservation: {
+      ...sampleEmailReservation,
+      email: 'maria.demo@example.com',
+      phone: '+30 690 000 0000',
+      country: 'Greece',
+      countryCode: '+30',
+      dateOfBirth: '12/04/1990',
+      accommodationName: 'Rhodes Bay Hotel',
+      flightNumber: 'A3 218',
+      notes: '',
+    },
+    intro: getBookingEmailIntro(template.id),
+    templateId: template.id,
+  });
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/45 p-5 backdrop-blur-sm">
@@ -5149,6 +5219,14 @@ function EmailTemplatePreviewModal({
                   className="mt-1.5 w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm leading-6 text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
                 />
               </label>
+              <div>
+                <FieldLabel>Final email preview</FieldLabel>
+                <iframe
+                  title={`${template.label} final email preview`}
+                  srcDoc={previewHtml}
+                  className="mt-1.5 h-[520px] w-full rounded-xl border border-slate-300 bg-white"
+                />
+              </div>
             </div>
           </div>
         </div>

@@ -24,8 +24,11 @@ import {
 import {
   buildBookingEmailEventPayload,
   buildBookingEmailHtml,
+  getBookingEmailIntro,
   normalizeSupabaseEmailTemplates,
   renderBookingEmailTemplate,
+  renderBookingExtrasHtml,
+  renderBookingExtrasSummary,
   sendBookingEngineEmailEvent,
   type BookingEngineEmailEventType,
   type BookingEngineEmailTemplateRow,
@@ -106,6 +109,7 @@ const emailVariables = [
   '{{total_price}}',
   '{{payment_method}}',
   '{{payment_link}}',
+  '{{extras_summary}}',
 ];
 
 const formatDate = (value: string) => {
@@ -136,6 +140,11 @@ const mapBoardStatusToDbStatus = (status: ReservationStatus, processed: boolean)
 const isProcessedDbStatus = (status?: string | null) => {
   const normalized = (status || '').toUpperCase();
   return normalized === 'PROCESSED' || normalized === 'READY' || normalized === 'CONFIRMED' || normalized === 'CANCELLED';
+};
+
+const isOnRequestReservation = (reservation: WebsiteReservation) => {
+  const rawStatus = reservation.rawStatus.toUpperCase();
+  return rawStatus === 'ON_REQUEST' || rawStatus === 'UNDER_REVIEW' || reservation.status === 'Under Review';
 };
 
 const parseVehicleCategory = (value?: string | null) => {
@@ -250,13 +259,35 @@ const toEmailReservationContext = (reservation: WebsiteReservation) => ({
   returnTime: reservation.returnTime,
   pickupLocation: reservation.pickupLocation,
   returnLocation: reservation.returnLocation,
+  rentalTotal: formatMoney(
+    Math.max(
+      0,
+      reservation.total - reservation.extras.reduce((sum, extra) => sum + Number(extra.total || 0), 0),
+    ),
+  ),
   totalPrice: formatMoney(reservation.total),
   paymentMethod: reservation.paymentMethod,
   paymentLink: '',
+  extras: reservation.extras,
 });
 
-const replaceEmailVariables = (template: string, reservation: WebsiteReservation) =>
-  renderBookingEmailTemplate(template, toEmailReservationContext(reservation));
+const replaceEmailVariables = (
+  template: string,
+  reservation: WebsiteReservation,
+  appendExtrasFallback = false,
+) => {
+  const context = toEmailReservationContext(reservation);
+  const renderedTemplate = renderBookingEmailTemplate(template, context);
+  if (
+    !appendExtrasFallback ||
+    template.includes('{{extras_summary}}') ||
+    template.includes('{extras_summary}')
+  ) {
+    return renderedTemplate;
+  }
+
+  return `${renderedTemplate}\n\nExtras:\n${renderBookingExtrasSummary(context.extras)}`;
+};
 
 const getReservationSortValue = (
   reservation: WebsiteReservation,
@@ -322,6 +353,7 @@ export default function AutoClubRhodesReservationsBoard() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [emailFeedback, setEmailFeedback] = useState('');
   const [emailReservationId, setEmailReservationId] = useState<string | null>(null);
+  const [confirmingReservationId, setConfirmingReservationId] = useState<string | null>(null);
   const [emailInitialTemplate, setEmailInitialTemplate] =
     useState<EmailTemplateId>('customer_confirmed_reservation');
   const [bookingEngineConfig, setBookingEngineConfig] = useState(() => loadBookingEngineConfig());
@@ -502,7 +534,7 @@ export default function AutoClubRhodesReservationsBoard() {
     }
 
     if (
-      reservation.rawStatus.toUpperCase() === 'ON_REQUEST' &&
+      isOnRequestReservation(reservation) &&
       nextProcessed &&
       nextStatus === 'Ready'
     ) {
@@ -510,6 +542,16 @@ export default function AutoClubRhodesReservationsBoard() {
     }
 
     await loadSupabaseReservations();
+  };
+
+  const confirmOnRequestReservation = async (reservationId: string) => {
+    if (confirmingReservationId) return;
+    setConfirmingReservationId(reservationId);
+    try {
+      await updateReservation(reservationId, { status: 'Ready', processed: true });
+    } finally {
+      setConfirmingReservationId(null);
+    }
   };
 
   const openEditor = (reservation: WebsiteReservation) => {
@@ -751,16 +793,30 @@ export default function AutoClubRhodesReservationsBoard() {
                         tone="primary"
                         onClick={() => openEmailComposer(reservation.id)}
                       />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateReservation(reservation.id, { status: 'Ready', processed: true })
-                        }
-                        className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border border-emerald-600 bg-emerald-600 px-2 text-[9px] font-black text-white transition hover:bg-emerald-700"
-                      >
-                        <Check className="h-3 w-3" />
-                        OK / Πέρασμα
-                      </button>
+                      {isOnRequestReservation(reservation) ? (
+                        <button
+                          type="button"
+                          disabled={Boolean(confirmingReservationId)}
+                          onClick={() => confirmOnRequestReservation(reservation.id)}
+                          className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border border-emerald-700 bg-emerald-700 px-2 text-[9px] font-black text-white transition hover:bg-emerald-800 disabled:cursor-wait disabled:opacity-60"
+                        >
+                          <Check className="h-3 w-3" />
+                          {confirmingReservationId === reservation.id
+                            ? 'Confirming...'
+                            : 'Confirm reservation'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateReservation(reservation.id, { status: 'Ready', processed: true })
+                          }
+                          className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border border-emerald-600 bg-emerald-600 px-2 text-[9px] font-black text-white transition hover:bg-emerald-700"
+                        >
+                          <Check className="h-3 w-3" />
+                          OK / Πέρασμα
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))
@@ -911,12 +967,20 @@ export default function AutoClubRhodesReservationsBoard() {
               accommodation_name: emailContext.accommodationName || '',
               flight_number: emailContext.flightNumber || '',
               notes: emailContext.notes || '',
+              extras: emailContext.extras || [],
+              extras_summary: renderBookingExtrasSummary(emailContext.extras),
+              extras_summary_html: renderBookingExtrasHtml(emailContext.extras),
+              extras_total: (emailContext.extras || []).reduce(
+                (sum, extra) => sum + Number(extra.total ?? Number(extra.unitPrice || 0) * extra.quantity),
+                0,
+              ),
               to: recipient,
               subject,
               html_body: buildBookingEmailHtml({
                 site: siteContext,
                 reservation: emailContext,
-                message,
+                intro: getBookingEmailIntro(templateId),
+                templateId,
               }),
               emails: [
                 {
@@ -925,7 +989,8 @@ export default function AutoClubRhodesReservationsBoard() {
                   html_body: buildBookingEmailHtml({
                     site: siteContext,
                     reservation: emailContext,
-                    message,
+                    intro: getBookingEmailIntro(templateId),
+                    templateId,
                   }),
                   text_body: message,
                   template_key: templateId,
@@ -1540,17 +1605,28 @@ function EmailComposerModal({
   const [templateId, setTemplateId] = useState<EmailTemplateId>(safeInitialTemplate);
   const [recipient, setRecipient] = useState(reservation.email);
   const [subject, setSubject] = useState(replaceEmailVariables(initialContent.subject, reservation));
-  const [message, setMessage] = useState(replaceEmailVariables(initialContent.message, reservation));
+  const [message, setMessage] = useState(replaceEmailVariables(initialContent.message, reservation, true));
   const [activeField, setActiveField] = useState<EmailField>('message');
   const subjectRef = useRef<HTMLInputElement | null>(null);
   const messageRef = useRef<HTMLTextAreaElement | null>(null);
+  const previewHtml = buildBookingEmailHtml({
+    site: {
+      siteId: 'preview',
+      siteName,
+      adminEmail: '',
+      logoImage,
+    },
+    reservation: toEmailReservationContext(reservation),
+    intro: getBookingEmailIntro(templateId),
+    templateId,
+  });
 
   const applyTemplate = (nextTemplateId: EmailTemplateId) => {
     const template = templates[nextTemplateId];
     setTemplateId(nextTemplateId);
     setRecipient(reservation.email);
     setSubject(replaceEmailVariables(template.subject, reservation));
-    setMessage(replaceEmailVariables(template.message, reservation));
+    setMessage(replaceEmailVariables(template.message, reservation, true));
     setActiveField('message');
   };
 
@@ -1610,7 +1686,7 @@ function EmailComposerModal({
           </button>
         </header>
 
-        <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_380px]">
           <div className="space-y-4 p-5">
             <label className="block">
               <EditorLabel>Template</EditorLabel>
@@ -1680,6 +1756,17 @@ function EmailComposerModal({
                   {variable}
                 </button>
               ))}
+            </div>
+            <div className="mt-5 border-t border-slate-200 pt-5">
+              <h4 className="text-sm font-black text-slate-950">Final email preview</h4>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                This is the cleaned HTML body sent to Make.
+              </p>
+              <iframe
+                title="Final reservation email preview"
+                srcDoc={previewHtml}
+                className="mt-3 h-[430px] w-full rounded-xl border border-slate-300 bg-white"
+              />
             </div>
           </aside>
         </div>
