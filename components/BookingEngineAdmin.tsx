@@ -4974,7 +4974,7 @@ function EmailsPanel({
                         Save
                       </button>
                       <span className="text-[11px] font-semibold text-slate-500">
-                        Manual preview only - live sends run through Make events.
+                        Manual preview only - live sends run through internal SMTP events.
                       </span>
                     </div>
                   </div>
@@ -5008,9 +5008,9 @@ function EmailsPanel({
             ))}
           </div>
           <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
-            <p className="text-xs font-bold text-amber-900">Supabase templates + Make webhook</p>
+            <p className="text-xs font-bold text-amber-900">Supabase templates + internal SMTP</p>
             <p className="mt-1 text-[11px] leading-5 text-slate-600">
-              Templates are stored in Supabase. Reservation events send through the Make email webhook.
+              Templates are stored in Supabase. Reservation events send through the internal SMTP endpoint.
             </p>
           </div>
           {loading && (
@@ -6444,7 +6444,7 @@ function ManualEmailButton({ label, onClick }: { label: string; onClick: () => v
         <Mail className="h-3.5 w-3.5" />
         {label}
       </button>
-      <span className="text-[11px] font-semibold text-slate-500">Manual preview only · Make sends from reservation events</span>
+      <span className="text-[11px] font-semibold text-slate-500">Manual preview only · SMTP sends from reservation events</span>
     </div>
   );
 }

@@ -1077,7 +1077,7 @@ export default function PublicBookingPreview() {
       },
     });
 
-    console.log('RESERVATION EMAIL WEBHOOK PAYLOAD', emailEventPayload);
+    console.log('INTERNAL EMAIL PAYLOAD', emailEventPayload);
     await sendBookingEngineEmailEvent(emailEventPayload);
 
     setSubmittedReservationId(savedReservationId);

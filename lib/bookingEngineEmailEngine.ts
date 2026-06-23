@@ -5,8 +5,7 @@ import {
   type BookingEngineEmailTemplateId,
 } from './bookingEngineLocalConfig';
 
-export const BOOKING_ENGINE_EMAIL_WEBHOOK_URL =
-  'https://hook.eu1.make.com/k4m65rc0do8ctn9se5zyh7msfez79m6v';
+export const BOOKING_ENGINE_EMAIL_ENDPOINT = '/api/send-email';
 
 export type BookingEngineEmailEventType =
   | 'new_reservation_confirmed'
@@ -448,36 +447,52 @@ export const buildBookingEmailEventPayload = ({
 export const sendBookingEngineEmailEvent = async (
   payload: ReturnType<typeof buildBookingEmailEventPayload>,
 ) => {
-  console.log('BOOKING ENGINE EMAIL WEBHOOK PAYLOAD', payload);
+  console.log('INTERNAL EMAIL PAYLOAD', payload);
 
   if (!payload.emails.length) {
-    console.log('BOOKING ENGINE EMAIL WEBHOOK RESULT', 'No active email templates or recipients for event.');
-    return;
+    const result = {
+      success: true,
+      message: 'No active email templates or recipients for event.',
+      results: [],
+    };
+    console.log('INTERNAL EMAIL RESULT', result);
+    return result;
   }
 
   try {
-    const response = await fetch(BOOKING_ENGINE_EMAIL_WEBHOOK_URL, {
+    const response = await fetch(BOOKING_ENGINE_EMAIL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
     });
-    const result = await response.text();
+    const result = await response.json().catch(async () => ({
+      success: false,
+      message: await response.text(),
+      results: [],
+    }));
 
-    console.log('BOOKING ENGINE EMAIL WEBHOOK RESULT', {
+    console.log('INTERNAL EMAIL RESULT', {
       ok: response.ok,
       status: response.status,
       body: result,
     });
 
-    if (!response.ok) {
-      console.error('BOOKING ENGINE EMAIL WEBHOOK ERROR', {
+    if (!response.ok || result?.success === false) {
+      console.error('INTERNAL EMAIL ERROR', {
         status: response.status,
         body: result,
       });
     }
+
+    return result;
   } catch (error) {
-    console.error('BOOKING ENGINE EMAIL WEBHOOK ERROR', error);
+    console.error('INTERNAL EMAIL ERROR', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Internal email request failed',
+      results: [],
+    };
   }
 };

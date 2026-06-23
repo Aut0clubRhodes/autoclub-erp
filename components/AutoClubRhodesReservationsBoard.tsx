@@ -926,7 +926,7 @@ export default function AutoClubRhodesReservationsBoard() {
           onSave={saveEditedReservation}
           onDelete={() => setPendingDeleteId(reservationDraft.id)}
           onEmail={(template) => openEmailComposer(reservationDraft.id, template)}
-          onEmailPlaceholder={() => setEmailFeedback('Use the email composer to send through the Make webhook.')}
+          onEmailPlaceholder={() => setEmailFeedback('Use the email composer to send through internal SMTP.')}
         />
       )}
 
@@ -953,7 +953,7 @@ export default function AutoClubRhodesReservationsBoard() {
               whatsappNumber: bookingEngineConfig.siteSettings.whatsappNumber,
             };
 
-            await sendBookingEngineEmailEvent({
+            const sendResult = await sendBookingEngineEmailEvent({
               event_type: eventType,
               reservation_id: emailContext.reservationId,
               site_id: beSiteId,
@@ -1000,7 +1000,11 @@ export default function AutoClubRhodesReservationsBoard() {
               ],
               reservation: emailContext,
             });
-            setEmailFeedback('Email webhook triggered. Check Make for delivery status.');
+            setEmailFeedback(
+              sendResult?.success === false
+                ? 'Email send failed. Check console for SMTP details.'
+                : 'Email sent through internal SMTP.',
+            );
             setEmailReservationId(null);
           }}
           onFeedback={(message) => {
@@ -1292,7 +1296,7 @@ function ReservationEditor({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-black text-slate-900">Email preview flow</p>
-                <p className="mt-0.5 text-xs text-slate-500">Supabase templates. Sends run through the Make email webhook.</p>
+                <p className="mt-0.5 text-xs text-slate-500">Supabase templates. Sends run through internal SMTP.</p>
               </div>
               <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black text-amber-800">
                 {draft.emailStatus}
@@ -1672,7 +1676,7 @@ function EmailComposerModal({
               <p className="font-mono text-xs font-black text-cyan-700">{reservation.id}</p>
               <h3 className="mt-1 text-xl font-black text-slate-950">Email composer</h3>
               <p className="mt-1 text-xs text-slate-500">
-                {siteName} · Car rental in Rhodes · Make email webhook
+                {siteName} · Car rental in Rhodes · Internal SMTP
               </p>
             </div>
           </div>
@@ -1760,7 +1764,7 @@ function EmailComposerModal({
             <div className="mt-5 border-t border-slate-200 pt-5">
               <h4 className="text-sm font-black text-slate-950">Final email preview</h4>
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                This is the cleaned HTML body sent to Make.
+                This is the cleaned HTML body sent through internal SMTP.
               </p>
               <iframe
                 title="Final reservation email preview"
