@@ -6,6 +6,7 @@ import {
 } from './bookingEngineLocalConfig';
 
 export const BOOKING_ENGINE_EMAIL_ENDPOINT = '/api/send-email';
+export const GOOGLE_REVIEW_URL = 'https://g.page/r/CYOr9zt3_-KVEBM/review';
 
 export type BookingEngineEmailEventType =
   | 'new_reservation_confirmed'
@@ -13,7 +14,9 @@ export type BookingEngineEmailEventType =
   | 'reservation_confirmed_customer'
   | 'payment_request'
   | 'reminder'
-  | 'cancellation';
+  | 'cancellation'
+  | 'review_request'
+  | 'custom_email';
 
 export type BookingEngineEmailTemplateRow = {
   template_key?: string | null;
@@ -80,6 +83,25 @@ export const bookingEngineEmailTemplateDefaults: Record<
   BookingEngineEmailTemplate
 > = bookingEngineLocalConfig.emailSettings.templates;
 
+const normalizeTemplateMessage = (
+  templateKey: BookingEngineEmailTemplateId,
+  message: string,
+) => {
+  if (templateKey !== 'customer_reminder') return message;
+
+  const cleaned = message
+    .replace(/A reminder for your upcoming AutoClub Rhodes booking\.?/gi, '')
+    .replace(/upcoming AutoClub Rhodes booking\.?/gi, '')
+    .trim();
+  const fallback =
+    'Hello {{customer_name}},\n\nThank you for choosing AutoClub Rhodes.\n\nWe hope you enjoyed your rental.\nWe would really appreciate your review and feedback.';
+  const withReviewWording = cleaned || fallback;
+
+  return withReviewWording.includes(GOOGLE_REVIEW_URL)
+    ? withReviewWording
+    : `${withReviewWording}\n${GOOGLE_REVIEW_URL}`;
+};
+
 export const normalizeSupabaseEmailTemplates = (
   rows: BookingEngineEmailTemplateRow[] = [],
   adminEmail = '',
@@ -96,7 +118,7 @@ export const normalizeSupabaseEmailTemplates = (
       label: row.label || defaultTemplate.label,
       active: row.active !== false,
       subject: row.subject || '',
-      message: row.message || '',
+      message: normalizeTemplateMessage(templateKey, row.message || ''),
     };
   });
 
@@ -124,7 +146,7 @@ const formatExtraAmount = (amount: number) =>
 export const renderBookingExtrasSummary = (
   extras: BookingEngineEmailReservationContext['extras'] = [],
 ) => {
-  if (!extras.length) return 'No extras selected';
+  if (!extras.length) return '';
 
   const lines = extras.map((extra) =>
     `${extra.name} x${extra.quantity} - ${formatExtraAmount(getExtraSubtotal(extra))}`,
@@ -138,7 +160,7 @@ export const renderBookingExtrasHtml = (
   extras: BookingEngineEmailReservationContext['extras'] = [],
 ) => {
   if (!extras.length) {
-    return '<p style="margin:0;color:#53657a;font-size:14px;">No extras selected</p>';
+    return '';
   }
 
   const rows = extras
@@ -204,7 +226,7 @@ export const getBookingEmailIntro = (templateId: BookingEngineEmailTemplateId) =
     case 'customer_payment_request':
       return 'Your payment request is ready.';
     case 'customer_reminder':
-      return 'A reminder for your upcoming AutoClub Rhodes booking.';
+      return 'Thank you for choosing AutoClub Rhodes. We hope you enjoyed your rental. We would really appreciate your review and feedback.';
     case 'customer_cancellation':
       return 'Your reservation has been cancelled.';
     default:
@@ -220,16 +242,80 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
+const renderEmailCta = ({
+  href,
+  label,
+  background = '#0891b2',
+}: {
+  href: string;
+  label: string;
+  background?: string;
+}) =>
+  `<div style="margin:12px 0 12px;">
+    <a href="${escapeHtml(href)}" style="display:inline-block;border-radius:10px;background:${background};color:#ffffff;text-decoration:none;padding:10px 14px;font-size:13px;font-weight:900;">${label}</a>
+  </div>`;
+
+const stripEmptyPaymentLinkLines = (value: string) =>
+  value
+    .split('\n')
+    .filter((line) => !/^payment link:\s*$/i.test(line.trim()))
+    .join('\n');
+
+const renderTextParagraph = (paragraph: string, paymentLink = '') => {
+  const reviewUrlPattern = new RegExp(GOOGLE_REVIEW_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+  const paymentLinkPattern = paymentLink
+    ? new RegExp(paymentLink.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
+    : null;
+  let working = paragraph.trim();
+  const pieces: string[] = [];
+
+  if (!working) return '';
+
+  if (working.includes(GOOGLE_REVIEW_URL)) {
+    working = working.replace(reviewUrlPattern, '').replace(/Review link:\s*/gi, '').trim();
+    if (working) {
+      pieces.push(
+        `<p style="margin:0 0 10px;font-size:14px;line-height:1.55;font-weight:650;color:#26384d;">${escapeHtml(working).replace(/\n/g, '<br />')}</p>`,
+      );
+    }
+    pieces.push(renderEmailCta({ href: GOOGLE_REVIEW_URL, label: '&#11088; Leave a Google Review' }));
+    return pieces.join('');
+  }
+
+  if (paymentLink && working.includes(paymentLink)) {
+    working = working.replace(paymentLinkPattern as RegExp, '').replace(/Payment link:\s*/gi, '').trim();
+    if (working) {
+      pieces.push(
+        `<p style="margin:0 0 10px;font-size:14px;line-height:1.55;font-weight:650;color:#26384d;">${escapeHtml(working).replace(/\n/g, '<br />')}</p>`,
+      );
+    }
+    pieces.push(renderEmailCta({ href: paymentLink, label: '&#128179; Complete Payment', background: '#059669' }));
+    return pieces.join('');
+  }
+
+  return `<p style="margin:0 0 10px;font-size:14px;line-height:1.55;font-weight:650;color:#26384d;">${escapeHtml(working).replace(/\n/g, '<br />')}</p>`;
+};
+
+const renderTextBlockHtml = (value: string, paymentLink = '') =>
+  stripEmptyPaymentLinkLines(value || '')
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => renderTextParagraph(paragraph, paymentLink))
+    .join('');
+
 export const buildBookingEmailHtml = ({
   site,
   reservation,
   intro,
   templateId,
+  manualMessage,
 }: {
   site: BookingEngineEmailSiteContext;
   reservation: BookingEngineEmailReservationContext;
   intro: string;
   templateId?: BookingEngineEmailTemplateId;
+  manualMessage?: string;
 }) => {
   const isAdminNotification =
     templateId === 'admin_new_confirmed_reservation' ||
@@ -237,6 +323,7 @@ export const buildBookingEmailHtml = ({
   const isAdminOnRequest = templateId === 'admin_new_onrequest_reservation';
   const isCustomerOnRequest = templateId === 'customer_onrequest_received';
   const isOnRequest = isAdminOnRequest || isCustomerOnRequest;
+  const hasManualMessage = typeof manualMessage === 'string';
   const emailTitle = isAdminOnRequest
     ? 'New On Request Reservation'
     : isCustomerOnRequest
@@ -272,6 +359,7 @@ export const buildBookingEmailHtml = ({
     ['Extras total', formatExtraAmount(extrasTotal)],
     ['Final total', reservation.totalPrice],
     ['Payment method', reservation.paymentMethod],
+    ['Payment link', reservation.paymentLink || ''],
   ].filter(([, value]) => String(value || '').trim());
   const allRows = [...customerRows, ...reservationRows];
   const renderRows = (rows: string[][]) => rows
@@ -318,17 +406,33 @@ export const buildBookingEmailHtml = ({
                 </div>`
               : ''
           }
-          <p style="margin:0 0 11px;font-size:14px;line-height:1.45;font-weight:700;color:#26384d;">${escapeHtml(intro)}</p>
           ${
-            isAdminNotification
-              ? `${renderSection('Customer details', customerRows)}${renderSection('Reservation details', reservationRows)}`
-              : `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border:1px solid #d8e0ea;border-radius:12px;overflow:hidden;">${renderRows(allRows)}</table>`
+            hasManualMessage
+              ? `<div style="margin:0 0 4px;">${renderTextBlockHtml(manualMessage || '', reservation.paymentLink || '')}</div>
+                ${
+                  reservation.extras?.length
+                    ? `<div style="margin-top:12px;">
+                        <div style="margin-bottom:6px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#53657a;">Extras</div>
+                        ${renderBookingExtrasHtml(reservation.extras)}
+                      </div>`
+                    : ''
+                }`
+              : `<p style="margin:0 0 11px;font-size:14px;line-height:1.45;font-weight:700;color:#26384d;">${escapeHtml(intro)}</p>
+                ${
+                  isAdminNotification
+                    ? `${renderSection('Customer details', customerRows)}${renderSection('Reservation details', reservationRows)}`
+                    : `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border:1px solid #d8e0ea;border-radius:12px;overflow:hidden;">${renderRows(allRows)}</table>`
+                }
+                ${
+                  reservation.extras?.length
+                    ? `<div style="margin-top:12px;">
+                        <div style="margin-bottom:6px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#53657a;">Extras</div>
+                        ${renderBookingExtrasHtml(reservation.extras)}
+                      </div>`
+                    : ''
+                }
+                ${renderSection('Total and payment', paymentRows)}`
           }
-          <div style="margin-top:12px;">
-            <div style="margin-bottom:6px;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#53657a;">Extras</div>
-            ${renderBookingExtrasHtml(reservation.extras)}
-          </div>
-          ${renderSection('Total and payment', paymentRows)}
         </div>
         <div style="padding:12px 16px;background:#f8fafc;border-top:1px solid #d8e0ea;font-size:11px;line-height:1.5;color:#53657a;">
           <strong style="color:#102033;">AutoClub Rhodes</strong><br />
@@ -358,7 +462,16 @@ const eventTemplateMap: Record<
   payment_request: [{ key: 'customer_payment_request', recipient: 'customer' }],
   reminder: [{ key: 'customer_reminder', recipient: 'customer' }],
   cancellation: [{ key: 'customer_cancellation', recipient: 'customer' }],
+  review_request: [{ key: 'customer_reminder', recipient: 'customer' }],
+  custom_email: [{ key: 'customEmail', recipient: 'customer' }],
 };
+
+const manualEmailTemplateKeys = new Set<BookingEngineEmailTemplateId>([
+  'customer_payment_request',
+  'customer_reminder',
+  'customer_cancellation',
+  'customEmail',
+]);
 
 export const buildBookingEmailEventPayload = ({
   eventType,
@@ -381,10 +494,13 @@ export const buildBookingEmailEventPayload = ({
 
       const subject = renderBookingEmailTemplate(template.subject, reservation);
       const renderedMessage = renderBookingEmailTemplate(template.message, reservation);
+      const usesManualBody = manualEmailTemplateKeys.has(key);
       const textBody =
         template.message.includes('{{extras_summary}}') || template.message.includes('{extras_summary}')
           ? renderedMessage
-          : `${renderedMessage}\n\nExtras:\n${renderBookingExtrasSummary(reservation.extras)}`;
+          : reservation.extras?.length
+            ? `${renderedMessage}\n\nExtras:\n${renderBookingExtrasSummary(reservation.extras)}`
+            : renderedMessage;
 
       return {
         to,
@@ -394,6 +510,7 @@ export const buildBookingEmailEventPayload = ({
           reservation,
           intro: getBookingEmailIntro(key),
           templateId: key,
+          manualMessage: usesManualBody ? renderedMessage : undefined,
         }),
         text_body: textBody,
         template_key: key,
@@ -429,6 +546,7 @@ export const buildBookingEmailEventPayload = ({
     accommodation_name: reservation.accommodationName || '',
     flight_number: reservation.flightNumber || '',
     notes: reservation.notes || '',
+    payment_link: reservation.paymentLink || '',
     extras: reservation.extras || [],
     extras_summary: renderBookingExtrasSummary(reservation.extras),
     extras_summary_html: renderBookingExtrasHtml(reservation.extras),

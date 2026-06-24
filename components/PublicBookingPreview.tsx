@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -216,47 +216,47 @@ type CountryDialCode = {
 };
 
 const COUNTRY_DIAL_CODES: CountryDialCode[] = [
-  { name: 'Greece', iso: 'GR', flag: '🇬🇷', dialCode: '+30' },
-  { name: 'Italy', iso: 'IT', flag: '🇮🇹', dialCode: '+39' },
-  { name: 'United Kingdom', iso: 'GB', flag: '🇬🇧', dialCode: '+44' },
-  { name: 'France', iso: 'FR', flag: '🇫🇷', dialCode: '+33' },
-  { name: 'Germany', iso: 'DE', flag: '🇩🇪', dialCode: '+49' },
-  { name: 'Czech Republic', iso: 'CZ', flag: '🇨🇿', dialCode: '+420' },
-  { name: 'Poland', iso: 'PL', flag: '🇵🇱', dialCode: '+48' },
-  { name: 'Netherlands', iso: 'NL', flag: '🇳🇱', dialCode: '+31' },
-  { name: 'Belgium', iso: 'BE', flag: '🇧🇪', dialCode: '+32' },
-  { name: 'Austria', iso: 'AT', flag: '🇦🇹', dialCode: '+43' },
-  { name: 'Switzerland', iso: 'CH', flag: '🇨🇭', dialCode: '+41' },
-  { name: 'Sweden', iso: 'SE', flag: '🇸🇪', dialCode: '+46' },
-  { name: 'Norway', iso: 'NO', flag: '🇳🇴', dialCode: '+47' },
-  { name: 'Denmark', iso: 'DK', flag: '🇩🇰', dialCode: '+45' },
-  { name: 'Finland', iso: 'FI', flag: '🇫🇮', dialCode: '+358' },
-  { name: 'Ireland', iso: 'IE', flag: '🇮🇪', dialCode: '+353' },
-  { name: 'Spain', iso: 'ES', flag: '🇪🇸', dialCode: '+34' },
-  { name: 'Portugal', iso: 'PT', flag: '🇵🇹', dialCode: '+351' },
-  { name: 'Cyprus', iso: 'CY', flag: '🇨🇾', dialCode: '+357' },
-  { name: 'United States', iso: 'US', flag: '🇺🇸', dialCode: '+1' },
-  { name: 'Canada', iso: 'CA', flag: '🇨🇦', dialCode: '+1' },
-  { name: 'Australia', iso: 'AU', flag: '🇦🇺', dialCode: '+61' },
-  { name: 'Israel', iso: 'IL', flag: '🇮🇱', dialCode: '+972' },
-  { name: 'Turkey', iso: 'TR', flag: '🇹🇷', dialCode: '+90' },
-  { name: 'Romania', iso: 'RO', flag: '🇷🇴', dialCode: '+40' },
-  { name: 'Bulgaria', iso: 'BG', flag: '🇧🇬', dialCode: '+359' },
-  { name: 'Hungary', iso: 'HU', flag: '🇭🇺', dialCode: '+36' },
-  { name: 'Slovakia', iso: 'SK', flag: '🇸🇰', dialCode: '+421' },
-  { name: 'Slovenia', iso: 'SI', flag: '🇸🇮', dialCode: '+386' },
-  { name: 'Croatia', iso: 'HR', flag: '🇭🇷', dialCode: '+385' },
-  { name: 'Lithuania', iso: 'LT', flag: '🇱🇹', dialCode: '+370' },
-  { name: 'Latvia', iso: 'LV', flag: '🇱🇻', dialCode: '+371' },
-  { name: 'Estonia', iso: 'EE', flag: '🇪🇪', dialCode: '+372' },
-  { name: 'Ukraine', iso: 'UA', flag: '🇺🇦', dialCode: '+380' },
-  { name: 'Serbia', iso: 'RS', flag: '🇷🇸', dialCode: '+381' },
-  { name: 'South Africa', iso: 'ZA', flag: '🇿🇦', dialCode: '+27' },
-  { name: 'Brazil', iso: 'BR', flag: '🇧🇷', dialCode: '+55' },
-  { name: 'Argentina', iso: 'AR', flag: '🇦🇷', dialCode: '+54' },
-  { name: 'India', iso: 'IN', flag: '🇮🇳', dialCode: '+91' },
-  { name: 'China', iso: 'CN', flag: '🇨🇳', dialCode: '+86' },
-  { name: 'Japan', iso: 'JP', flag: '🇯🇵', dialCode: '+81' },
+  { name: 'Greece', iso: 'GR', flag: 'π‡¬π‡·', dialCode: '+30' },
+  { name: 'Italy', iso: 'IT', flag: 'π‡®π‡Ή', dialCode: '+39' },
+  { name: 'United Kingdom', iso: 'GB', flag: 'π‡¬π‡§', dialCode: '+44' },
+  { name: 'France', iso: 'FR', flag: 'π‡«π‡·', dialCode: '+33' },
+  { name: 'Germany', iso: 'DE', flag: 'π‡©π‡', dialCode: '+49' },
+  { name: 'Czech Republic', iso: 'CZ', flag: 'π‡¨π‡Ώ', dialCode: '+420' },
+  { name: 'Poland', iso: 'PL', flag: 'π‡µπ‡±', dialCode: '+48' },
+  { name: 'Netherlands', iso: 'NL', flag: 'π‡³π‡±', dialCode: '+31' },
+  { name: 'Belgium', iso: 'BE', flag: 'π‡§π‡', dialCode: '+32' },
+  { name: 'Austria', iso: 'AT', flag: 'π‡¦π‡Ή', dialCode: '+43' },
+  { name: 'Switzerland', iso: 'CH', flag: 'π‡¨π‡­', dialCode: '+41' },
+  { name: 'Sweden', iso: 'SE', flag: 'π‡Έπ‡', dialCode: '+46' },
+  { name: 'Norway', iso: 'NO', flag: 'π‡³π‡΄', dialCode: '+47' },
+  { name: 'Denmark', iso: 'DK', flag: 'π‡©π‡°', dialCode: '+45' },
+  { name: 'Finland', iso: 'FI', flag: 'π‡«π‡®', dialCode: '+358' },
+  { name: 'Ireland', iso: 'IE', flag: 'π‡®π‡', dialCode: '+353' },
+  { name: 'Spain', iso: 'ES', flag: 'π‡π‡Έ', dialCode: '+34' },
+  { name: 'Portugal', iso: 'PT', flag: 'π‡µπ‡Ή', dialCode: '+351' },
+  { name: 'Cyprus', iso: 'CY', flag: 'π‡¨π‡Ύ', dialCode: '+357' },
+  { name: 'United States', iso: 'US', flag: 'π‡Ίπ‡Έ', dialCode: '+1' },
+  { name: 'Canada', iso: 'CA', flag: 'π‡¨π‡¦', dialCode: '+1' },
+  { name: 'Australia', iso: 'AU', flag: 'π‡¦π‡Ί', dialCode: '+61' },
+  { name: 'Israel', iso: 'IL', flag: 'π‡®π‡±', dialCode: '+972' },
+  { name: 'Turkey', iso: 'TR', flag: 'π‡Ήπ‡·', dialCode: '+90' },
+  { name: 'Romania', iso: 'RO', flag: 'π‡·π‡΄', dialCode: '+40' },
+  { name: 'Bulgaria', iso: 'BG', flag: 'π‡§π‡¬', dialCode: '+359' },
+  { name: 'Hungary', iso: 'HU', flag: 'π‡­π‡Ί', dialCode: '+36' },
+  { name: 'Slovakia', iso: 'SK', flag: 'π‡Έπ‡°', dialCode: '+421' },
+  { name: 'Slovenia', iso: 'SI', flag: 'π‡Έπ‡®', dialCode: '+386' },
+  { name: 'Croatia', iso: 'HR', flag: 'π‡­π‡·', dialCode: '+385' },
+  { name: 'Lithuania', iso: 'LT', flag: 'π‡±π‡Ή', dialCode: '+370' },
+  { name: 'Latvia', iso: 'LV', flag: 'π‡±π‡»', dialCode: '+371' },
+  { name: 'Estonia', iso: 'EE', flag: 'π‡π‡', dialCode: '+372' },
+  { name: 'Ukraine', iso: 'UA', flag: 'π‡Ίπ‡¦', dialCode: '+380' },
+  { name: 'Serbia', iso: 'RS', flag: 'π‡·π‡Έ', dialCode: '+381' },
+  { name: 'South Africa', iso: 'ZA', flag: 'π‡Ώπ‡¦', dialCode: '+27' },
+  { name: 'Brazil', iso: 'BR', flag: 'π‡§π‡·', dialCode: '+55' },
+  { name: 'Argentina', iso: 'AR', flag: 'π‡¦π‡·', dialCode: '+54' },
+  { name: 'India', iso: 'IN', flag: 'π‡®π‡³', dialCode: '+91' },
+  { name: 'China', iso: 'CN', flag: 'π‡¨π‡³', dialCode: '+86' },
+  { name: 'Japan', iso: 'JP', flag: 'π‡―π‡µ', dialCode: '+81' },
 ];
 
 const carAccentByIndex = [
@@ -453,6 +453,11 @@ const mapPricingSeason = (row: BePricingSeasonRow): BookingEngineSeasonPrice => 
 function formatDisplayDate(value: string) {
   const [year, month, day] = value.split('-');
   return year && month && day ? `${day}/${month}/${year}` : value;
+}
+
+function formatEuro(value: number | string) {
+  const amount = Number(value || 0);
+  return `€${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
 }
 
 function getRentalDays(pickupDate: string, returnDate: string) {
@@ -1070,8 +1075,8 @@ export default function PublicBookingPreview() {
         returnTime: search.returnTime,
         pickupLocation: search.pickupLocation,
         returnLocation: effectiveReturnLocation,
-        rentalTotal: selectedCar.priceOnRequest ? 'Price on request' : `€${baseRental}`,
-        totalPrice: selectedCar.priceOnRequest ? 'Price on request' : `€${finalTotal}`,
+        rentalTotal: selectedCar.priceOnRequest ? 'Price on request' : formatEuro(baseRental),
+        totalPrice: selectedCar.priceOnRequest ? 'Price on request' : formatEuro(finalTotal),
         paymentMethod,
         extras: selectedExtras,
       },
@@ -1223,7 +1228,7 @@ export default function PublicBookingPreview() {
                 </button>
                 <h1 className="text-3xl font-black tracking-tight text-[#073f5d]">Choose your car</h1>
                 <p className="mt-1 text-sm font-medium text-slate-600">
-                  {search.pickupLocation} · {formatDisplayDate(search.pickupDate)} to {formatDisplayDate(search.returnDate)} · {rentalDays} days
+                  {search.pickupLocation} - {formatDisplayDate(search.pickupDate)} to {formatDisplayDate(search.returnDate)} - {rentalDays} days
                 </p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
@@ -1277,7 +1282,7 @@ export default function PublicBookingPreview() {
                           {car.priceOnRequest ? (
                             <span className="text-lg">Price on request</span>
                           ) : (
-                            <>€{car.pricePerDay}<span className="text-sm font-bold text-slate-500">/day</span></>
+                            <>{formatEuro(car.pricePerDay)}<span className="text-sm font-bold text-slate-500">/day</span></>
                           )}
                         </p>
                       </div>
@@ -1336,7 +1341,7 @@ export default function PublicBookingPreview() {
                           >
                             {COUNTRY_DIAL_CODES.map((country) => (
                               <option key={`${country.iso}-${country.dialCode}`} value={country.name}>
-                                {country.flag} {country.name}
+                                {country.iso} {country.name}
                               </option>
                             ))}
                           </select>
@@ -1427,7 +1432,7 @@ export default function PublicBookingPreview() {
                           <p className="mt-1 text-sm leading-5 text-slate-500">{extra.description}</p>
                         </div>
                         <div className="mt-3 flex items-center justify-between gap-3">
-                          <span className="text-sm font-black text-[#073f5d]">€{extra.price}<span className="font-semibold text-slate-500">{extra.pricingMode === 'Per Day' ? '/day' : ''}</span></span>
+                          <span className="text-sm font-black text-[#073f5d]">{formatEuro(extra.price)}<span className="font-semibold text-slate-500">{extra.pricingMode === 'Per Day' ? '/day' : ''}</span></span>
                           <div className="grid min-w-[112px] grid-cols-[36px_40px_36px] items-center overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
                             <button type="button" onClick={() => changeExtraQuantity(extra, -1)} className="flex h-9 items-center justify-center border-r border-slate-200 bg-[#073f5d] text-white transition hover:bg-[#052f46]" aria-label={`Remove ${extra.name}`}><Minus className="h-4 w-4" /></button>
                             <span className="text-center text-sm font-black text-slate-950">{extras[extra.id] || 0}</span>
@@ -1469,24 +1474,24 @@ export default function PublicBookingPreview() {
                   )}
                 </div>
                 <h2 className="mt-2 text-xl font-black text-[#073f5d]">{selectedCar.name}</h2>
-                <p className="mt-1 text-sm font-bold text-slate-500">Group {selectedCar.groupCode} · {selectedCar.groupName}</p>
+                <p className="mt-1 text-sm font-bold text-slate-500">Group {selectedCar.groupCode} - {selectedCar.groupName}</p>
                 <div className="mt-4 space-y-3 border-y border-slate-100 py-4 text-sm">
-                  <SummaryLine label="Pickup" value={`${formatDisplayDate(search.pickupDate)} · ${search.pickupTime}`} />
+                  <SummaryLine label="Pickup" value={`${formatDisplayDate(search.pickupDate)} - ${search.pickupTime}`} />
                   <SummaryLine label="Pickup location" value={search.pickupLocation} />
-                  <SummaryLine label="Return" value={`${formatDisplayDate(search.returnDate)} · ${search.returnTime}`} />
+                  <SummaryLine label="Return" value={`${formatDisplayDate(search.returnDate)} - ${search.returnTime}`} />
                   <SummaryLine label="Return location" value={effectiveReturnLocation} />
                   <SummaryLine
                     label="Rental"
-                    value={selectedCar.priceOnRequest ? 'Price on request' : `${rentalDays} days × €${selectedCar.pricePerDay}`}
+                    value={selectedCar.priceOnRequest ? 'Price on request' : `${rentalDays} days x ${formatEuro(selectedCar.pricePerDay)}`}
                   />
                   {activeExtras.filter((extra) => (extras[extra.id] || 0) > 0).map((extra) => (
                     <SummaryLine
                       key={extra.id}
-                      label={`${extra.name} × ${extras[extra.id] || 0}`}
-                      value={`€${(extras[extra.id] || 0) * Number(extra.price || 0) * rentalDays}`}
+                      label={`${extra.name} x ${extras[extra.id] || 0}`}
+                      value={formatEuro((extras[extra.id] || 0) * Number(extra.price || 0) * rentalDays)}
                     />
                   ))}
-                  <SummaryLine label="Extras" value={extrasTotal > 0 ? `€${extrasTotal}` : '€0'} />
+                  <SummaryLine label="Extras" value={formatEuro(extrasTotal)} />
                   <div className="rounded-xl bg-slate-50 p-3">
                     <p className="mb-2 font-black text-slate-700">Coupon</p>
                     <div className="flex gap-2">
@@ -1514,13 +1519,13 @@ export default function PublicBookingPreview() {
                       </p>
                     )}
                   </div>
-                  <SummaryLine label="Coupon Discount" value={couponDiscount > 0 ? `-€${couponDiscount}` : '€0'} />
+                  <SummaryLine label="Coupon Discount" value={couponDiscount > 0 ? `-${formatEuro(couponDiscount)}` : formatEuro(0)} />
                   <SummaryLine label="Payment Method" value={paymentMethod} />
                 </div>
                 <div className="flex items-end justify-between py-4">
                   <span className="font-black text-slate-700">Total</span>
                   <span className="text-3xl font-black text-[#073f5d]">
-                    {selectedCar.priceOnRequest ? 'Price on request' : `€${finalTotal}`}
+                    {selectedCar.priceOnRequest ? 'Price on request' : formatEuro(finalTotal)}
                   </span>
                 </div>
                 <div className="mb-3 space-y-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
@@ -1546,7 +1551,7 @@ export default function PublicBookingPreview() {
                 <button type="button" disabled={submittingReservation} aria-disabled={!acceptTerms || requiredFieldsMissing || submittingReservation} onClick={submitReservation} className={`flex h-[54px] w-full items-center justify-center gap-2 rounded-xl px-6 text-base font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70 ${selectedCar.mode === 'Open' ? 'bg-emerald-600 shadow-emerald-900/20 hover:bg-emerald-700' : 'bg-[#0891b2] shadow-cyan-900/20 hover:bg-[#087f9c]'}`}>
                   {submittingReservation ? 'Saving...' : selectedCar.mode === 'Open' ? 'Confirm Booking' : 'Send Request'} <ArrowRight className="h-5 w-5" />
                 </button>
-                <p className="mt-2 text-center text-xs text-slate-400">Prototype only · no payment will be taken</p>
+                <p className="mt-2 text-center text-xs text-slate-400">Preview only - no payment will be taken</p>
                 <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-xs font-bold leading-5 text-emerald-800">
                   Full insurance, zero excess and road assistance are included.
                 </div>
@@ -1556,37 +1561,75 @@ export default function PublicBookingPreview() {
         )}
 
         {step === 'success' && selectedCar && (
-          <section className="mx-auto max-w-3xl py-6 text-center sm:py-10">
-            <div className="rounded-[30px] border border-slate-200 bg-white px-5 py-9 shadow-[0_30px_90px_rgba(7,63,93,0.18)] sm:px-12 sm:py-11">
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-8 border-emerald-50 bg-emerald-100 text-emerald-600"><CheckCircle2 className="h-10 w-10" /></div>
-              <p className="mt-5 text-sm font-black uppercase text-emerald-700">Reservation Received</p>
-              <h1 className="mt-2 text-3xl font-black tracking-tight text-[#073f5d] sm:text-4xl">Your reservation is received</h1>
-              <p className="mt-5 text-sm font-bold text-slate-500">Reservation Code</p>
-              <p className="mx-auto mt-2 max-w-sm rounded-2xl bg-[#073f5d] px-5 py-4 font-mono text-xl font-black tracking-[0.08em] text-white shadow-lg shadow-slate-900/15">
-                {submittedReservationId || 'ACR-DEMO-0001'}
-              </p>
-              <p className="mx-auto mt-6 max-w-lg whitespace-pre-line text-base leading-7 text-slate-600">
-                {'Thank you for choosing AutoClub Rhodes.\nYour reservation request has been received.\nYou will receive confirmation by email.'}
-              </p>
-              <div className="mt-6 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left sm:grid-cols-2">
-                <SummaryLine label="Car" value={selectedCar.name} />
-                <SummaryLine label="Coupon Discount" value={couponDiscount > 0 ? `-€${couponDiscount}` : '€0'} />
-                <SummaryLine label="Total" value={selectedCar.priceOnRequest ? 'Price on request' : `€${finalTotal}`} />
-                <SummaryLine label="Pickup" value={`${formatDisplayDate(search.pickupDate)} · ${search.pickupTime}`} />
-                <SummaryLine label="Return" value={`${formatDisplayDate(search.returnDate)} · ${search.returnTime}`} />
+          <section className="mx-auto flex min-h-[calc(100vh-190px)] max-w-3xl items-center py-5 text-center sm:py-8">
+            <div className="w-full rounded-[26px] border border-slate-200 bg-white px-5 py-7 shadow-[0_24px_70px_rgba(7,63,93,0.16)] sm:px-10 sm:py-9">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border-8 border-emerald-50 bg-emerald-100 text-emerald-600">
+                <CheckCircle2 className="h-8 w-8" />
               </div>
-              <div className="mt-5 grid gap-3 text-left sm:grid-cols-2">
+              <p className="mt-4 text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Reservation Received</p>
+              <h1 className="mt-2 text-3xl font-black tracking-tight text-[#073f5d]">Your reservation is received</h1>
+              <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-600">
+                Thank you for choosing AutoClub Rhodes. Your reservation request has been received and you will receive confirmation by email.
+              </p>
+              <div className="mx-auto mt-5 max-w-md rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Reservation Code</p>
+                <p className="mt-2 rounded-xl bg-[#073f5d] px-4 py-3 font-mono text-lg font-black tracking-[0.08em] text-white shadow-lg shadow-slate-900/15">
+                  {submittedReservationId || 'ACR-DEMO-0001'}
+                </p>
+              </div>
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+                <ConfirmationSummaryBlock label="Car">
+                  <p className="font-black text-slate-950">{selectedCar.name}</p>
+                </ConfirmationSummaryBlock>
+                <ConfirmationSummaryBlock label="Pickup">
+                  <p className="font-black text-slate-950">{search.pickupLocation}</p>
+                  <p className="mt-0.5 text-sm font-bold text-slate-600">
+                    {formatDisplayDate(search.pickupDate)} - {search.pickupTime}
+                  </p>
+                </ConfirmationSummaryBlock>
+                <ConfirmationSummaryBlock label="Return">
+                  <p className="font-black text-slate-950">{effectiveReturnLocation}</p>
+                  <p className="mt-0.5 text-sm font-bold text-slate-600">
+                    {formatDisplayDate(search.returnDate)} - {search.returnTime}
+                  </p>
+                </ConfirmationSummaryBlock>
+                {activeExtras.filter((extra) => (extras[extra.id] || 0) > 0).length > 0 && (
+                  <ConfirmationSummaryBlock label="Extras">
+                    <div className="space-y-1">
+                      {activeExtras.filter((extra) => (extras[extra.id] || 0) > 0).map((extra) => (
+                        <p key={extra.id} className="flex items-center justify-between gap-4 text-sm font-bold text-slate-700">
+                          <span>{extra.name} x{extras[extra.id] || 0}</span>
+                          <span className="font-black text-slate-950">
+                            {formatEuro((extras[extra.id] || 0) * Number(extra.price || 0) * rentalDays)}
+                          </span>
+                        </p>
+                      ))}
+                    </div>
+                  </ConfirmationSummaryBlock>
+                )}
+                <ConfirmationSummaryBlock label="Total" last>
+                  <p className="text-xl font-black text-[#073f5d]">
+                    {selectedCar.priceOnRequest ? 'Price on request' : formatEuro(finalTotal)}
+                  </p>
+                </ConfirmationSummaryBlock>
+              </div>
+              <div className="mt-4 grid gap-3 text-left sm:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="font-black text-[#073f5d]">What happens next</p>
                   <p className="mt-1 text-sm leading-6 text-slate-600">We will review your reservation and send confirmation by email.</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="font-black text-[#073f5d]">Need an urgent change?</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">For urgent changes, contact us on WhatsApp.</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    For urgent changes, contact us on{' '}
+                    <a href="https://wa.me/306948202397" target="_blank" rel="noreferrer" className="font-black text-emerald-700 underline decoration-emerald-300 underline-offset-2">
+                      WhatsApp +306948202397
+                    </a>.
+                  </p>
                 </div>
               </div>
-              <button type="button" onClick={() => { setSelectedCar(null); setStep('search'); setAcceptTerms(false); setSubmittedReservationId(''); }} className="mt-7 rounded-xl bg-[#073f5d] px-7 py-3.5 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition hover:bg-[#052f46]">
-                Start another search
+              <button type="button" onClick={() => { setSelectedCar(null); setStep('search'); setAcceptTerms(false); setSubmittedReservationId(''); }} className="mt-5 rounded-xl bg-[#073f5d] px-7 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition hover:bg-[#052f46]">
+                Make another reservation
               </button>
             </div>
           </section>
@@ -1754,3 +1797,21 @@ function SummaryLine({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+function ConfirmationSummaryBlock({
+  label,
+  children,
+  last = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  last?: boolean;
+}) {
+  return (
+    <div className={`${last ? '' : 'border-b border-slate-200'} py-3 first:pt-0 last:pb-0`}>
+      <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">{label}</p>
+      <div className="mt-1.5">{children}</div>
+    </div>
+  );
+}
+

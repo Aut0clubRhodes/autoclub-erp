@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -56,6 +56,7 @@ type ReservationSortState = {
 type WebsiteReservation = BookingEngineWebsiteReservation & {
   supabaseId: string;
   rawStatus: string;
+  paymentLink?: string;
 };
 
 type BeReservationRow = {
@@ -80,6 +81,7 @@ type BeReservationRow = {
   extras?: BookingEngineWebsiteReservation['extras'] | null;
   coupon?: { code?: string; discount?: number } | null;
   payment_method?: string | null;
+  payment_link?: string | null;
   total_price?: string | number | null;
   status?: string | null;
   notes?: string | null;
@@ -119,6 +121,77 @@ const formatDate = (value: string) => {
 
 const formatMoney = (value: number) =>
   new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(value);
+
+const escapePrintHtml = (value: string | number | null | undefined) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+const printReservationDetails = (reservation: WebsiteReservation) => {
+  const extrasRows = reservation.extras.length
+    ? reservation.extras
+        .map(
+          (extra) =>
+            `<tr><td>${escapePrintHtml(extra.name)} x${escapePrintHtml(extra.quantity)}</td><td>${formatMoney(extra.total)}</td></tr>`,
+        )
+        .join('')
+    : '<tr><td colspan="2">No extras selected</td></tr>';
+  const rows = [
+    ['Reservation ID', reservation.id],
+    ['Customer', reservation.customerName],
+    ['Email', reservation.email],
+    ['Phone', reservation.fullPhone || reservation.phone],
+    ['Country', reservation.country || ''],
+    ['Date of Birth', reservation.dateOfBirth || ''],
+    ['Flight Number', reservation.flightNumber || ''],
+    ['Hotel / Villa / Apartment', reservation.accommodationName || reservation.hotelVillaApartment || reservation.hotelRoom],
+    ['Car / Group', `${reservation.carName} / ${reservation.groupCode}`],
+    ['Pickup', `${formatDate(reservation.pickupDate)} ${reservation.pickupTime} - ${reservation.pickupLocation}`],
+    ['Return', `${formatDate(reservation.returnDate)} ${reservation.returnTime} - ${reservation.returnLocation}`],
+    ['Status', reservation.status],
+    ['Payment method', reservation.paymentMethod],
+    ['Total', formatMoney(reservation.total)],
+    ['Notes', reservation.notes || ''],
+  ];
+  const printWindow = window.open('', '_blank', 'width=900,height=720');
+  if (!printWindow) return;
+
+  printWindow.document.write(`<!doctype html>
+    <html>
+      <head>
+        <title>${escapePrintHtml(reservation.id)} - AutoClub Rhodes</title>
+        <style>
+          body { margin: 0; padding: 32px; background: #f8fafc; color: #102033; font-family: Arial, sans-serif; }
+          .sheet { max-width: 820px; margin: 0 auto; background: #fff; border: 1px solid #cbd5e1; border-radius: 16px; padding: 28px; }
+          h1 { margin: 0; font-size: 24px; color: #073f5d; }
+          .code { margin: 6px 0 20px; font-family: monospace; font-weight: 800; color: #0e7490; }
+          table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+          th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #53657a; padding: 10px; background: #f1f5f9; border: 1px solid #d8e0ea; }
+          td { padding: 10px; border: 1px solid #d8e0ea; font-size: 14px; vertical-align: top; }
+          td:first-child { width: 34%; font-weight: 800; color: #26384d; background: #f8fafc; }
+          .section { margin-top: 20px; font-size: 14px; font-weight: 900; color: #073f5d; }
+          @media print { body { background: #fff; padding: 0; } .sheet { border: 0; border-radius: 0; } }
+        </style>
+      </head>
+      <body>
+        <main class="sheet">
+          <h1>AutoClub Rhodes Reservation</h1>
+          <p class="code">${escapePrintHtml(reservation.id)}</p>
+          <table><tbody>
+            ${rows.map(([label, value]) => `<tr><td>${escapePrintHtml(label)}</td><td>${escapePrintHtml(value)}</td></tr>`).join('')}
+          </tbody></table>
+          <p class="section">Extras</p>
+          <table><tbody>${extrasRows}</tbody></table>
+        </main>
+      </body>
+    </html>`);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+};
 
 const mapDbStatusToBoardStatus = (status?: string | null): ReservationStatus => {
   const normalized = (status || '').toUpperCase();
@@ -225,6 +298,7 @@ const mapBeReservation = (row: BeReservationRow): WebsiteReservation => {
     couponDiscount: Number(coupon?.discount || 0),
     customFields: [],
     paymentMethod: row.payment_method || '',
+    paymentLink: row.payment_link || '',
     total: Number(row.total_price || 0),
     status: boardStatus,
     createdAt: row.created_at || new Date().toISOString(),
@@ -267,7 +341,7 @@ const toEmailReservationContext = (reservation: WebsiteReservation) => ({
   ),
   totalPrice: formatMoney(reservation.total),
   paymentMethod: reservation.paymentMethod,
-  paymentLink: '',
+  paymentLink: reservation.paymentLink || '',
   extras: reservation.extras,
 });
 
@@ -280,6 +354,7 @@ const replaceEmailVariables = (
   const renderedTemplate = renderBookingEmailTemplate(template, context);
   if (
     !appendExtrasFallback ||
+    !context.extras?.length ||
     template.includes('{{extras_summary}}') ||
     template.includes('{extras_summary}')
   ) {
@@ -287,6 +362,27 @@ const replaceEmailVariables = (
   }
 
   return `${renderedTemplate}\n\nExtras:\n${renderBookingExtrasSummary(context.extras)}`;
+};
+
+const ensurePaymentReminderDetails = (
+  message: string,
+  context: ReturnType<typeof toEmailReservationContext>,
+) => {
+  const requiredValues = [
+    context.customerName,
+    context.reservationId,
+    context.carName,
+    context.pickupDate,
+    context.returnDate,
+    context.totalPrice,
+    context.paymentLink || '',
+  ].filter(Boolean);
+
+  if (requiredValues.every((value) => message.includes(value))) {
+    return message;
+  }
+
+  return `${message.trim()}\n\nPayment details:\nCustomer: ${context.customerName}\nReservation: ${context.reservationId}\nCar: ${context.carName} (Group ${context.group})\nPickup: ${context.pickupDate} ${context.pickupTime}, ${context.pickupLocation}\nReturn: ${context.returnDate} ${context.returnTime}, ${context.returnLocation}\nFinal total: ${context.totalPrice}\nPayment link: ${context.paymentLink || ''}`.trim();
 };
 
 const getReservationSortValue = (
@@ -337,8 +433,9 @@ const getEmailEventTypeForTemplate = (
   templateId: EmailTemplateId,
 ): BookingEngineEmailEventType => {
   if (templateId === 'customer_payment_request') return 'payment_request';
-  if (templateId === 'customer_reminder') return 'reminder';
+  if (templateId === 'customer_reminder') return 'review_request';
   if (templateId === 'customer_cancellation') return 'cancellation';
+  if (templateId === 'customEmail') return 'custom_email';
   if (templateId === 'customer_onrequest_received') return 'reservation_onrequest';
   return 'reservation_confirmed_customer';
 };
@@ -351,6 +448,7 @@ export default function AutoClubRhodesReservationsBoard() {
   const [editingReservationId, setEditingReservationId] = useState<string | null>(null);
   const [reservationDraft, setReservationDraft] = useState<WebsiteReservation | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
   const [emailFeedback, setEmailFeedback] = useState('');
   const [emailReservationId, setEmailReservationId] = useState<string | null>(null);
   const [confirmingReservationId, setConfirmingReservationId] = useState<string | null>(null);
@@ -502,7 +600,7 @@ export default function AutoClubRhodesReservationsBoard() {
       reservation: toEmailReservationContext(reservation),
     });
 
-    await sendBookingEngineEmailEvent(payload);
+    return sendBookingEngineEmailEvent(payload);
   };
 
   const updateReservation = async (
@@ -567,6 +665,15 @@ export default function AutoClubRhodesReservationsBoard() {
   const saveEditedReservation = async () => {
     if (!editingReservationId || !reservationDraft?.customerName.trim() || !beSiteId) return;
 
+    const originalReservation = reservations.find((item) => item.id === editingReservationId);
+    if (
+      originalReservation?.status !== 'Cancelled' &&
+      reservationDraft.status === 'Cancelled'
+    ) {
+      setPendingCancelId(reservationDraft.id);
+      return;
+    }
+
     const dbStatus = mapBoardStatusToDbStatus(reservationDraft.status, reservationDraft.processed);
     const payload = reservationPayload(
       {
@@ -618,6 +725,51 @@ export default function AutoClubRhodesReservationsBoard() {
     closeEditor();
   };
 
+  const cancelReservation = async (reservationId: string, sendEmail: boolean) => {
+    const reservation = reservations.find((item) => item.id === reservationId);
+    if (!reservation || !beSiteId) return;
+
+    const { error } = await supabase
+      .from('be_reservations')
+      .update({ status: 'CANCELLED' })
+      .eq('id', reservation.supabaseId)
+      .eq('site_id', beSiteId);
+
+    if (error) {
+      console.error('Website reservation cancellation failed:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      setReservationsError('Failed to cancel reservation in Supabase.');
+      return;
+    }
+
+    if (sendEmail) {
+      const sendResult = await sendReservationEmailEvent(
+        {
+          ...reservation,
+          status: 'Cancelled',
+          rawStatus: 'CANCELLED',
+          processed: true,
+        },
+        'cancellation',
+      );
+      setEmailFeedback(
+        sendResult?.success === false
+          ? 'Reservation cancelled, but cancellation email failed. Check console for SMTP details.'
+          : 'Cancellation email sent through internal SMTP.',
+      );
+    } else {
+      setEmailFeedback('Reservation cancelled without email.');
+    }
+
+    await loadSupabaseReservations();
+    closeEditor();
+    setPendingCancelId(null);
+  };
+
   const deleteReservation = async (reservationId: string) => {
     const reservation = reservations.find((item) => item.id === reservationId);
     if (!reservation || !beSiteId) return;
@@ -639,7 +791,6 @@ export default function AutoClubRhodesReservationsBoard() {
       return;
     }
 
-    await sendReservationEmailEvent(reservation, 'cancellation');
     await loadSupabaseReservations();
     closeEditor();
     setPendingDeleteId(null);
@@ -674,11 +825,9 @@ export default function AutoClubRhodesReservationsBoard() {
         <div>
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] text-cyan-700">
             <Globe2 className="h-3.5 w-3.5" />
-            Website reservations
+            AUTOCLUB-RHODES
           </div>
-          <h2 className="text-lg font-black text-slate-950">
-            ΚΡΑΤΗΣΕΙΣ AUTOCLUB-RHODES
-          </h2>
+          <h2 className="text-lg font-black text-slate-950">Website reservations</h2>
         </div>
         <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-cyan-800">
           Supabase live
@@ -735,8 +884,8 @@ export default function AutoClubRhodesReservationsBoard() {
           />
 
           <div className="overflow-x-auto">
-            <div className="min-w-[1370px]">
-              <div className="grid grid-cols-[170px_135px_180px_135px_135px_130px_85px_120px_365px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
+            <div className="min-w-[1410px]">
+              <div className="grid grid-cols-[170px_135px_210px_145px_145px_130px_110px_360px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
                 <SortHeader label="Customer" sortKey="customer" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <SortHeader label="Phone" sortKey="phone" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <SortHeader label="Car / Group" sortKey="car" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
@@ -744,14 +893,13 @@ export default function AutoClubRhodesReservationsBoard() {
                 <SortHeader label="Return" sortKey="return" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <SortHeader label="Status" sortKey="status" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <SortHeader label="Total" sortKey="total" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
-                <SortHeader label="Payment" sortKey="payment" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
-                <span className="text-right">Actions</span>
+                <span className="justify-self-end text-right">Actions</span>
               </div>
               {newReservations.length > 0 ? (
                 newReservations.map((reservation) => (
                   <div
                     key={reservation.id}
-                    className="grid grid-cols-[170px_135px_180px_135px_135px_130px_85px_120px_365px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
+                    className="grid grid-cols-[170px_135px_210px_145px_145px_130px_110px_360px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
                   >
                     <div className="min-w-0 pr-3">
                       <p className="truncate font-black text-slate-900">{reservation.customerName}</p>
@@ -765,40 +913,19 @@ export default function AutoClubRhodesReservationsBoard() {
                     <DateCell date={reservation.returnDate} time={reservation.returnTime} />
                     <StatusBadge status={reservation.status} />
                     <span className="font-black text-slate-900">{formatMoney(reservation.total)}</span>
-                    <span className="truncate pr-2 text-xs font-bold text-slate-700">
-                      {reservation.paymentMethod}
-                    </span>
-                    <div className="flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
+                    <div className="actions-cell flex w-full flex-nowrap items-center justify-end gap-2 justify-self-end whitespace-nowrap">
                       <TextAction
                         label="View"
                         icon={Eye}
                         tone="secondary"
                         onClick={() => openEditor(reservation)}
                       />
-                      <TextAction
-                        label="Edit"
-                        icon={Pencil}
-                        tone="primary"
-                        onClick={() => openEditor(reservation)}
-                      />
-                      <TextAction
-                        label="Delete"
-                        icon={Trash2}
-                        tone="danger"
-                        onClick={() => setPendingDeleteId(reservation.id)}
-                      />
-                      <TextAction
-                        label="Email"
-                        icon={Mail}
-                        tone="primary"
-                        onClick={() => openEmailComposer(reservation.id)}
-                      />
                       {isOnRequestReservation(reservation) ? (
                         <button
                           type="button"
                           disabled={Boolean(confirmingReservationId)}
                           onClick={() => confirmOnRequestReservation(reservation.id)}
-                          className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border border-emerald-700 bg-emerald-700 px-2 text-[9px] font-black text-white transition hover:bg-emerald-800 disabled:cursor-wait disabled:opacity-60"
+                          className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border border-emerald-700 bg-emerald-700 px-2 text-[8.5px] font-black text-white transition hover:bg-emerald-800 disabled:cursor-wait disabled:opacity-60"
                         >
                           <Check className="h-3 w-3" />
                           {confirmingReservationId === reservation.id
@@ -811,7 +938,7 @@ export default function AutoClubRhodesReservationsBoard() {
                           onClick={() =>
                             updateReservation(reservation.id, { status: 'Ready', processed: true })
                           }
-                          className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border border-emerald-600 bg-emerald-600 px-2 text-[9px] font-black text-white transition hover:bg-emerald-700"
+                          className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border border-emerald-600 bg-emerald-600 px-2 text-[8.5px] font-black text-white transition hover:bg-emerald-700"
                         >
                           <Check className="h-3 w-3" />
                           OK / Πέρασμα
@@ -835,8 +962,8 @@ export default function AutoClubRhodesReservationsBoard() {
           />
 
           <div className="overflow-x-auto">
-            <div className="min-w-[1430px]">
-              <div className="grid grid-cols-[135px_160px_135px_180px_135px_135px_130px_85px_120px_330px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
+            <div className="min-w-[1550px]">
+              <div className="grid grid-cols-[135px_170px_135px_210px_145px_145px_130px_110px_360px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
                 <SortHeader label="ID" sortKey="id" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Customer" sortKey="customer" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Phone" sortKey="phone" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
@@ -845,14 +972,13 @@ export default function AutoClubRhodesReservationsBoard() {
                 <SortHeader label="Return" sortKey="return" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Status" sortKey="status" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Total" sortKey="total" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
-                <SortHeader label="Payment" sortKey="payment" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
-                <span className="text-right">Actions</span>
+                <span className="justify-self-end text-right">Actions</span>
               </div>
               {processedReservations.length > 0 ? (
                 processedReservations.map((reservation) => (
                   <div
                     key={reservation.id}
-                    className="grid grid-cols-[135px_160px_135px_180px_135px_135px_130px_85px_120px_330px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
+                    className="grid grid-cols-[135px_170px_135px_210px_145px_145px_130px_110px_360px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
                   >
                     <span className="font-mono text-[11px] font-black text-cyan-700">
                       {reservation.id}
@@ -868,33 +994,12 @@ export default function AutoClubRhodesReservationsBoard() {
                     <DateCell date={reservation.returnDate} time={reservation.returnTime} />
                     <StatusBadge status={reservation.status} />
                     <span className="font-black text-slate-900">{formatMoney(reservation.total)}</span>
-                    <span className="truncate pr-2 text-xs font-bold text-slate-700">
-                      {reservation.paymentMethod}
-                    </span>
-                    <div className="flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap">
+                    <div className="actions-cell flex w-full flex-nowrap items-center justify-end gap-2 justify-self-end whitespace-nowrap">
                       <TextAction
                         label="View"
                         icon={Eye}
                         tone="secondary"
                         onClick={() => openEditor(reservation)}
-                      />
-                      <TextAction
-                        label="Edit"
-                        icon={Pencil}
-                        tone="primary"
-                        onClick={() => openEditor(reservation)}
-                      />
-                      <TextAction
-                        label="Delete"
-                        icon={Trash2}
-                        tone="danger"
-                        onClick={() => setPendingDeleteId(reservation.id)}
-                      />
-                      <TextAction
-                        label="Email"
-                        icon={Mail}
-                        tone="primary"
-                        onClick={() => openEmailComposer(reservation.id)}
                       />
                       <TextAction
                         label="Move back to New Requests"
@@ -925,8 +1030,8 @@ export default function AutoClubRhodesReservationsBoard() {
           onClose={closeEditor}
           onSave={saveEditedReservation}
           onDelete={() => setPendingDeleteId(reservationDraft.id)}
+          onCancelReservation={() => setPendingCancelId(reservationDraft.id)}
           onEmail={(template) => openEmailComposer(reservationDraft.id, template)}
-          onEmailPlaceholder={() => setEmailFeedback('Use the email composer to send through internal SMTP.')}
         />
       )}
 
@@ -939,9 +1044,12 @@ export default function AutoClubRhodesReservationsBoard() {
           siteName={bookingEngineConfig.siteSettings.companyName || 'AutoClub Rhodes'}
           logoImage={bookingEngineConfig.siteSettings.logoImage}
           onClose={() => setEmailReservationId(null)}
-          onSend={async ({ recipient, subject, message, templateId }) => {
+          onSend={async ({ recipient, subject, message, templateId, paymentLink }) => {
             const eventType = getEmailEventTypeForTemplate(templateId);
-            const emailContext = toEmailReservationContext(emailReservation);
+            const emailContext = {
+              ...toEmailReservationContext(emailReservation),
+              paymentLink: paymentLink.trim(),
+            };
             const siteContext = {
               siteId: beSiteId,
               siteName: bookingEngineConfig.siteSettings.companyName || 'AutoClub Rhodes',
@@ -952,6 +1060,18 @@ export default function AutoClubRhodesReservationsBoard() {
               logoImage: bookingEngineConfig.siteSettings.logoImage,
               whatsappNumber: bookingEngineConfig.siteSettings.whatsappNumber,
             };
+            const renderedSubject = renderBookingEmailTemplate(subject, emailContext);
+            const renderedMessage = renderBookingEmailTemplate(message, emailContext);
+            const paymentSafeMessage =
+              templateId === 'customer_payment_request'
+                ? ensurePaymentReminderDetails(renderedMessage, emailContext)
+                : renderedMessage;
+            const manualMessage =
+              templateId === 'customer_payment_request' &&
+              paymentLink.trim() &&
+              !paymentSafeMessage.includes(paymentLink.trim())
+                ? `${paymentSafeMessage}\n\nPayment link: ${paymentLink.trim()}`
+                : paymentSafeMessage;
 
             const sendResult = await sendBookingEngineEmailEvent({
               event_type: eventType,
@@ -967,6 +1087,7 @@ export default function AutoClubRhodesReservationsBoard() {
               accommodation_name: emailContext.accommodationName || '',
               flight_number: emailContext.flightNumber || '',
               notes: emailContext.notes || '',
+              payment_link: emailContext.paymentLink || '',
               extras: emailContext.extras || [],
               extras_summary: renderBookingExtrasSummary(emailContext.extras),
               extras_summary_html: renderBookingExtrasHtml(emailContext.extras),
@@ -975,24 +1096,26 @@ export default function AutoClubRhodesReservationsBoard() {
                 0,
               ),
               to: recipient,
-              subject,
+              subject: renderedSubject,
               html_body: buildBookingEmailHtml({
                 site: siteContext,
                 reservation: emailContext,
                 intro: getBookingEmailIntro(templateId),
                 templateId,
+                manualMessage,
               }),
               emails: [
                 {
                   to: recipient,
-                  subject,
+                  subject: renderedSubject,
                   html_body: buildBookingEmailHtml({
                     site: siteContext,
                     reservation: emailContext,
                     intro: getBookingEmailIntro(templateId),
                     templateId,
+                    manualMessage,
                   }),
-                  text_body: message,
+                  text_body: manualMessage,
                   template_key: templateId,
                   template_label: bookingEngineConfig.emailSettings.templates[templateId]?.label || templateId,
                   recipient_type: 'customer',
@@ -1014,6 +1137,14 @@ export default function AutoClubRhodesReservationsBoard() {
         />
       )}
 
+      {pendingCancelId && (
+        <CancelReservationConfirmation
+          onClose={() => setPendingCancelId(null)}
+          onCancelWithoutEmail={() => cancelReservation(pendingCancelId, false)}
+          onCancelAndSendEmail={() => cancelReservation(pendingCancelId, true)}
+        />
+      )}
+
       {pendingDeleteId && (
         <DeleteConfirmation
           onCancel={() => setPendingDeleteId(null)}
@@ -1030,16 +1161,16 @@ function ReservationEditor({
   onClose,
   onSave,
   onDelete,
+  onCancelReservation,
   onEmail,
-  onEmailPlaceholder,
 }: {
   draft: WebsiteReservation;
   onDraftChange: (draft: WebsiteReservation) => void;
   onClose: () => void;
   onSave: () => void;
   onDelete: () => void;
+  onCancelReservation: () => void;
   onEmail: (template: EmailTemplateId) => void;
-  onEmailPlaceholder: () => void;
 }) {
   const updateDraft = (patch: Partial<WebsiteReservation>) => {
     onDraftChange({ ...draft, ...patch });
@@ -1056,14 +1187,6 @@ function ReservationEditor({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => window.print()}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-100"
-          >
-            <Printer className="h-4 w-4" />
-            Print
-          </button>
-          <button
-            type="button"
             onClick={onClose}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-100"
             aria-label="Close editor"
@@ -1074,6 +1197,63 @@ function ReservationEditor({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        <section className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-slate-900">Reservation controls</p>
+              <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                Use these actions for email, cancellation, print and testing delete.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const firstInput = document.querySelector('aside input') as HTMLElement | null;
+                  firstInput?.focus();
+                }}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-3 text-xs font-black text-white transition hover:bg-cyan-800"
+              >
+                <Pencil className="h-4 w-4" />
+                Edit Reservation
+              </button>
+              <button
+                type="button"
+                onClick={() => onEmail(draft.customerEmailTemplateId || 'customer_confirmed_reservation')}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-cyan-700 bg-white px-3 text-xs font-black text-cyan-800 transition hover:bg-cyan-50"
+              >
+                <Mail className="h-4 w-4" />
+                Send Email
+              </button>
+              {draft.status !== 'Cancelled' && (
+                <button
+                  type="button"
+                  onClick={onCancelReservation}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-amber-600 bg-amber-600 px-3 text-xs font-black text-white transition hover:bg-amber-700"
+                >
+                  <X className="h-4 w-4" />
+                  Cancel Reservation
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onDelete}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-rose-600 bg-rose-600 px-3 text-xs font-black text-white transition hover:bg-rose-700"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Reservation
+              </button>
+              <button
+                type="button"
+                onClick={() => printReservationDetails(draft)}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-100"
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </button>
+            </div>
+          </div>
+        </section>
         <div className="grid gap-3 md:grid-cols-2">
           <EditorField
             label="Customer name"
@@ -1282,7 +1462,7 @@ function ReservationEditor({
                     <p className="text-[10px] font-black uppercase tracking-[0.07em] text-slate-500">
                       {field.label}
                     </p>
-                    <p className="mt-1 text-sm font-bold text-slate-900">{field.value || '—'}</p>
+                    <p className="mt-1 text-sm font-bold text-slate-900">{field.value || '-'}</p>
                   </div>
                 ))
               ) : (
@@ -1344,37 +1524,11 @@ function ReservationEditor({
                 </p>
               </div>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => onEmail(draft.customerEmailTemplateId || 'customer_confirmed_reservation')}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-3 text-xs font-black text-white transition hover:bg-cyan-800"
-              >
-                <Mail className="h-4 w-4" />
-                Open email composer
-              </button>
-              <button
-                type="button"
-                onClick={onEmailPlaceholder}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-700 bg-emerald-700 px-3 text-xs font-black text-white transition hover:bg-emerald-800"
-              >
-                <Mail className="h-4 w-4" />
-                Send email via composer
-              </button>
-            </div>
           </section>
         </div>
       </div>
 
-      <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 p-4">
-        <button
-          type="button"
-          onClick={onDelete}
-          className="inline-flex h-10 items-center gap-2 rounded-lg border border-rose-600 bg-rose-600 px-3 text-sm font-black text-white transition hover:bg-rose-700"
-        >
-          <Trash2 className="h-4 w-4" />
-          Delete reservation
-        </button>
+      <footer className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4">
         <div className="flex gap-2">
           <button
             type="button"
@@ -1503,7 +1657,7 @@ function SortHeader({
     >
       <span className="truncate">{label}</span>
       <span className={`text-[9px] ${isActive ? 'opacity-100' : 'opacity-25'}`}>
-        {isActive ? (sort.direction === 'asc' ? '▲' : '▼') : '↕'}
+        {isActive ? (sort.direction === 'asc' ? '↑' : '↓') : '↕'}
       </span>
     </button>
   );
@@ -1561,7 +1715,7 @@ function TextAction({
       onClick={onClick}
       title={label}
       aria-label={label}
-      className={`inline-flex h-7 items-center justify-center gap-1 whitespace-nowrap rounded-md border px-1.5 text-[9px] font-black transition ${styles[tone]}`}
+      className={`inline-flex h-7 items-center justify-center gap-1 whitespace-nowrap rounded-md border px-2 text-[8.5px] font-black transition ${styles[tone]}`}
     >
       <Icon className="h-3 w-3" />
       {label}
@@ -1590,6 +1744,7 @@ function EmailComposerModal({
     subject: string;
     message: string;
     templateId: EmailTemplateId;
+    paymentLink: string;
   }) => void | Promise<void>;
   onFeedback: (message: string) => void;
 }) {
@@ -1602,17 +1757,51 @@ function EmailComposerModal({
     'customer_cancellation',
     'customEmail',
   ];
+  const templateModeLabels: Partial<Record<EmailTemplateId, string>> = {
+    customer_payment_request: 'Manual',
+    customer_reminder: 'Manual',
+    customer_cancellation: 'Manual Action',
+    customEmail: 'Manual',
+  };
+  const getComposerMessage = (nextTemplateId: EmailTemplateId) => {
+    const baseMessage = templates[nextTemplateId]?.message || '';
+    if (
+      nextTemplateId === 'customer_reminder' &&
+      !baseMessage.includes('https://g.page/r/CYOr9zt3_-KVEBM/review')
+    ) {
+      return `${baseMessage}\n\nReview link: https://g.page/r/CYOr9zt3_-KVEBM/review`;
+    }
+    return baseMessage;
+  };
   const safeInitialTemplate = customerTemplateOrder.includes(initialTemplate)
     ? initialTemplate
     : 'customer_confirmed_reservation';
   const initialContent = templates[safeInitialTemplate];
+  const initialPaymentLink = reservation.paymentLink || '';
   const [templateId, setTemplateId] = useState<EmailTemplateId>(safeInitialTemplate);
   const [recipient, setRecipient] = useState(reservation.email);
   const [subject, setSubject] = useState(replaceEmailVariables(initialContent.subject, reservation));
-  const [message, setMessage] = useState(replaceEmailVariables(initialContent.message, reservation, true));
+  const [message, setMessage] = useState(replaceEmailVariables(getComposerMessage(safeInitialTemplate), reservation));
+  const [paymentLink, setPaymentLink] = useState(initialPaymentLink);
+  const [composerWarning, setComposerWarning] = useState('');
   const [activeField, setActiveField] = useState<EmailField>('message');
   const subjectRef = useRef<HTMLInputElement | null>(null);
   const messageRef = useRef<HTMLTextAreaElement | null>(null);
+  const emailContext = {
+    ...toEmailReservationContext(reservation),
+    paymentLink: paymentLink.trim(),
+  };
+  const renderedPreviewMessage = renderBookingEmailTemplate(message, emailContext);
+  const paymentSafePreviewMessage =
+    templateId === 'customer_payment_request'
+      ? ensurePaymentReminderDetails(renderedPreviewMessage, emailContext)
+      : renderedPreviewMessage;
+  const manualPreviewMessage =
+    templateId === 'customer_payment_request' &&
+    paymentLink.trim() &&
+    !paymentSafePreviewMessage.includes(paymentLink.trim())
+      ? `${paymentSafePreviewMessage}\n\nPayment link: ${paymentLink.trim()}`
+      : paymentSafePreviewMessage;
   const previewHtml = buildBookingEmailHtml({
     site: {
       siteId: 'preview',
@@ -1620,9 +1809,10 @@ function EmailComposerModal({
       adminEmail: '',
       logoImage,
     },
-    reservation: toEmailReservationContext(reservation),
+    reservation: emailContext,
     intro: getBookingEmailIntro(templateId),
     templateId,
+    manualMessage: manualPreviewMessage,
   });
 
   const applyTemplate = (nextTemplateId: EmailTemplateId) => {
@@ -1630,7 +1820,9 @@ function EmailComposerModal({
     setTemplateId(nextTemplateId);
     setRecipient(reservation.email);
     setSubject(replaceEmailVariables(template.subject, reservation));
-    setMessage(replaceEmailVariables(template.message, reservation, true));
+    setMessage(replaceEmailVariables(getComposerMessage(nextTemplateId), reservation));
+    setPaymentLink(reservation.paymentLink || '');
+    setComposerWarning('');
     setActiveField('message');
   };
 
@@ -1676,7 +1868,7 @@ function EmailComposerModal({
               <p className="font-mono text-xs font-black text-cyan-700">{reservation.id}</p>
               <h3 className="mt-1 text-xl font-black text-slate-950">Email composer</h3>
               <p className="mt-1 text-xs text-slate-500">
-                {siteName} · Car rental in Rhodes · Internal SMTP
+                {siteName} - Car rental in Rhodes - Internal SMTP
               </p>
             </div>
           </div>
@@ -1703,12 +1895,31 @@ function EmailComposerModal({
                   const template = templates[id];
                   return (
                   <option key={id} value={id}>
-                    {template.label}
+                    {template.label}{templateModeLabels[id] ? ` - ${templateModeLabels[id]}` : ''}
                   </option>
                   );
                 })}
               </select>
             </label>
+
+            {templateId === 'customer_payment_request' && (
+              <label className="block rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <EditorLabel>Payment link</EditorLabel>
+                <input
+                  type="url"
+                  value={paymentLink}
+                  onChange={(event) => {
+                    setPaymentLink(event.target.value);
+                    setComposerWarning('');
+                  }}
+                  placeholder="https://..."
+                  className="mt-1.5 h-10 w-full rounded-lg border border-amber-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+                />
+                <p className="mt-1.5 text-xs font-semibold text-amber-900">
+                  Required before sending a Payment Reminder.
+                </p>
+              </label>
+            )}
 
             <label className="block">
               <EditorLabel>To</EditorLabel>
@@ -1742,6 +1953,16 @@ function EmailComposerModal({
                 className="mt-1.5 w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm leading-6 text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
               />
             </label>
+            {templateId === 'customer_reminder' && !message.includes('https://g.page/r/CYOr9zt3_-KVEBM/review') && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">
+                Review Request should include: https://g.page/r/CYOr9zt3_-KVEBM/review
+              </p>
+            )}
+            {composerWarning && (
+              <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
+                {composerWarning}
+              </p>
+            )}
           </div>
 
           <aside className="border-t border-slate-200 bg-slate-50 p-5 lg:border-l lg:border-t-0">
@@ -1793,7 +2014,13 @@ function EmailComposerModal({
           </button>
           <button
             type="button"
-            onClick={() => onSend({ recipient, subject, message, templateId })}
+            onClick={() => {
+              if (templateId === 'customer_payment_request' && !paymentLink.trim()) {
+                setComposerWarning('Payment link is required before sending a Payment Reminder.');
+                return;
+              }
+              void onSend({ recipient, subject, message, templateId, paymentLink });
+            }}
             className="inline-flex h-10 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-4 text-sm font-black text-white transition hover:bg-cyan-800"
           >
             <Mail className="h-4 w-4" />
@@ -1845,6 +2072,62 @@ function DeleteConfirmation({
           >
             <Trash2 className="h-4 w-4" />
             Delete reservation
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function CancelReservationConfirmation({
+  onClose,
+  onCancelWithoutEmail,
+  onCancelAndSendEmail,
+}: {
+  onClose: () => void;
+  onCancelWithoutEmail: () => void;
+  onCancelAndSendEmail: () => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-5 backdrop-blur-sm">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+      >
+        <div className="p-5">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
+            <X className="h-5 w-5" />
+          </span>
+          <h3 className="mt-4 text-lg font-black text-slate-950">
+            Cancel reservation and send cancellation email?
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            The reservation status will become CANCELLED. The row stays in Supabase and can still be viewed.
+          </p>
+        </div>
+        <footer className="flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            onClick={onCancelWithoutEmail}
+            className="h-10 rounded-lg border border-amber-600 bg-amber-600 px-4 text-sm font-black text-white transition hover:bg-amber-700"
+          >
+            Cancel Without Email
+          </button>
+          <button
+            type="button"
+            onClick={onCancelAndSendEmail}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-rose-600 bg-rose-600 px-4 text-sm font-black text-white transition hover:bg-rose-700"
+          >
+            <Mail className="h-4 w-4" />
+            Cancel + Send Email
           </button>
         </footer>
       </div>

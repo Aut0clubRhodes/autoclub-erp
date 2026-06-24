@@ -472,7 +472,7 @@ export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
         active: true,
         subject: 'Payment request for reservation {{reservation_id}}',
         message:
-          'Hello {{customer_name}},\n\nPlease complete payment for reservation {{reservation_id}}.\nTotal: {{total_price}}\nPayment method: {{payment_method}}\n\nPayment link: {{payment_link}}\n\nThank you, AutoClub Rhodes',
+          'Hello {{customer_name}},\n\nPlease complete payment for reservation {{reservation_id}}.\n\nCar: {{car_name}} (Group {{group}})\nPickup: {{pickup_date}} at {{pickup_time}}, {{pickup_location}}\nReturn: {{return_date}} at {{return_time}}, {{return_location}}\nFinal total: {{total_price}}\nPayment method: {{payment_method}}\n\nPayment link: {{payment_link}}\n\nThank you, AutoClub Rhodes',
       },
       customer_reminder: {
         id: 'customer_reminder',
@@ -480,7 +480,7 @@ export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
         active: true,
         subject: 'How was your AutoClub Rhodes rental?',
         message:
-          'Hello {{customer_name}},\n\nThank you for choosing AutoClub Rhodes for reservation {{reservation_id}}.\n\nWe hope you enjoyed your rental with {{car_name}}. We would really appreciate your review and feedback.',
+          'Hello {{customer_name}},\n\nThank you for choosing AutoClub Rhodes for reservation {{reservation_id}}.\n\nWe hope you enjoyed your rental with {{car_name}}. We would really appreciate your review and feedback:\nhttps://g.page/r/CYOr9zt3_-KVEBM/review',
       },
       customer_cancellation: {
         id: 'customer_cancellation',

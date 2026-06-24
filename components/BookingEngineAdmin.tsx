@@ -36,7 +36,7 @@ import {
   bookingEngineEmailTemplateOrder,
   buildBookingEmailHtml,
   getBookingEmailIntro,
-  renderBookingExtrasSummary,
+  renderBookingEmailTemplate,
 } from '@/lib/bookingEngineEmailEngine';
 import { supabase } from '@/lib/supabaseClient';
 
@@ -4748,13 +4748,13 @@ function EmailsPanel({
       icon: CreditCard,
     },
     customer_reminder: {
-      purpose: 'Manual reservation reminder template.',
+      purpose: 'Manual post-rental Google review request.',
       badge: 'Manual',
       icon: Mail,
     },
     customer_cancellation: {
-      purpose: 'Sent when a reservation is cancelled.',
-      badge: 'Automatic',
+      purpose: 'Manual action template for cancelled reservations.',
+      badge: 'Manual Action',
       icon: Mail,
     },
     customEmail: {
@@ -4830,7 +4830,7 @@ function EmailsPanel({
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-600">
-            Locked preview flow only. No email provider is connected.
+            Templates are saved in Supabase. Live sends use the internal SMTP endpoint.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -5070,40 +5070,27 @@ const sampleEmailReservation = {
   ],
 };
 
-const renderSampleTemplate = (template: string, appendExtrasFallback = false) => {
-  const replacements: Record<string, string> = {
-    customer_name: sampleEmailReservation.customerName,
-    reservation_id: sampleEmailReservation.reservationId,
-    car_name: sampleEmailReservation.carName,
-    group: sampleEmailReservation.group,
-    pickup_date: sampleEmailReservation.pickupDate,
-    pickup_time: sampleEmailReservation.pickupTime,
-    return_date: sampleEmailReservation.returnDate,
-    return_time: sampleEmailReservation.returnTime,
-    pickup_location: sampleEmailReservation.pickupLocation,
-    return_location: sampleEmailReservation.returnLocation,
-    total_price: sampleEmailReservation.totalPrice,
-    payment_method: sampleEmailReservation.paymentMethod,
-    payment_link: sampleEmailReservation.paymentLink,
-    extras_summary: renderBookingExtrasSummary(sampleEmailReservation.extras),
-  };
-
-  const renderedTemplate = Object.entries(replacements).reduce(
-    (message, [key, value]) =>
-      message.split(`{{${key}}}`).join(value).split(`{${key}}`).join(value),
-    template,
-  );
-
-  if (
-    !appendExtrasFallback ||
-    template.includes('{{extras_summary}}') ||
-    template.includes('{extras_summary}')
-  ) {
-    return renderedTemplate;
-  }
-
-  return `${renderedTemplate}\n\nExtras:\n${renderBookingExtrasSummary(sampleEmailReservation.extras)}`;
+const sampleEmailContext = {
+  ...sampleEmailReservation,
+  email: 'maria.demo@example.com',
+  phone: '+30 690 000 0000',
+  country: 'Greece',
+  countryCode: '+30',
+  dateOfBirth: '12/04/1990',
+  accommodationName: 'Rhodes Bay Hotel',
+  flightNumber: 'A3 218',
+  notes: '',
 };
+
+const renderSampleTemplate = (template: string) =>
+  renderBookingEmailTemplate(template, sampleEmailContext);
+
+const adminManualPreviewTemplateIds = new Set<BookingEngineEmailTemplateId>([
+  'customer_payment_request',
+  'customer_reminder',
+  'customer_cancellation',
+  'customEmail',
+]);
 
 function EmailTemplatePreviewModal({
   template,
@@ -5121,7 +5108,9 @@ function EmailTemplatePreviewModal({
   onSave: (subject: string, message: string) => void;
 }) {
   const [subject, setSubject] = useState(renderSampleTemplate(template.subject));
-  const [message, setMessage] = useState(renderSampleTemplate(template.message, true));
+  const [message, setMessage] = useState(renderSampleTemplate(template.message));
+  const renderedPreviewMessage = renderBookingEmailTemplate(message, sampleEmailContext);
+  const usesManualBody = adminManualPreviewTemplateIds.has(template.id);
   const recipient =
     template.id === 'admin_new_confirmed_reservation' || template.id === 'admin_new_onrequest_reservation'
       ? adminEmail || 'reservations@autoclub-rhodes.com'
@@ -5133,19 +5122,10 @@ function EmailTemplatePreviewModal({
       adminEmail,
       logoImage,
     },
-    reservation: {
-      ...sampleEmailReservation,
-      email: 'maria.demo@example.com',
-      phone: '+30 690 000 0000',
-      country: 'Greece',
-      countryCode: '+30',
-      dateOfBirth: '12/04/1990',
-      accommodationName: 'Rhodes Bay Hotel',
-      flightNumber: 'A3 218',
-      notes: '',
-    },
+    reservation: sampleEmailContext,
     intro: getBookingEmailIntro(template.id),
     templateId: template.id,
+    manualMessage: usesManualBody ? renderedPreviewMessage : undefined,
   });
 
   return (
