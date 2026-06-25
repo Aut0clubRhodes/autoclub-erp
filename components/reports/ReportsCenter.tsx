@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import AgenciesReport from './AgenciesReport';
 import CarsReport from './CarsReport';
 import ExpensesReport from './ExpensesReport';
 import IncomeReport from './IncomeReport';
-import KteoReport from './KteoReport';
 import SecretariatReport from './SecretariatReport';
 import SuppliersReport from './SuppliersReport';
 import { fetchDebts, type DebtRecord } from '@/lib/debtsApi';
@@ -18,16 +17,28 @@ import {
 import { fetchServices, type ServiceRecord } from '@/lib/servicesApi';
 import type { ReportsData, ReportsFilters } from './types';
 
-type ReportSection = 'agencies' | 'expenses' | 'income' | 'suppliers' | 'cars' | 'kteo' | 'secretariat';
+type ReportSection =
+  | 'cashflow'
+  | 'income'
+  | 'expenses'
+  | 'agencies'
+  | 'suppliers'
+  | 'secretariat'
+  | 'cars'
+  | 'depreciation';
 
-const sections: { id: ReportSection; label: string; group: 'income' | 'expense' | 'kteo' }[] = [
-  { id: 'income', label: 'Έσοδα', group: 'income' },
-  { id: 'agencies', label: 'Πρακτορεία', group: 'income' },
-  { id: 'cars', label: 'Αυτοκίνητα', group: 'income' },
-  { id: 'expenses', label: 'Έξοδα', group: 'expense' },
-  { id: 'suppliers', label: 'Προμηθευτές', group: 'expense' },
-  { id: 'secretariat', label: 'Γραμματεία', group: 'expense' },
-  { id: 'kteo', label: 'ΚΤΕΟ', group: 'kteo' },
+const cashflowSections: { id: ReportSection; label: string }[] = [
+  { id: 'cashflow', label: 'Σύνολα Ταμείου' },
+  { id: 'income', label: 'Έσοδα' },
+  { id: 'expenses', label: 'Έξοδα' },
+  { id: 'agencies', label: 'Πρακτορεία' },
+  { id: 'suppliers', label: 'Προμηθευτές' },
+  { id: 'secretariat', label: 'Γραμμάτια' },
+];
+
+const accountingSections: { id: ReportSection; label: string }[] = [
+  { id: 'cars', label: 'Αυτοκίνητα' },
+  { id: 'depreciation', label: 'Αποσβέσεις' },
 ];
 
 const initialFilters: ReportsFilters = {
@@ -47,9 +58,10 @@ export default function ReportsCenter({
   representatives,
   supplierLedger,
   vehicles,
-  onUpdateKteo,
+  onAddIncome,
+  onAddExpense,
 }: ReportsData) {
-  const [activeSection, setActiveSection] = useState<ReportSection>('income');
+  const [activeSection, setActiveSection] = useState<ReportSection>('cashflow');
   const [filters, setFilters] = useState(initialFilters);
   const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [inventoryItems, setInventoryItems] = useState<ServiceInventoryItem[]>([]);
@@ -199,27 +211,37 @@ export default function ReportsCenter({
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[190px_minmax(0,1fr)]">
         <aside className="border-b border-white/[0.07] bg-white/[0.015] p-3 lg:border-b-0 lg:border-r">
+          <ReportSectionTitle>ΤΑΜΕΙΑΚΗ ΡΟΗ</ReportSectionTitle>
           <nav className="flex gap-2 overflow-x-auto lg:flex-col">
-            {sections.map((section, index) => {
-              const startsNewGroup = index > 0 && section.group !== sections[index - 1].group;
-
-              return (
-                <button
-                  key={section.id}
-                  type="button"
-                  onClick={() => setActiveSection(section.id)}
-                  className={`rounded-xl px-4 py-3 text-left text-sm transition ${
-                    startsNewGroup ? 'ml-3 border-l border-white/[0.08] pl-5 lg:ml-0 lg:mt-3 lg:border-l-0 lg:border-t lg:pt-5' : ''
-                  } ${
-                    activeSection === section.id
-                      ? 'erp-active-nav border border-sky-400/20 bg-sky-400/10 text-white'
-                      : 'border border-transparent text-zinc-400 hover:border-white/[0.06] hover:bg-white/[0.03] hover:text-zinc-200'
-                  }`}
-                >
-                  {section.label}
-                </button>
-              );
-            })}
+            {cashflowSections.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => setActiveSection(section.id)}
+                className={`rounded-xl px-4 py-3 text-left text-sm transition ${
+                  activeSection === section.id
+                    ? 'erp-active-nav border border-sky-400/20 bg-sky-400/10 text-white'
+                    : 'border border-transparent text-zinc-400 hover:border-white/[0.06] hover:bg-white/[0.03] hover:text-zinc-200'
+                }`}
+              >
+                {section.label}
+              </button>
+            ))}
+            <ReportSectionTitle className="mt-3">ΛΟΓΙΣΤΙΚΟ ΚΕΡΔΟΣ / ΖΗΜΙΑ</ReportSectionTitle>
+            {accountingSections.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => setActiveSection(section.id)}
+                className={`rounded-xl px-4 py-3 text-left text-sm transition ${
+                  activeSection === section.id
+                    ? 'erp-active-nav border border-sky-400/20 bg-sky-400/10 text-white'
+                    : 'border border-transparent text-zinc-400 hover:border-white/[0.06] hover:bg-white/[0.03] hover:text-zinc-200'
+                }`}
+              >
+                {section.label}
+              </button>
+            ))}
           </nav>
         </aside>
 
@@ -233,8 +255,19 @@ export default function ReportsCenter({
                 representatives={representatives}
               />
             )}
-            {activeSection === 'expenses' && <ExpensesReport transactions={filteredTransactions} />}
-            {activeSection === 'income' && <IncomeReport transactions={filteredTransactions} />}
+            {activeSection === 'expenses' && (
+              <>
+                <ReportActionBar label="+ Καταχώρηση Εξόδου" onClick={onAddExpense} tone="expense" />
+                <ExpensesReport transactions={filteredTransactions} />
+              </>
+            )}
+            {activeSection === 'income' && (
+              <>
+                <ReportActionBar label="+ Καταχώρηση Εσόδου" onClick={onAddIncome} tone="income" />
+                <IncomeReport transactions={filteredTransactions} />
+              </>
+            )}
+            {activeSection === 'cashflow' && <CashflowSummary transactions={filteredTransactions} />}
             {activeSection === 'suppliers' && (
               <SuppliersReport
                 transactions={filteredTransactions}
@@ -260,14 +293,7 @@ export default function ReportsCenter({
                 toDate={filters.toDate}
               />
             )}
-            {activeSection === 'kteo' && (
-              <KteoReport
-                vehicles={vehicles}
-                fromDate={filters.fromDate}
-                toDate={filters.toDate}
-                onUpdateKteo={onUpdateKteo}
-              />
-            )}
+            {activeSection === 'depreciation' && <DepreciationReport vehicles={vehicles} />}
             {activeSection === 'secretariat' && (
               <SecretariatReport
                 debts={debts.filter(
@@ -307,6 +333,22 @@ function FilterInput({
   );
 }
 
+function ReportSectionTitle({
+  children,
+  className = '',
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <h2
+      className={`rounded-xl border border-zinc-700/70 bg-zinc-900/70 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-300 shadow-inner ${className}`}
+    >
+      {children}
+    </h2>
+  );
+}
+
 function FilterSelect({
   label,
   value,
@@ -333,5 +375,123 @@ function FilterSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function CashflowSummary({ transactions }: { transactions: ReportsData['transactions'] }) {
+  const incomeTotal = transactions
+    .filter((transaction) => transaction.type === 'income')
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const expenseTotal = transactions
+    .filter((transaction) => transaction.type === 'expense' || transaction.type === 'supplier_payment')
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const netTotal = incomeTotal - expenseTotal;
+  const formatMoney = (value: number) =>
+    `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const cards = [
+    { label: 'Σύνολο Εσόδων', value: incomeTotal, className: 'text-emerald-300' },
+    { label: 'Σύνολο Εξόδων', value: expenseTotal, className: 'text-rose-300' },
+    { label: 'Καθαρή Ροή', value: netTotal, className: netTotal >= 0 ? 'text-emerald-300' : 'text-rose-300' },
+  ];
+
+  return (
+    <div className="grid gap-4 md:grid-cols-3">
+      {cards.map((card) => (
+        <div key={card.label} className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{card.label}</p>
+          <p className={`mt-3 text-2xl font-bold ${card.className}`}>{formatMoney(card.value)}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DepreciationReport({ vehicles }: { vehicles: ReportsData['vehicles'] }) {
+  const depreciationRate = 0.16;
+  const formatMoney = (value: number) =>
+    `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const parseCurrentValue = (value?: string) => {
+    if (!value) return 0;
+    const normalized = value
+      .replace(/[^\d,.-]/g, '')
+      .replace(/\./g, '')
+      .replace(',', '.');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  };
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-zinc-800">
+      <table className="w-full min-w-[1080px] text-left">
+        <thead className="bg-zinc-900/90">
+          <tr>
+            {[
+              'Αυτοκίνητο / Πινακίδα',
+              'Μάρκα',
+              'Μοντέλο',
+              'Έτος',
+              'Τρέχουσα Αξία',
+              'Ποσοστό Απόσβεσης',
+              'Ποσό Απόσβεσης',
+              'Εκτιμώμενη Αξία Μετά Απόσβεσης',
+            ].map((label) => (
+              <th key={label} className="px-4 py-3 text-sm text-zinc-400">
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {vehicles.map((vehicle) => {
+            const currentValue = parseCurrentValue(vehicle.price);
+            const depreciationAmount = currentValue * depreciationRate;
+            const estimatedValue = currentValue - depreciationAmount;
+
+            return (
+              <tr key={vehicle.id} className="border-t border-zinc-800 hover:bg-zinc-900/60">
+                <td className="px-4 py-4 text-sm font-semibold text-white">{vehicle.plate || '-'}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">{vehicle.brand || '-'}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">{vehicle.model || '-'}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">{vehicle.year || '-'}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">{formatMoney(currentValue)}</td>
+                <td className="px-4 py-4 text-sm text-zinc-200">16%</td>
+                <td className="px-4 py-4 text-sm text-amber-300">{formatMoney(depreciationAmount)}</td>
+                <td className="px-4 py-4 text-sm text-emerald-300">{formatMoney(estimatedValue)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {vehicles.length === 0 && <p className="p-6 text-sm text-zinc-500">Δεν βρέθηκαν αυτοκίνητα.</p>}
+    </div>
+  );
+}
+
+function ReportActionBar({
+  label,
+  onClick,
+  tone,
+}: {
+  label: string;
+  onClick?: () => void;
+  tone: 'income' | 'expense';
+}) {
+  const className =
+    tone === 'income'
+      ? 'border-emerald-500/30 bg-emerald-500 px-4 py-2 text-white hover:bg-emerald-600'
+      : 'border-sky-500/30 bg-sky-500 px-4 py-2 text-white hover:bg-sky-600';
+
+  return (
+    <div className="flex justify-end">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={!onClick}
+        className={`rounded-xl border text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      >
+        {label}
+      </button>
+    </div>
   );
 }

@@ -14,6 +14,7 @@ import BookingsManager from '@/components/BookingsManager';
 import LeasingManager from '@/components/LeasingManager';
 import FinancialEngine from '@/components/FinancialEngine';
 import ReportsCenter from '@/components/reports/ReportsCenter';
+import KteoReport from '@/components/reports/KteoReport';
 import { fetchCars, addCar, deleteCar, updateCar } from '@/lib/carsApi';
 import {
   fetchTransactions,
@@ -65,6 +66,7 @@ import {
 type WindowType =
   | 'Πίνακας'
   | 'Αυτοκίνητα'
+  | 'ΚΤΕΟ'
   | 'Κρατήσεις'
   | 'Service'
   | 'Leasing'
@@ -241,8 +243,14 @@ const initialVehicles: Vehicle[] = [
 
 const topMenuEntries: TopMenuEntry[] = [
   { label: 'Κρατήσεις', windowId: 'Κρατήσεις' },
-  { label: 'Αυτοκίνητα', windowId: 'Αυτοκίνητα' },
-  { label: 'Service', windowId: 'Service' },
+  {
+    label: 'Αυτοκίνητα',
+    items: [
+      { label: 'Αυτοκίνητα', windowId: 'Αυτοκίνητα' },
+      { label: 'Service', windowId: 'Service' },
+      { label: 'ΚΤΕΟ', windowId: 'ΚΤΕΟ' },
+    ],
+  },
   { label: 'Leasing', windowId: 'Leasing' },
   {
     label: 'AutoClub-Rhodes',
@@ -256,8 +264,6 @@ const topMenuEntries: TopMenuEntry[] = [
     label: 'Οικονομικά',
     items: [
       { label: 'Σύνολα Ταμείου', windowId: 'Ταμείο' },
-      { label: 'Καταχώρηση Εσόδων', windowId: 'Έσοδα' },
-      { label: 'Καταχώρηση Εξόδων', windowId: 'Έξοδα' },
       { label: 'Γραμμάτια', windowId: 'Γραμμάτια' },
       { label: 'Financial Engine', windowId: 'Financial Engine' },
       { label: 'Αναφορές', windowId: 'Αναφορές' },
@@ -296,10 +302,23 @@ function DesktopTopNavigation({
   onMarkNotificationRead: (notification: NotificationRecord) => void;
   onMarkAllNotificationsRead: () => void;
 }) {
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
   const isEntryActive = (entry: TopMenuEntry) =>
     'windowId' in entry
       ? activeWindow === entry.windowId
       : entry.items.some((item) => activeWindow === item.windowId);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!navRef.current?.contains(event.target as Node)) {
+        setOpenDropdown(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   return (
     <header className="fixed left-0 right-0 top-0 z-[9200] flex h-16 items-center border-b border-slate-400/70 bg-white/96 px-4 text-slate-900 shadow-[0_14px_34px_rgba(15,23,42,0.14)] backdrop-blur-xl">
@@ -314,7 +333,7 @@ function DesktopTopNavigation({
           </span>
         </button>
 
-        <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-visible">
+        <nav ref={navRef} className="flex min-w-0 flex-1 items-center gap-1 overflow-visible">
           {topMenuEntries.map((entry) => {
             const active = isEntryActive(entry);
 
@@ -323,7 +342,10 @@ function DesktopTopNavigation({
                 <button
                   key={entry.label}
                   type="button"
-                  onClick={() => onWindowOpen(entry.windowId)}
+                  onClick={() => {
+                    setOpenDropdown(null);
+                    onWindowOpen(entry.windowId);
+                  }}
                   className={`h-10 rounded-xl px-3 text-[15px] font-black transition ${active ? 'bg-sky-800 text-white shadow-[0_8px_18px_rgba(7,89,133,0.28)]' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
                 >
                   {entry.label}
@@ -331,18 +353,27 @@ function DesktopTopNavigation({
               );
             }
 
+            const isOpen = openDropdown === entry.label;
+
             return (
-              <div key={entry.label} className="group relative">
-                <button type="button" className={`flex h-10 items-center gap-1 rounded-xl px-3 text-[15px] font-black transition ${active ? 'bg-sky-800 text-white shadow-[0_8px_18px_rgba(7,89,133,0.28)]' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}>
+              <div key={entry.label} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setOpenDropdown((current) => (current === entry.label ? null : entry.label))}
+                  className={`flex h-10 items-center gap-1 rounded-xl px-3 text-[15px] font-black transition ${active ? 'bg-sky-800 text-white shadow-[0_8px_18px_rgba(7,89,133,0.28)]' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
+                >
                   {entry.label}
                   <ChevronDown className="h-4 w-4" />
                 </button>
-                <div className="invisible absolute left-0 top-full z-[9300] min-w-[250px] translate-y-2 rounded-2xl border border-slate-300 bg-white p-2 opacity-0 shadow-[0_22px_60px_rgba(15,23,42,0.2)] transition group-hover:visible group-hover:translate-y-1 group-hover:opacity-100">
+                <div className={`${isOpen ? 'visible translate-y-1 opacity-100' : 'invisible translate-y-2 opacity-0'} absolute left-0 top-full z-[9300] min-w-[250px] rounded-2xl border border-slate-300 bg-white p-2 shadow-[0_22px_60px_rgba(15,23,42,0.2)] transition`}>
                   {entry.items.map((item) => (
                     <button
                       key={item.label}
                       type="button"
-                      onClick={() => onWindowOpen(item.windowId)}
+                      onClick={() => {
+                        setOpenDropdown(null);
+                        onWindowOpen(item.windowId);
+                      }}
                       className={`flex h-10 w-full items-center rounded-xl px-3 text-left text-[15px] font-black transition ${activeWindow === item.windowId ? 'bg-sky-100 text-sky-900' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
                     >
                       {item.label}
@@ -805,6 +836,23 @@ const handleEditIncome = (transaction: Transaction) => {
   setShowIncomeModal(true);
 };
 
+const openAddIncomeModal = () => {
+  setEditingIncomeId(null);
+  setIncomeForm({
+    income_type: 'rental',
+    date: new Date().toISOString().split('T')[0],
+    amount: '',
+    payment_method: 'cash',
+    car_id: '',
+    agency_id: '',
+    representative_id: '',
+    contract_number: '',
+    notes: '',
+  });
+  setShowIncomeNotes(false);
+  setShowIncomeModal(true);
+};
+
 const handleDeleteIncome = async (transaction: Transaction) => {
   const result = await deleteIncomeFull(Number(transaction.id));
   if (result.error) {
@@ -1080,6 +1128,7 @@ const handleSaveSupplierPayment = async () => {
     if (
       openWindows.length === 0 ||
       hasOpenWindow('Αυτοκίνητα') ||
+      hasOpenWindow('ΚΤΕΟ') ||
       hasOpenWindow('Έσοδα') ||
       hasOpenWindow('Έξοδα') ||
       hasOpenWindow('Αναφορές')
@@ -1248,6 +1297,8 @@ const handleSaveSupplierPayment = async () => {
         return 'ΚΡΑΤΗΣΕΙΣ AUTOCLUB-RHODES';
       case 'Αυτοκίνητα':
         return 'Διαχείριση Αυτοκινήτων';
+      case 'ΚΤΕΟ':
+        return 'ΚΤΕΟ';
       case 'Κρατήσεις':
         return 'Κρατήσεις';
       case 'Service':
@@ -1341,12 +1392,7 @@ const handleSaveSupplierPayment = async () => {
 
   const openHomepageIncome = () => {
     openWindow('Έσοδα');
-    setIncomeForm((current) => ({
-      ...current,
-      date: new Date().toISOString().split('T')[0],
-    }));
-    setShowIncomeNotes(false);
-    setShowIncomeModal(true);
+    openAddIncomeModal();
   };
 
   const openHomepageExpense = () => {
@@ -1454,7 +1500,11 @@ const handleSaveSupplierPayment = async () => {
     }
   };
 
-  const handleUpdateVehicleKteo = async (vehicleId: string, kteoExpiry: string) => {
+  const handleUpdateVehicleKteo = async (
+    vehicleId: string,
+    kteoExpiry: string,
+    expense?: { amount: number; paymentMethod: string }
+  ) => {
     const vehicle = vehicles.find((item) => item.id === vehicleId);
     if (!vehicle) return false;
 
@@ -1479,6 +1529,49 @@ const handleSaveSupplierPayment = async () => {
     setVehicles((current) =>
       current.map((item) => (item.id === vehicleId ? { ...item, kteo_expiry: kteoExpiry } : item))
     );
+
+    if (expense) {
+      const createdExpense = await addTransaction({
+        type: 'expense',
+        source: 'kteo',
+        amount: expense.amount,
+        date: new Date().toISOString().slice(0, 10),
+        payment_method: expense.paymentMethod,
+        car_id: Number(vehicle.id),
+        category: 'ΚΤΕΟ',
+        notes: `KTEO renewal for ${vehicle.plate}`,
+      });
+
+      if (!createdExpense) return false;
+
+      const transactionRows = await fetchTransactions();
+      const carsData = await fetchCars();
+      setTransactions(
+        (transactionRows || []).map((transaction: any) => ({
+          id: String(transaction.id ?? ''),
+          date: transaction.date ?? '',
+          amount: Number(transaction.amount) || 0,
+          payment_method: String(transaction.payment_method ?? ''),
+          type: String(transaction.type ?? ''),
+          car_id: transaction.car_id ?? null,
+          car_plate: transaction.car_id
+            ? carsData.find((car: any) => String(car.id) === String(transaction.car_id))?.plate || `#${transaction.car_id}`
+            : '-',
+          agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
+          representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
+          supplier_id: transaction.supplier_id ? Number(transaction.supplier_id) : null,
+          supplier: String(transaction.supplier ?? ''),
+          category: String(transaction.category ?? ''),
+          notes: String(transaction.notes ?? ''),
+          contract_number: String(transaction.contract_number ?? ''),
+          booking_id: transaction.booking_id ? String(transaction.booking_id) : undefined,
+          source: transaction.source ? String(transaction.source) : undefined,
+          agency: transaction.agency ? String(transaction.agency) : undefined,
+          representative: transaction.representative ? String(transaction.representative) : undefined,
+        }))
+      );
+    }
+
     return true;
   };
 
@@ -1901,6 +1994,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       'Έγγραφα',
       'Κατηγορίες Εξόδων',
       'Αναφορές',
+      'ΚΤΕΟ',
       'Πρακτορεία',
       'Marketing',
       'Booking Engine Admin',
@@ -2094,6 +2188,25 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return <PublicBookingPreview />;
       case 'Ρυθμίσεις':
         return <SettingsManager onSuppliersChange={setSuppliers} />;
+      case 'ΚΤΕΟ': {
+        const currentYear = new Date().getFullYear();
+        return (
+          <KteoReport
+            vehicles={vehicles.map((vehicle) => ({
+              id: vehicle.id,
+              plate: vehicle.plate,
+              brand: vehicle.brand,
+              model: vehicle.model,
+              year: vehicle.year,
+              price: vehicle.price,
+              kteo_expiry: vehicle.kteo_expiry,
+            }))}
+            fromDate={`${currentYear}-01-01`}
+            toDate={`${currentYear}-12-31`}
+            onUpdateKteo={handleUpdateVehicleKteo}
+          />
+        );
+      }
       case 'Αναφορές':
         return (
           <ReportsCenter
@@ -2110,6 +2223,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               kteo_expiry: vehicle.kteo_expiry,
             }))}
             onUpdateKteo={handleUpdateVehicleKteo}
+            onAddIncome={openAddIncomeModal}
+            onAddExpense={openAddExpenseModal}
           />
         );
       case 'Γραμμάτια':
@@ -2125,6 +2240,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return 'ΚΡΑΤΗΣΕΙΣ AUTOCLUB-RHODES';
       case 'Αυτοκίνητα':
         return 'Διαχείριση Αυτοκινήτων';
+      case 'ΚΤΕΟ':
+        return 'ΚΤΕΟ';
       case 'Κρατήσεις':
         return 'Κρατήσεις';
       case 'Service':
@@ -2177,14 +2294,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
     <button
       className="rounded-2xl border border-sky-500 px-5 py-3 text-sm font-semibold text-sky-300 hover:bg-sky-500/10"
       type="button"
-      onClick={() => {
-        setIncomeForm((current) => ({
-          ...current,
-          date: new Date().toISOString().split('T')[0],
-        }));
-        setShowIncomeNotes(false);
-        setShowIncomeModal(true);
-      }}
+      onClick={openAddIncomeModal}
     >
       + Καταχώρηση Εσόδου
     </button>

@@ -7,7 +7,11 @@ type KteoReportProps = {
   vehicles: ReportVehicle[];
   fromDate: string;
   toDate: string;
-  onUpdateKteo: (vehicleId: string, kteoExpiry: string) => Promise<boolean>;
+  onUpdateKteo: (
+    vehicleId: string,
+    kteoExpiry: string,
+    expense?: { amount: number; paymentMethod: string }
+  ) => Promise<boolean>;
 };
 
 type KteoStatus = 'missing' | 'expired' | 'inRange' | 'soon';
@@ -80,6 +84,8 @@ function compareNullableDate(left?: string, right?: string, direction: SortDirec
 export default function KteoReport({ vehicles, fromDate, toDate, onUpdateKteo }: KteoReportProps) {
   const [editingVehicle, setEditingVehicle] = useState<ReportVehicle | null>(null);
   const [nextExpiry, setNextExpiry] = useState('');
+  const [kteoAmount, setKteoAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
   const [saving, setSaving] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('kteoExpiry');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -131,18 +137,26 @@ export default function KteoReport({ vehicles, fromDate, toDate, onUpdateKteo }:
   const openUpdateModal = (vehicle: ReportVehicle) => {
     setEditingVehicle(vehicle);
     setNextExpiry(vehicle.kteo_expiry || '');
+    setKteoAmount('');
+    setPaymentMethod('cash');
   };
 
   const closeUpdateModal = () => {
     setEditingVehicle(null);
     setNextExpiry('');
+    setKteoAmount('');
+    setPaymentMethod('cash');
   };
 
   const saveKteoExpiry = async () => {
-    if (!editingVehicle || !nextExpiry) return;
+    const amount = Number(kteoAmount.replace(',', '.'));
+    if (!editingVehicle || !nextExpiry || !Number.isFinite(amount) || amount <= 0 || !paymentMethod) return;
 
     setSaving(true);
-    const updated = await onUpdateKteo(editingVehicle.id, nextExpiry);
+    const updated = await onUpdateKteo(editingVehicle.id, nextExpiry, {
+      amount,
+      paymentMethod,
+    });
     setSaving(false);
 
     if (updated) {
@@ -211,6 +225,30 @@ export default function KteoReport({ vehicles, fromDate, toDate, onUpdateKteo }:
                   className="input"
                 />
               </label>
+              <label className="block space-y-2 text-sm text-zinc-300">
+                <span>Ποσό</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={kteoAmount}
+                  onChange={(event) => setKteoAmount(event.target.value)}
+                  className="input"
+                  placeholder="0.00"
+                />
+              </label>
+              <label className="block space-y-2 text-sm text-zinc-300">
+                <span>Τρόπος Πληρωμής</span>
+                <select
+                  value={paymentMethod}
+                  onChange={(event) => setPaymentMethod(event.target.value)}
+                  className="input"
+                >
+                  <option value="cash">Μετρητά</option>
+                  <option value="card">Κάρτα</option>
+                  <option value="bank">Τράπεζα</option>
+                </select>
+              </label>
               <div className="flex justify-end gap-3">
                 <button type="button" onClick={closeUpdateModal} className="rounded-2xl border border-zinc-700 px-5 py-3 text-sm text-zinc-300">
                   Ακύρωση
@@ -218,7 +256,13 @@ export default function KteoReport({ vehicles, fromDate, toDate, onUpdateKteo }:
                 <button
                   type="button"
                   onClick={saveKteoExpiry}
-                  disabled={!nextExpiry || saving}
+                  disabled={
+                    !nextExpiry ||
+                    !paymentMethod ||
+                    !Number.isFinite(Number(kteoAmount.replace(',', '.'))) ||
+                    Number(kteoAmount.replace(',', '.')) <= 0 ||
+                    saving
+                  }
                   className="rounded-2xl bg-sky-500 px-5 py-3 text-sm font-semibold text-black transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Αποθήκευση

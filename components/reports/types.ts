@@ -38,6 +38,8 @@ export type ReportVehicle = {
   plate: string;
   brand: string;
   model: string;
+  year?: string;
+  price?: string;
   kteo_expiry?: string;
 };
 
@@ -48,7 +50,13 @@ export type ReportsData = {
   representatives: ReportRepresentative[];
   supplierLedger: SupplierLedgerRow[];
   vehicles: ReportVehicle[];
-  onUpdateKteo: (vehicleId: string, kteoExpiry: string) => Promise<boolean>;
+  onUpdateKteo: (
+    vehicleId: string,
+    kteoExpiry: string,
+    expense?: { amount: number; paymentMethod: string }
+  ) => Promise<boolean>;
+  onAddIncome?: () => void;
+  onAddExpense?: () => void;
 };
 
 export type ReportsFilters = {
