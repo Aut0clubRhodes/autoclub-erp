@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { Fragment, useState, useEffect, useRef, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import Image from 'next/image';
 import { Bell, ChevronDown, LogOut, Menu, X } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
@@ -124,6 +124,7 @@ type Vehicle = {
   year: string;
   km: string;
   price: string;
+  purchase_date?: string;
   vin?: string;
   fuel?: string;
   engine_cc?: string;
@@ -138,6 +139,22 @@ type VehicleSortState = {
   key: VehicleSortKey;
   direction: SortDirection;
 } | null;
+
+const VEHICLE_CATEGORY_GROUP_ORDER = ['A', 'B', 'C', 'D', 'E', 'H', 'H1', 'H2', 'H3', 'H4', 'H5', 'K', 'K1', 'K2'];
+const UNCATEGORIZED_VEHICLE_GROUP = 'Χωρίς Κατηγορία';
+
+function normalizeVehicleGroup(category?: string) {
+  return category?.trim() || UNCATEGORIZED_VEHICLE_GROUP;
+}
+
+function getVehicleGroupSortIndex(category: string) {
+  const index = VEHICLE_CATEGORY_GROUP_ORDER.indexOf(category);
+  return index === -1 ? VEHICLE_CATEGORY_GROUP_ORDER.length : index;
+}
+
+function formatVehicleGroupLabel(category: string) {
+  return category === UNCATEGORIZED_VEHICLE_GROUP ? 'ΧΩΡΙΣ ΚΑΤΗΓΟΡΙΑ' : `GROUP ${category}`;
+}
 
 type LicenseViewerState = {
   vehicle: Vehicle;
@@ -1144,6 +1161,7 @@ const handleSaveSupplierPayment = async () => {
           year: String(car.year || '0'),
           km: String(car.current_km || '0'),
           price: String(car.purchase_price || '€0'),
+          purchase_date: car.purchase_date || '',
           vin: car.vin || '',
           fuel: car.fuel || '',
           engine_cc: car.engine_cc || '',
@@ -1594,6 +1612,7 @@ const handleSaveSupplierPayment = async () => {
         year: String(car.year || ''),
         km: String(car.current_km || ''),
         price: String(car.purchase_price || ''),
+        purchase_date: car.purchase_date || '',
         vin: car.vin || '',
         fuel: car.fuel || '',
         engine_cc: car.engine_cc || '',
@@ -1665,6 +1684,7 @@ const handleSaveSupplierPayment = async () => {
         year: String(car.year || ''),
         km: String(car.current_km || ''),
         price: String(car.purchase_price || ''),
+        purchase_date: car.purchase_date || '',
         vin: car.vin || '',
         fuel: car.fuel || '',
         engine_cc: car.engine_cc || '',
@@ -1703,6 +1723,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       year: String(car.year || ''),
       km: String(car.current_km || ''),
       price: String(car.purchase_price || ''),
+      purchase_date: car.purchase_date || '',
       vin: car.vin || '',
       fuel: car.fuel || '',
       engine_cc: car.engine_cc || '',
@@ -2189,20 +2210,18 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       case 'Ρυθμίσεις':
         return <SettingsManager onSuppliersChange={setSuppliers} />;
       case 'ΚΤΕΟ': {
-        const currentYear = new Date().getFullYear();
         return (
           <KteoReport
             vehicles={vehicles.map((vehicle) => ({
               id: vehicle.id,
               plate: vehicle.plate,
+              category: vehicle.category,
               brand: vehicle.brand,
               model: vehicle.model,
               year: vehicle.year,
               price: vehicle.price,
               kteo_expiry: vehicle.kteo_expiry,
             }))}
-            fromDate={`${currentYear}-01-01`}
-            toDate={`${currentYear}-12-31`}
             onUpdateKteo={handleUpdateVehicleKteo}
           />
         );
@@ -2218,8 +2237,12 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
             vehicles={vehicles.map((vehicle) => ({
               id: vehicle.id,
               plate: vehicle.plate,
+              category: vehicle.category,
               brand: vehicle.brand,
               model: vehicle.model,
+              year: vehicle.year,
+              price: vehicle.price,
+              purchase_date: vehicle.purchase_date,
               kteo_expiry: vehicle.kteo_expiry,
             }))}
             onUpdateKteo={handleUpdateVehicleKteo}
@@ -3521,6 +3544,42 @@ function VehiclesTable({
   onEdit: (plate: string) => void;
   onDelete: (plate: string) => void;
 }) {
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const groupedVehicles = vehicles.reduce<Array<{ category: string; vehicles: Vehicle[] }>>((groups, vehicle) => {
+    const category = normalizeVehicleGroup(vehicle.category);
+    const existingGroup = groups.find((group) => group.category === category);
+
+    if (existingGroup) {
+      existingGroup.vehicles.push(vehicle);
+      return groups;
+    }
+
+    return [...groups, { category, vehicles: [vehicle] }];
+  }, []);
+
+  groupedVehicles.sort((left, right) => {
+    const leftIndex = getVehicleGroupSortIndex(left.category);
+    const rightIndex = getVehicleGroupSortIndex(right.category);
+
+    if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+    return left.category.localeCompare(right.category, 'el');
+  });
+  groupedVehicles.forEach((group) => {
+    group.vehicles.sort((left, right) => left.plate.localeCompare(right.plate, 'el', { numeric: true }));
+  });
+
+  const toggleGroup = (category: string) => {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="w-full">
       <div className="overflow-x-auto">
@@ -3542,49 +3601,64 @@ function VehiclesTable({
             </tr>
           </thead>
           <tbody>
-            {vehicles.map((vehicle) => (
-              <tr key={vehicle.plate} className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors">
-                <td className="py-4 px-4 text-sm text-zinc-200 font-mono">{vehicle.plate}</td>
-                <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.category}</td>
-                <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.brand}</td>
-                <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.model}</td>
-                <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.year}</td>
-                <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.km}</td>
-                <td className="py-4 px-4 text-sm text-zinc-200 font-medium">{formatEuro(vehicle.price)}</td>
-                <td className="min-w-[430px] py-4 px-4 text-sm">
-                  <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
+            {groupedVehicles.map((group) => (
+              <Fragment key={group.category}>
+                <tr className="border-b border-zinc-700/70 bg-zinc-900/70">
+                  <td colSpan={8} className="px-4 py-2 text-xs font-bold uppercase tracking-wide text-zinc-300">
                     <button
                       type="button"
-                      onClick={() => onView(vehicle.plate)}
-                      className="rounded-2xl border border-sky-600 bg-zinc-900 px-3 py-2 text-xs text-sky-300 transition hover:bg-sky-500/10"
+                      onClick={() => toggleGroup(group.category)}
+                      className="flex w-full items-center justify-between text-left"
                     >
-                      Προβολή
+                      <span>{formatVehicleGroupLabel(group.category)} ({group.vehicles.length})</span>
+                      <span className="text-zinc-500">{collapsedGroups.has(group.category) ? '+' : '−'}</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => onViewLicense(vehicle)}
-                      className="rounded-2xl border border-emerald-500/35 bg-emerald-500/[0.06] px-3 py-2 text-xs text-emerald-950 transition hover:border-emerald-400/50 hover:bg-emerald-500/12"
-                    >
-                      Προβολή Άδειας
-                    </button>
-                   
-                    <button
-                      type="button"
-                      onClick={() => onEdit(vehicle.plate)}
-                      className="rounded-2xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-white transition hover:bg-zinc-800"
-                    >
-                      Επεξεργασία
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(vehicle.id)}
-                      className="rounded-2xl border border-rose-600 bg-zinc-900 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/10"
-                    >
-                      Διαγραφή
-                    </button>
-                  </div>
-                </td>
-              </tr>
+                  </td>
+                </tr>
+                {!collapsedGroups.has(group.category) && group.vehicles.map((vehicle) => (
+                  <tr key={vehicle.plate} className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors">
+                    <td className="py-4 px-4 text-sm text-zinc-200 font-mono">{vehicle.plate}</td>
+                    <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.category || '-'}</td>
+                    <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.brand}</td>
+                    <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.model}</td>
+                    <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.year}</td>
+                    <td className="py-4 px-4 text-sm text-zinc-200">{vehicle.km}</td>
+                    <td className="py-4 px-4 text-sm text-zinc-200 font-medium">{formatEuro(vehicle.price)}</td>
+                    <td className="min-w-[430px] py-4 px-4 text-sm">
+                      <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => onView(vehicle.plate)}
+                          className="rounded-2xl border border-sky-600 bg-zinc-900 px-3 py-2 text-xs text-sky-300 transition hover:bg-sky-500/10"
+                        >
+                          Προβολή
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onViewLicense(vehicle)}
+                          className="rounded-2xl border border-emerald-500/35 bg-emerald-500/[0.06] px-3 py-2 text-xs text-emerald-950 transition hover:border-emerald-400/50 hover:bg-emerald-500/12"
+                        >
+                          Προβολή Άδειας
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onEdit(vehicle.plate)}
+                          className="rounded-2xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-white transition hover:bg-zinc-800"
+                        >
+                          Επεξεργασία
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDelete(vehicle.id)}
+                          className="rounded-2xl border border-rose-600 bg-zinc-900 px-3 py-2 text-xs text-rose-300 transition hover:bg-rose-500/10"
+                        >
+                          Διαγραφή
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -4007,7 +4081,7 @@ function VehicleViewModal({
                   <button
                     type="button"
                     onClick={() => setShowLicenseRegistrationModal(true)}
-                    className="h-10 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.08] px-3.5 text-[13px] font-medium text-emerald-950 transition hover:bg-emerald-500/[0.14]"
+                    className="h-10 rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3.5 text-[13px] font-semibold text-emerald-100 transition hover:border-emerald-300/60 hover:bg-emerald-500/25"
                   >
                     Άδεια Κυκλοφορίας
                   </button>
@@ -4019,7 +4093,7 @@ function VehicleViewModal({
                   <button
                     type="button"
                     onClick={() => setShowKteoModal(true)}
-                    className="h-10 rounded-xl border border-amber-500/25 bg-amber-500/[0.08] px-3.5 text-[13px] font-medium text-amber-950 transition hover:bg-amber-500/[0.14]"
+                    className="h-10 rounded-xl border border-amber-400/40 bg-amber-500/15 px-3.5 text-[13px] font-semibold text-amber-100 transition hover:border-amber-300/60 hover:bg-amber-500/25"
                   >
                     Ενημέρωση ΚΤΕΟ
                   </button>
@@ -4084,9 +4158,9 @@ function VehicleViewModal({
                     className="sr-only"
                   />
                 </label>
-                <label className="block cursor-pointer rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-950 transition hover:bg-emerald-500/20">
+                <label className="block cursor-pointer rounded-2xl border border-emerald-400/35 bg-emerald-500/12 px-4 py-4 text-sm text-emerald-100 transition hover:border-emerald-300/55 hover:bg-emerald-500/22">
                   <span className="block font-medium">Camera / Λήψη φωτογραφίας</span>
-                  <span className="mt-1 block text-xs text-emerald-950/70">Χρήση κάμερας συσκευής</span>
+                  <span className="mt-1 block text-xs text-emerald-100/70">Χρήση κάμερας συσκευής</span>
                   <input
                     type="file"
                     accept="image/*"

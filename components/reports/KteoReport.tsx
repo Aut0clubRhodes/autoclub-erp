@@ -1,12 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import type { ReportVehicle } from './types';
 
 type KteoReportProps = {
   vehicles: ReportVehicle[];
-  fromDate: string;
-  toDate: string;
   onUpdateKteo: (
     vehicleId: string,
     kteoExpiry: string,
@@ -17,6 +15,7 @@ type KteoReportProps = {
 type KteoStatus = 'missing' | 'expired' | 'inRange' | 'soon';
 type SortKey = 'plate' | 'brand' | 'model' | 'kteoExpiry' | 'status';
 type SortDirection = 'asc' | 'desc';
+type KteoRow = { vehicle: ReportVehicle; status: KteoStatus };
 
 const statusLabel: Record<KteoStatus, string> = {
   missing: 'Δεν έχει ημερομηνία',
@@ -36,35 +35,42 @@ function parseDate(value?: string) {
   return value ? new Date(`${value}T00:00:00`) : null;
 }
 
-function getKteoStatus(kteoExpiry: string | undefined, fromDate: string, toDate: string): KteoStatus {
+function getCurrentYear() {
+  return new Date().getFullYear();
+}
+
+function getTodayStart() {
+  return new Date(new Date().toDateString());
+}
+
+function getYearRange(year: number) {
+  return {
+    start: new Date(year, 0, 1),
+    end: new Date(year, 11, 31),
+  };
+}
+
+function isInsideYear(value: string | undefined, year: number) {
+  const date = parseDate(value);
+  if (!date) return false;
+
+  const { start, end } = getYearRange(year);
+  return date >= start && date <= end;
+}
+
+function getKteoStatus(kteoExpiry: string | undefined, selectedYear: number): KteoStatus {
   if (!kteoExpiry) return 'missing';
 
   const today = new Date();
   const expiry = parseDate(kteoExpiry);
-  const rangeStart = parseDate(fromDate);
-  const rangeEnd = parseDate(toDate);
   const soonThreshold = new Date(today);
   soonThreshold.setDate(soonThreshold.getDate() + 60);
 
   if (!expiry) return 'missing';
-  if (expiry < new Date(today.toDateString())) return 'expired';
-  if ((!rangeStart || expiry >= rangeStart) && (!rangeEnd || expiry <= rangeEnd)) return 'inRange';
+  if (expiry < getTodayStart()) return 'expired';
+  if (isInsideYear(kteoExpiry, selectedYear)) return 'inRange';
   if (expiry <= soonThreshold) return 'soon';
   return 'inRange';
-}
-
-function shouldShowVehicle(vehicle: ReportVehicle, fromDate: string, toDate: string) {
-  if (!vehicle.kteo_expiry) return true;
-
-  const today = new Date();
-  const expiry = parseDate(vehicle.kteo_expiry);
-  const rangeStart = parseDate(fromDate);
-  const rangeEnd = parseDate(toDate);
-  if (!expiry) return true;
-  const expired = expiry < new Date(today.toDateString());
-  const insideRange = (!rangeStart || expiry >= rangeStart) && (!rangeEnd || expiry <= rangeEnd);
-
-  return expired || insideRange;
 }
 
 function formatKteoDate(value?: string) {
@@ -81,48 +87,88 @@ function compareNullableDate(left?: string, right?: string, direction: SortDirec
   return direction === 'asc' ? left.localeCompare(right) : right.localeCompare(left);
 }
 
-export default function KteoReport({ vehicles, fromDate, toDate, onUpdateKteo }: KteoReportProps) {
+function sortKteoRows(rows: KteoRow[], sortKey: SortKey, sortDirection: SortDirection) {
+  return [...rows].sort((left, right) => {
+    switch (sortKey) {
+      case 'plate':
+        return sortDirection === 'asc'
+          ? left.vehicle.plate.localeCompare(right.vehicle.plate)
+          : right.vehicle.plate.localeCompare(left.vehicle.plate);
+      case 'brand':
+        return sortDirection === 'asc'
+          ? (left.vehicle.brand || '').localeCompare(right.vehicle.brand || '')
+          : (right.vehicle.brand || '').localeCompare(left.vehicle.brand || '');
+      case 'model':
+        return sortDirection === 'asc'
+          ? (left.vehicle.model || '').localeCompare(right.vehicle.model || '')
+          : (right.vehicle.model || '').localeCompare(left.vehicle.model || '');
+      case 'status':
+        return sortDirection === 'asc'
+          ? statusLabel[left.status].localeCompare(statusLabel[right.status])
+          : statusLabel[right.status].localeCompare(statusLabel[left.status]);
+      case 'kteoExpiry':
+      default:
+        return compareNullableDate(left.vehicle.kteo_expiry, right.vehicle.kteo_expiry, sortDirection);
+    }
+  });
+}
+
+export default function KteoReport({ vehicles, onUpdateKteo }: KteoReportProps) {
   const [editingVehicle, setEditingVehicle] = useState<ReportVehicle | null>(null);
   const [nextExpiry, setNextExpiry] = useState('');
   const [kteoAmount, setKteoAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [saving, setSaving] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(getCurrentYear);
   const [sortKey, setSortKey] = useState<SortKey>('kteoExpiry');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
-  const rows = useMemo(
-    () =>
-      vehicles
-        .filter((vehicle) => shouldShowVehicle(vehicle, fromDate, toDate))
-        .map((vehicle) => ({
-          vehicle,
-          status: getKteoStatus(vehicle.kteo_expiry, fromDate, toDate),
-        }))
-        .sort((left, right) => {
-          switch (sortKey) {
-            case 'plate':
-              return sortDirection === 'asc'
-                ? left.vehicle.plate.localeCompare(right.vehicle.plate)
-                : right.vehicle.plate.localeCompare(left.vehicle.plate);
-            case 'brand':
-              return sortDirection === 'asc'
-                ? (left.vehicle.brand || '').localeCompare(right.vehicle.brand || '')
-                : (right.vehicle.brand || '').localeCompare(left.vehicle.brand || '');
-            case 'model':
-              return sortDirection === 'asc'
-                ? (left.vehicle.model || '').localeCompare(right.vehicle.model || '')
-                : (right.vehicle.model || '').localeCompare(left.vehicle.model || '');
-            case 'status':
-              return sortDirection === 'asc'
-                ? statusLabel[left.status].localeCompare(statusLabel[right.status])
-                : statusLabel[right.status].localeCompare(statusLabel[left.status]);
-            case 'kteoExpiry':
-            default:
-              return compareNullableDate(left.vehicle.kteo_expiry, right.vehicle.kteo_expiry, sortDirection);
-          }
-        }),
-    [fromDate, sortDirection, sortKey, toDate, vehicles]
-  );
+  const sections = useMemo(() => {
+    const expiredRows: KteoRow[] = [];
+    const dueRows: KteoRow[] = [];
+    const missingRows: KteoRow[] = [];
+
+    vehicles.forEach((vehicle) => {
+      const status = getKteoStatus(vehicle.kteo_expiry, selectedYear);
+      const row = { vehicle, status };
+
+      if (!vehicle.kteo_expiry) {
+        missingRows.push(row);
+        return;
+      }
+
+      const expiry = parseDate(vehicle.kteo_expiry);
+      if (!expiry) {
+        missingRows.push({ vehicle, status: 'missing' });
+        return;
+      }
+
+      if (expiry < getTodayStart()) {
+        expiredRows.push(row);
+        return;
+      }
+
+      if (isInsideYear(vehicle.kteo_expiry, selectedYear)) {
+        dueRows.push(row);
+      }
+    });
+
+    return [
+      { id: 'expired', title: 'Ληγμένα', rows: sortKteoRows(expiredRows, sortKey, sortDirection) },
+      {
+        id: 'due-year',
+        title: `Λήγουν το ${selectedYear}`,
+        rows: sortKteoRows(dueRows, sortKey, sortDirection),
+      },
+      {
+        id: 'missing',
+        title: 'Χωρίς ημερομηνία ΚΤΕΟ',
+        rows: sortKteoRows(missingRows, sortKey, sortDirection),
+      },
+    ];
+  }, [selectedYear, sortDirection, sortKey, vehicles]);
+
+  const visibleRowsCount = sections.reduce((total, section) => total + section.rows.length, 0);
 
   const handleSort = (nextKey: SortKey) => {
     if (sortKey === nextKey) {
@@ -166,6 +212,23 @@ export default function KteoReport({ vehicles, fromDate, toDate, onUpdateKteo }:
 
   return (
     <div className="space-y-4">
+      <label className="inline-flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm text-zinc-300">
+        <span className="font-semibold">Έτος ΚΤΕΟ</span>
+        <input
+          type="number"
+          min="1900"
+          max="2200"
+          value={selectedYear}
+          onChange={(event) => {
+            const nextYear = Number(event.target.value);
+            if (Number.isFinite(nextYear) && nextYear > 0) {
+              setSelectedYear(nextYear);
+            }
+          }}
+          className="w-28 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
+        />
+      </label>
+
       <div className="overflow-hidden rounded-2xl border border-zinc-800">
         <table className="w-full min-w-[860px] text-left">
           <thead className="bg-zinc-900/90">
@@ -179,31 +242,48 @@ export default function KteoReport({ vehicles, fromDate, toDate, onUpdateKteo }:
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ vehicle, status }) => (
-              <tr key={vehicle.id} className="border-t border-zinc-800">
-                <td className="px-4 py-4 text-sm font-medium text-white">{vehicle.plate}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{vehicle.brand || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{vehicle.model || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{formatKteoDate(vehicle.kteo_expiry)}</td>
-                <td className="px-4 py-4 text-sm">
-                  <span className={`inline-flex rounded-full border px-3 py-1 text-xs ${statusClassName[status]}`}>
-                    {statusLabel[status]}
-                  </span>
-                </td>
-                <td className="px-4 py-4 text-sm">
-                  <button
-                    type="button"
-                    onClick={() => openUpdateModal(vehicle)}
-                    className="rounded-2xl border border-sky-400/25 bg-sky-400/10 px-3 py-2 text-xs font-medium text-sky-200 transition hover:bg-sky-400/20"
-                  >
-                    Πέρασε ΚΤΕΟ
-                  </button>
-                </td>
-              </tr>
+            {sections.map((section) => (
+              <Fragment key={section.id}>
+                <tr className="border-t border-zinc-700/70 bg-zinc-900/70">
+                  <td colSpan={6} className="px-4 py-2 text-xs font-bold uppercase tracking-wide text-zinc-300">
+                    {section.title} ({section.rows.length})
+                  </td>
+                </tr>
+                {section.rows.length === 0 ? (
+                  <tr className="border-t border-zinc-800">
+                    <td colSpan={6} className="px-4 py-4 text-sm text-zinc-500">
+                      Δεν υπάρχουν αυτοκίνητα σε αυτή την ενότητα.
+                    </td>
+                  </tr>
+                ) : (
+                  section.rows.map(({ vehicle, status }) => (
+                    <tr key={`${section.id}-${vehicle.id}`} className="border-t border-zinc-800">
+                      <td className="px-4 py-4 text-sm font-medium text-white">{vehicle.plate}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{vehicle.brand || '-'}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{vehicle.model || '-'}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{formatKteoDate(vehicle.kteo_expiry)}</td>
+                      <td className="px-4 py-4 text-sm">
+                        <span className={`inline-flex rounded-full border px-3 py-1 text-xs ${statusClassName[status]}`}>
+                          {statusLabel[status]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-sm">
+                        <button
+                          type="button"
+                          onClick={() => openUpdateModal(vehicle)}
+                          className="rounded-2xl border border-sky-400/25 bg-sky-400/10 px-3 py-2 text-xs font-medium text-sky-200 transition hover:bg-sky-400/20"
+                        >
+                          Πέρασε ΚΤΕΟ
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </Fragment>
             ))}
           </tbody>
         </table>
-        {rows.length === 0 && <p className="p-6 text-sm text-zinc-500">Δεν υπάρχουν αυτοκίνητα για παρακολούθηση ΚΤΕΟ.</p>}
+        {visibleRowsCount === 0 && <p className="p-6 text-sm text-zinc-500">Δεν υπάρχουν αυτοκίνητα για παρακολούθηση ΚΤΕΟ.</p>}
       </div>
 
       {editingVehicle && (

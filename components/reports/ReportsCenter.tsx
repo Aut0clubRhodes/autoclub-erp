@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import AgenciesReport from './AgenciesReport';
 import CarsReport from './CarsReport';
 import ExpensesReport from './ExpensesReport';
@@ -16,6 +16,7 @@ import {
 } from '@/lib/serviceInventoryApi';
 import { fetchServices, type ServiceRecord } from '@/lib/servicesApi';
 import type { ReportsData, ReportsFilters } from './types';
+import { DEPRECIATION_RATE, calculateYearDepreciation } from './depreciationUtils';
 
 type ReportSection =
   | 'cashflow'
@@ -41,6 +42,27 @@ const accountingSections: { id: ReportSection; label: string }[] = [
   { id: 'depreciation', label: 'Αποσβέσεις' },
 ];
 
+const VEHICLE_CATEGORY_GROUP_ORDER = ['A', 'B', 'C', 'D', 'E', 'H', 'H1', 'H2', 'H3', 'H4', 'H5', 'K', 'K1', 'K2'];
+const UNCATEGORIZED_VEHICLE_GROUP = 'Χωρίς Κατηγορία';
+
+function normalizeVehicleGroup(category?: string) {
+  return category?.trim() || UNCATEGORIZED_VEHICLE_GROUP;
+}
+
+function getVehicleGroupSortIndex(category: string) {
+  const index = VEHICLE_CATEGORY_GROUP_ORDER.indexOf(category);
+  return index === -1 ? VEHICLE_CATEGORY_GROUP_ORDER.length : index;
+}
+
+function formatVehicleGroupLabel(category: string) {
+  return category === UNCATEGORIZED_VEHICLE_GROUP ? 'ΧΩΡΙΣ ΚΑΤΗΓΟΡΙΑ' : `GROUP ${category}`;
+}
+
+function getYearFromDate(value?: string) {
+  const year = Number(String(value || '').slice(0, 4));
+  return Number.isFinite(year) && year > 0 ? year : new Date().getFullYear();
+}
+
 const initialFilters: ReportsFilters = {
   fromDate: '2026-01-01',
   toDate: '2026-12-31',
@@ -63,6 +85,7 @@ export default function ReportsCenter({
 }: ReportsData) {
   const [activeSection, setActiveSection] = useState<ReportSection>('cashflow');
   const [filters, setFilters] = useState(initialFilters);
+  const [depreciationYear, setDepreciationYear] = useState(() => getYearFromDate(initialFilters.fromDate));
   const [debts, setDebts] = useState<DebtRecord[]>([]);
   const [inventoryItems, setInventoryItems] = useState<ServiceInventoryItem[]>([]);
   const [inventoryMovements, setInventoryMovements] = useState<ServiceInventoryMovement[]>([]);
@@ -86,6 +109,10 @@ export default function ReportsCenter({
 
     loadReportData();
   }, []);
+
+  useEffect(() => {
+    setDepreciationYear(getYearFromDate(filters.fromDate));
+  }, [filters.fromDate]);
 
   const filteredTransactions = useMemo(
     () =>
@@ -136,8 +163,8 @@ export default function ReportsCenter({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-black/20">
-      <div className="sticky top-0 z-10 border-b border-white/[0.07] bg-black/30 px-6 py-5 backdrop-blur">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+      <div className="sticky top-0 z-10 border-b border-white/[0.07] bg-black/30 px-5 py-3.5 backdrop-blur">
+        <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-7">
           <FilterInput
             label="Από Ημερομηνία"
             type="date"
@@ -245,8 +272,8 @@ export default function ReportsCenter({
           </nav>
         </aside>
 
-        <main className="min-h-0 overflow-auto px-4 py-5">
-          <div className="w-full max-w-none space-y-5">
+        <main className="min-h-0 overflow-auto px-4 py-4">
+          <div className="w-full max-w-none space-y-4">
             {activeSection === 'agencies' && (
               <AgenciesReport
                 transactions={filteredTransactions}
@@ -291,9 +318,16 @@ export default function ReportsCenter({
                 services={services}
                 fromDate={filters.fromDate}
                 toDate={filters.toDate}
+                depreciationYear={depreciationYear}
               />
             )}
-            {activeSection === 'depreciation' && <DepreciationReport vehicles={vehicles} />}
+            {activeSection === 'depreciation' && (
+              <DepreciationReport
+                vehicles={vehicles}
+                depreciationYear={depreciationYear}
+                onDepreciationYearChange={setDepreciationYear}
+              />
+            )}
             {activeSection === 'secretariat' && (
               <SecretariatReport
                 debts={debts.filter(
@@ -321,13 +355,13 @@ function FilterInput({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="space-y-2 text-sm text-zinc-300">
+    <label className="space-y-1.5 text-sm text-zinc-300">
       <span className="block text-xs text-zinc-500">{label}</span>
       <input
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500"
+        className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
       />
     </label>
   );
@@ -361,12 +395,12 @@ function FilterSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="space-y-2 text-sm text-zinc-300">
+    <label className="space-y-1.5 text-sm text-zinc-300">
       <span className="block text-xs text-zinc-500">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-500"
+        className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
       >
         {options.map((option) => (
           <option key={`${label}-${option.value}`} value={option.value}>
@@ -407,63 +441,134 @@ function CashflowSummary({ transactions }: { transactions: ReportsData['transact
   );
 }
 
-function DepreciationReport({ vehicles }: { vehicles: ReportsData['vehicles'] }) {
-  const depreciationRate = 0.16;
+function DepreciationReport({
+  vehicles,
+  depreciationYear,
+  onDepreciationYearChange,
+}: {
+  vehicles: ReportsData['vehicles'];
+  depreciationYear: number;
+  onDepreciationYearChange: (year: number) => void;
+}) {
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const formatMoney = (value: number) =>
     `€${value.toLocaleString('el-GR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const parseCurrentValue = (value?: string) => {
-    if (!value) return 0;
-    const normalized = value
-      .replace(/[^\d,.-]/g, '')
-      .replace(/\./g, '')
-      .replace(',', '.');
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  const groupedVehicles = vehicles.reduce<Array<{ category: string; vehicles: typeof vehicles }>>((groups, vehicle) => {
+    const category = normalizeVehicleGroup(vehicle.category);
+    const existingGroup = groups.find((group) => group.category === category);
+
+    if (existingGroup) {
+      existingGroup.vehicles.push(vehicle);
+      return groups;
+    }
+
+    return [...groups, { category, vehicles: [vehicle] }];
+  }, []);
+
+  groupedVehicles.sort((left, right) => {
+    const leftIndex = getVehicleGroupSortIndex(left.category);
+    const rightIndex = getVehicleGroupSortIndex(right.category);
+
+    if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+    return left.category.localeCompare(right.category, 'el');
+  });
+  groupedVehicles.forEach((group) => {
+    group.vehicles.sort((left, right) => left.plate.localeCompare(right.plate, 'el', { numeric: true }));
+  });
+
+  const toggleGroup = (category: string) => {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-800">
-      <table className="w-full min-w-[1080px] text-left">
-        <thead className="bg-zinc-900/90">
-          <tr>
-            {[
-              'Αυτοκίνητο / Πινακίδα',
-              'Μάρκα',
-              'Μοντέλο',
-              'Έτος',
-              'Τρέχουσα Αξία',
-              'Ποσοστό Απόσβεσης',
-              'Ποσό Απόσβεσης',
-              'Εκτιμώμενη Αξία Μετά Απόσβεσης',
-            ].map((label) => (
-              <th key={label} className="px-4 py-3 text-sm text-zinc-400">
-                {label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {vehicles.map((vehicle) => {
-            const currentValue = parseCurrentValue(vehicle.price);
-            const depreciationAmount = currentValue * depreciationRate;
-            const estimatedValue = currentValue - depreciationAmount;
+    <div className="space-y-4">
+      <label className="inline-flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm text-zinc-300">
+        <span className="font-semibold">Έτος Απόσβεσης</span>
+        <input
+          type="number"
+          min="1900"
+          max="2200"
+          value={depreciationYear}
+          onChange={(event) => {
+            const nextYear = Number(event.target.value);
+            if (Number.isFinite(nextYear)) {
+              onDepreciationYearChange(nextYear);
+            }
+          }}
+          className="w-28 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
+        />
+      </label>
 
-            return (
-              <tr key={vehicle.id} className="border-t border-zinc-800 hover:bg-zinc-900/60">
-                <td className="px-4 py-4 text-sm font-semibold text-white">{vehicle.plate || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{vehicle.brand || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{vehicle.model || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{vehicle.year || '-'}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">{formatMoney(currentValue)}</td>
-                <td className="px-4 py-4 text-sm text-zinc-200">16%</td>
-                <td className="px-4 py-4 text-sm text-amber-300">{formatMoney(depreciationAmount)}</td>
-                <td className="px-4 py-4 text-sm text-emerald-300">{formatMoney(estimatedValue)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {vehicles.length === 0 && <p className="p-6 text-sm text-zinc-500">Δεν βρέθηκαν αυτοκίνητα.</p>}
+      <div className="overflow-hidden rounded-2xl border border-zinc-800">
+        <table className="w-full min-w-[1480px] text-left">
+          <thead className="bg-zinc-900/90">
+            <tr>
+              {[
+                'Κατηγορία',
+                'Αυτοκίνητο / Πινακίδα',
+                'Μάρκα',
+                'Μοντέλο',
+                'Έτος',
+                'Έτος Απόσβεσης',
+                'Αξία Αρχής Έτους',
+                'Ποσοστό Απόσβεσης',
+                'Ποσό Απόσβεσης',
+                'Εκτιμώμενη Αξία Τέλους Έτους',
+              ].map((label) => (
+                <th key={label} className="px-4 py-3 text-sm text-zinc-400">
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {groupedVehicles.map((group) => (
+              <Fragment key={group.category}>
+                <tr className="border-t border-zinc-700/70 bg-zinc-900/70">
+                  <td colSpan={10} className="px-4 py-2 text-xs font-bold uppercase tracking-wide text-zinc-300">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.category)}
+                      className="flex w-full items-center justify-between text-left"
+                    >
+                      <span>{formatVehicleGroupLabel(group.category)} ({group.vehicles.length})</span>
+                      <span className="text-zinc-500">{collapsedGroups.has(group.category) ? '+' : '−'}</span>
+                    </button>
+                  </td>
+                </tr>
+                {!collapsedGroups.has(group.category) && group.vehicles.map((vehicle) => {
+                  const depreciation = calculateYearDepreciation(vehicle, depreciationYear);
+                  const category = normalizeVehicleGroup(vehicle.category);
+
+                  return (
+                    <tr key={vehicle.id} className="border-t border-zinc-800 hover:bg-zinc-900/60">
+                      <td className="px-4 py-4 text-sm text-zinc-200">{category}</td>
+                      <td className="px-4 py-4 text-sm font-semibold text-white">{vehicle.plate || '-'}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{vehicle.brand || '-'}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{vehicle.model || '-'}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{vehicle.year || '-'}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{depreciationYear}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{formatMoney(depreciation.startValue)}</td>
+                      <td className="px-4 py-4 text-sm text-zinc-200">{Math.round(DEPRECIATION_RATE * 100)}%</td>
+                      <td className="px-4 py-4 text-sm text-amber-300">{formatMoney(depreciation.depreciationAmount)}</td>
+                      <td className="px-4 py-4 text-sm text-emerald-300">{formatMoney(depreciation.endValue)}</td>
+                    </tr>
+                  );
+                })}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+        {vehicles.length === 0 && <p className="p-6 text-sm text-zinc-500">Δεν βρέθηκαν αυτοκίνητα.</p>}
+      </div>
     </div>
   );
 }

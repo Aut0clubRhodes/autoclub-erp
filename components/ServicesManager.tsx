@@ -2693,8 +2693,8 @@ function SearchableCombobox({
       </div>
 
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full z-[10030] mt-2 overflow-hidden rounded-2xl border border-white/[0.12] bg-[#080d14] shadow-[0_22px_54px_rgba(0,0,0,0.62),0_0_24px_rgba(249,115,22,0.07)]">
-          <div className="border-b border-white/[0.06] p-2">
+        <div className="absolute left-0 right-0 top-full z-[10030] mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_44px_rgba(15,23,42,0.16)]">
+          <div className="border-b border-slate-200 p-2">
             <input
               autoFocus
               value={searchTerm}
@@ -2705,7 +2705,7 @@ function SearchableCombobox({
                 }
               }}
               placeholder={searchPlaceholder}
-              className="w-full rounded-xl border border-white/[0.12] bg-black/45 px-3.5 py-2.5 text-sm font-medium text-zinc-50 outline-none transition duration-200 placeholder:text-zinc-400 focus:border-orange-300/45 focus:bg-black/55"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-900 outline-none transition duration-200 placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             />
           </div>
 
@@ -2713,7 +2713,7 @@ function SearchableCombobox({
             <button
               type="button"
               onClick={() => selectOption('')}
-              className="w-full border-b border-white/[0.06] px-3.5 py-2.5 text-left text-xs font-bold text-zinc-300 transition duration-200 hover:bg-white/[0.06] hover:text-white"
+              className="w-full border-b border-slate-200 px-3.5 py-2.5 text-left text-xs font-bold text-slate-600 transition duration-200 hover:bg-slate-50 hover:text-slate-950"
             >
               Καθαρισμός επιλογής
             </button>
@@ -2728,13 +2728,13 @@ function SearchableCombobox({
                   key={option.value}
                   type="button"
                   onClick={() => selectOption(option.value)}
-                  className={`w-full rounded-xl px-3.5 py-3 text-left transition duration-200 hover:bg-orange-300/[0.11] hover:text-white ${
-                    option.value === value ? 'bg-orange-300/[0.13] text-orange-50 ring-1 ring-orange-300/18' : 'text-zinc-100'
+                  className={`w-full rounded-xl px-3.5 py-3 text-left transition duration-200 hover:bg-sky-50 hover:text-slate-950 ${
+                    option.value === value ? 'bg-sky-100 text-slate-950 ring-1 ring-sky-300' : 'text-slate-800'
                   }`}
                 >
                   <span className="block truncate text-[13px] font-bold leading-5 tracking-normal">{option.label}</span>
                   {option.description && (
-                    <span className="mt-1 block truncate text-xs font-medium text-zinc-400">{option.description}</span>
+                    <span className="mt-1 block truncate text-xs font-medium text-slate-500">{option.description}</span>
                   )}
                 </button>
               ))

@@ -36,10 +36,12 @@ export type ReportRepresentative = {
 export type ReportVehicle = {
   id: string;
   plate: string;
+  category?: string;
   brand: string;
   model: string;
   year?: string;
   price?: string;
+  purchase_date?: string;
   kteo_expiry?: string;
 };
 
