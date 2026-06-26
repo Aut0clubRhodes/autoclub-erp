@@ -16,6 +16,10 @@ type FinancialEngineTransaction = {
   amount: number;
   type: string;
   payment_method?: string | null;
+  source?: string | null;
+  category?: string | null;
+  notes?: string | null;
+  supplier_name?: string | null;
 };
 
 type FinancialEngineDebt = {
@@ -555,8 +559,8 @@ function ForecastView({
   matrix: EngineMatrixResult;
 }) {
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3 md:grid-cols-3 xl:grid-cols-5">
+    <div className="space-y-2.5">
+      <div className="grid gap-2 rounded-2xl border border-white/10 bg-white/[0.035] p-2.5 md:grid-cols-3 xl:grid-cols-5">
         <Field label="Έτος πρόβλεψης"><input className="engine-input" type="number" value={inputs.forecastYear} onChange={(event) => onChange({ ...inputs, forecastYear: event.target.value })} /></Field>
         <Field label="Έτος βάσης"><input className="engine-input" type="number" value={inputs.baseYear} onChange={(event) => onChange({ ...inputs, baseYear: event.target.value })} /></Field>
         <Field label="Νέα αυτοκίνητα"><input className="engine-input" type="number" value={inputs.carsCount} onChange={(event) => onChange({ ...inputs, carsCount: event.target.value })} /></Field>
@@ -575,16 +579,16 @@ function ForecastView({
           </select>
         </Field>
       </div>
-      <p className="rounded-2xl border border-cyan-300/15 bg-cyan-400/[0.05] px-4 py-3 text-sm font-medium text-cyan-50">
+      <p className="rounded-xl border border-cyan-300/15 bg-cyan-400/[0.05] px-3 py-2 text-xs font-medium text-cyan-50">
         Ιστορικό αποτέλεσμα έτους βάσης: {money(matrix.meta.baseResult)}
       </p>
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <MetricCard label="Συνολική επένδυση" value={money(matrix.meta.totalInvestment)} />
-        <MetricCard label="Συνολική προκαταβολή" value={money(matrix.meta.totalDownPayment)} />
-        <MetricCard label="Μηνιαία δόση" value={money(matrix.meta.monthlyInstallment)} />
-        <MetricCard label="Χαμηλότερο ταμείο" value={`${matrix.lowestMonth} ${money(matrix.lowestCash)}`} tone={matrix.lowestCash < 0 ? 'danger' : 'neutral'} />
-        <MetricCard label="Τελικό ταμείο" value={money(matrix.finalCash)} tone={matrix.finalCash < 0 ? 'danger' : 'income'} />
-        <RiskCard risk={matrix.risk} />
+      <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
+        <MetricCard label="Συνολική επένδυση" value={money(matrix.meta.totalInvestment)} compact />
+        <MetricCard label="Συνολική προκαταβολή" value={money(matrix.meta.totalDownPayment)} compact />
+        <MetricCard label="Μηνιαία δόση" value={money(matrix.meta.monthlyInstallment)} compact />
+        <MetricCard label="Χαμηλότερο ταμείο" value={`${matrix.lowestMonth} ${money(matrix.lowestCash)}`} tone={matrix.lowestCash < 0 ? 'danger' : 'neutral'} compact />
+        <MetricCard label="Τελικό ταμείο" value={money(matrix.finalCash)} tone={matrix.finalCash < 0 ? 'danger' : 'income'} compact />
+        <RiskCard risk={matrix.risk} compact />
       </div>
       <MatrixTable rows={matrix.rows} explanation />
     </div>
@@ -642,7 +646,17 @@ function MatrixTable({ rows, explanation = false }: { rows: MatrixRow[]; explana
   );
 }
 
-function MetricCard({ label, value, tone = 'neutral' }: { label: string; value: string; tone?: 'income' | 'expense' | 'danger' | 'warn' | 'neutral' }) {
+function MetricCard({
+  label,
+  value,
+  tone = 'neutral',
+  compact = false,
+}: {
+  label: string;
+  value: string;
+  tone?: 'income' | 'expense' | 'danger' | 'warn' | 'neutral';
+  compact?: boolean;
+}) {
   const toneClass =
     tone === 'income'
       ? 'text-emerald-100 border-emerald-300/20 bg-emerald-400/[0.06]'
@@ -653,9 +667,9 @@ function MetricCard({ label, value, tone = 'neutral' }: { label: string; value: 
           : 'text-white border-white/10 bg-white/[0.035]';
 
   return (
-    <div className={`rounded-2xl border p-3 ${toneClass}`}>
+    <div className={`rounded-2xl border ${compact ? 'p-2.5' : 'p-3'} ${toneClass}`}>
       <p className="text-[11px] font-medium text-slate-300">{label}</p>
-      <p className="mt-1 text-lg font-semibold">{value}</p>
+      <p className={`${compact ? 'mt-0.5 text-base' : 'mt-1 text-lg'} font-semibold`}>{value}</p>
     </div>
   );
 }
@@ -669,7 +683,7 @@ function MiniMetric({ label, value, tone = 'neutral' }: { label: string; value: 
   );
 }
 
-function RiskCard({ risk }: { risk: RiskLevel }) {
+function RiskCard({ risk, compact = false }: { risk: RiskLevel; compact?: boolean }) {
   const className =
     risk === 'SAFE'
       ? 'border-emerald-300/25 bg-emerald-400/[0.08] text-emerald-100'
@@ -678,9 +692,9 @@ function RiskCard({ risk }: { risk: RiskLevel }) {
         : 'border-rose-300/25 bg-rose-400/[0.08] text-rose-100';
 
   return (
-    <div className={`rounded-2xl border p-3 ${className}`}>
+    <div className={`rounded-2xl border ${compact ? 'p-2.5' : 'p-3'} ${className}`}>
       <p className="text-[11px] font-medium opacity-75">Κίνδυνος</p>
-      <p className="mt-1 text-lg font-semibold">{riskLabel(risk)}</p>
+      <p className={`${compact ? 'mt-0.5 text-base' : 'mt-1 text-lg'} font-semibold`}>{riskLabel(risk)}</p>
     </div>
   );
 }
@@ -729,6 +743,61 @@ function buildYearSummary(transactions: FinancialEngineTransaction[], year: stri
   return { monthly, total: monthly.reduce((sum, value) => sum + value, 0) };
 }
 
+function buildOperatingExpenseYearSummary(transactions: FinancialEngineTransaction[], year: string) {
+  const monthly = createMonthArray();
+  const targetYear = Number(year);
+
+  transactions.forEach((transaction) => {
+    const date = parseDate(transaction.date);
+    if (!date || date.getFullYear() !== targetYear) return;
+    if (!isForecastOperatingExpense(transaction)) return;
+
+    monthly[date.getMonth()] += toNumber(transaction.amount);
+  });
+
+  return { monthly, total: monthly.reduce((sum, value) => sum + value, 0) };
+}
+
+function isForecastOperatingExpense(transaction: FinancialEngineTransaction) {
+  const validPaymentMethod = ['cash', 'card', 'bank'].includes(String(transaction.payment_method || ''));
+  const expenseLike =
+    (transaction.type === 'expense' && validPaymentMethod) || transaction.type === 'supplier_payment';
+
+  return expenseLike && !isDebtOrFinancingTransaction(transaction);
+}
+
+function isDebtOrFinancingTransaction(transaction: FinancialEngineTransaction) {
+  const searchableText = [
+    transaction.type,
+    transaction.source,
+    transaction.category,
+    transaction.notes,
+    transaction.supplier_name,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLocaleLowerCase('el-GR');
+
+  return [
+    'debt_payment',
+    'γραμμάτιο',
+    'γραμμάτια',
+    'γραμματιο',
+    'γραμματια',
+    'grammatia',
+    'promissory',
+    'debt installment',
+    'loan installment',
+    'leasing installment',
+    'vehicle financing installment',
+    'vehicle purchase financing',
+    'δόση',
+    'δάνειο',
+    'χρηματοδότηση',
+    'αγορά οχήματος',
+  ].some((term) => searchableText.includes(term));
+}
+
 function buildCashflowMatrix({
   transactions,
   schedules,
@@ -775,8 +844,8 @@ function buildForecastMatrix({
   const forecastYear = Number(inputs.forecastYear);
   const baseYear = inputs.baseYear;
   const income = buildYearSummary(transactions, baseYear, 'income').monthly;
-  const expenses = buildYearSummary(transactions, baseYear, 'expenses').monthly;
-  const obligations = scheduleMonthlyTotals(schedules, forecastYear);
+  const expenses = buildOperatingExpenseYearSummary(transactions, baseYear).monthly;
+  const remainingDebts = scheduleMonthlyTotals(schedules, forecastYear);
   const downPayments = createMonthArray();
   const installments = createMonthArray();
   const baseResult = calculateHistoricalEndingCash(transactions, Number(baseYear));
@@ -809,16 +878,19 @@ function buildForecastMatrix({
     }
   }
 
-  const net = income.map((value, index) => value - expenses[index] - obligations[index] - downPayments[index] - installments[index]);
+  const net = income.map(
+    (value, index) =>
+      value - expenses[index] - remainingDebts[index] - downPayments[index] - installments[index]
+  );
   const runningCash = buildRunningCash(0, net);
 
   return toEngineResult(
     [
       { label: 'Προβλεπόμενα έσοδα', values: income, tone: 'income' },
       { label: 'Προβλεπόμενα έξοδα', values: expenses, tone: 'expense' },
-      { label: 'Γραμμάτια', values: obligations, tone: 'expense' },
+      { label: 'Υπόλοιπα Γραμμάτια', values: remainingDebts, tone: 'expense' },
       { label: 'Προκαταβολές επένδυσης', values: downPayments, tone: 'expense' },
-      { label: 'Δόσεις επένδυσης', values: installments, tone: 'expense' },
+      { label: 'Νέα Γραμμάτια Πρόβλεψης', values: installments, tone: 'expense' },
       { label: 'Καθαρό αποτέλεσμα μήνα', values: net, tone: 'neutral' },
       { label: 'Σωρευτικό υπόλοιπο πρόβλεψης', values: runningCash, tone: 'neutral', totalMode: 'last' },
     ],
@@ -852,7 +924,13 @@ function isOpenDebt(debt: FinancialEngineDebt) {
   const status = normalizeDebtStatus(debt.status);
   const remaining = toNumber(debt.remaining_amount);
 
-  return remaining > 0 || (status !== 'paid' && status !== 'πληρωμένη');
+  return (
+    remaining > 0 &&
+    status !== 'paid' &&
+    status !== 'closed' &&
+    status !== 'πληρωμένη' &&
+    status !== 'πληρωμένο'
+  );
 }
 
 function getDebtPaymentDate(debt: FinancialEngineDebt) {
