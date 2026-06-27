@@ -13,6 +13,7 @@ import DebtsManager from '@/components/DebtsManager';
 import BookingsManager from '@/components/BookingsManager';
 import LeasingManager from '@/components/LeasingManager';
 import FinancialEngine from '@/components/FinancialEngine';
+import InvestmentDecisionEngine from '@/components/InvestmentDecisionEngine';
 import ReportsCenter from '@/components/reports/ReportsCenter';
 import KteoReport from '@/components/reports/KteoReport';
 import { fetchCars, addCar, deleteCar, updateCar } from '@/lib/carsApi';
@@ -75,6 +76,7 @@ type WindowType =
   | 'Έξοδα'
   | 'Γραμμάτια'
   | 'Financial Engine'
+  | 'Investment Decision'
   | 'Προμηθευτές'
   | 'Έγγραφα'
   | 'Κατηγορίες Εξόδων'
@@ -109,9 +111,10 @@ const isDefaultMaximizedWindow = (windowId: WindowId) =>
   windowId === 'Booking Engine Admin' ||
   windowId === 'Public Booking Preview';
 
+type TopMenuItem = { label: string; windowId: string };
 type TopMenuEntry =
-  | { label: string; windowId: string }
-  | { label: string; items: Array<{ label: string; windowId: string }> };
+  | TopMenuItem
+  | { label: string; items: TopMenuItem[] };
 
 const WORKSPACE_STORAGE_KEY = 'autoclub-erp-workspace-v1';
 
@@ -259,18 +262,18 @@ const initialVehicles: Vehicle[] = [
 ];
 
 const topMenuEntries: TopMenuEntry[] = [
-  { label: 'Κρατήσεις', windowId: 'Κρατήσεις' },
+  { label: 'ΚΡΑΤΗΣΕΙΣ', windowId: 'Κρατήσεις' },
   {
-    label: 'Αυτοκίνητα',
+    label: 'ΑΥΤΟΚΙΝΗΤΑ',
     items: [
       { label: 'Αυτοκίνητα', windowId: 'Αυτοκίνητα' },
       { label: 'Service', windowId: 'Service' },
       { label: 'ΚΤΕΟ', windowId: 'ΚΤΕΟ' },
     ],
   },
-  { label: 'Leasing', windowId: 'Leasing' },
+  { label: 'LEASING', windowId: 'Leasing' },
   {
-    label: 'AutoClub-Rhodes',
+    label: 'AUTOCLUB RHODES',
     items: [
       { label: 'ΚΡΑΤΗΣΕΙΣ AUTOCLUB-RHODES', windowId: 'Πίνακας' },
       { label: 'Booking Engine Admin', windowId: 'Booking Engine Admin' },
@@ -278,7 +281,7 @@ const topMenuEntries: TopMenuEntry[] = [
     ],
   },
   {
-    label: 'Οικονομικά',
+    label: 'ΟΙΚΟΝΟΜΙΚΑ',
     items: [
       { label: 'Σύνολα Ταμείου', windowId: 'Ταμείο' },
       { label: 'Γραμμάτια', windowId: 'Γραμμάτια' },
@@ -286,8 +289,9 @@ const topMenuEntries: TopMenuEntry[] = [
       { label: 'Αναφορές', windowId: 'Αναφορές' },
     ],
   },
+  { label: 'INVESTMENT DECISION', windowId: 'Investment Decision' },
   {
-    label: 'Σύστημα',
+    label: 'ΣΥΣΤΗΜΑ',
     items: [
       { label: 'Έγγραφα', windowId: 'Έγγραφα' },
       { label: 'Marketing', windowId: 'Marketing' },
@@ -1333,6 +1337,8 @@ const handleSaveSupplierPayment = async () => {
         return 'Γραμμάτια';
       case 'Financial Engine':
         return 'Financial Engine';
+      case 'Investment Decision':
+        return 'INVESTMENT DECISION';
       case 'Προμηθευτές':
         return 'Προμηθευτές';
       case 'Έγγραφα':
@@ -2000,6 +2006,9 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
   const resolveWindowId = (windowId: WindowId | string, title?: string): WindowId | null => {
     const value = String(windowId || title || '');
+    if (value === 'Investment Decision') {
+      return 'Investment Decision';
+    }
     const knownWindows: WindowId[] = [
       'Πίνακας',
       'Αυτοκίνητα',
@@ -2195,6 +2204,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         );
       case 'Financial Engine':
         return <FinancialEngine transactions={transactionsWithAgencyNames} debts={debts} />;
+      case 'Investment Decision':
+        return <InvestmentDecisionEngine />;
       case 'Προμηθευτές':
         return <SuppliersManager onSuppliersChange={setSuppliers} />;
       case 'Έγγραφα':
@@ -2281,6 +2292,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return 'Γραμμάτια';
       case 'Financial Engine':
         return 'Financial Engine';
+      case 'Investment Decision':
+        return 'INVESTMENT DECISION';
       case 'Προμηθευτές':
         return 'Προμηθευτές';
       case 'Έγγραφα':
