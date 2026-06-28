@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
-export type InvestmentDecisionPage = 'dashboard' | 'new' | 'library' | 'reports' | 'singleReport';
+export type InvestmentDecisionPage = 'new' | 'library' | 'singleReport';
 type InvestmentNavigationPage = Exclude<InvestmentDecisionPage, 'singleReport'>;
 
 type InvestmentCategory =
@@ -211,10 +211,8 @@ const categories: InvestmentCategory[] = [
 ];
 
 const pageLabels: Record<InvestmentNavigationPage, string> = {
-  dashboard: 'Πίνακας',
   new: 'Νέα Επένδυση',
   library: 'Βιβλιοθήκη Επενδύσεων',
-  reports: 'Αναφορές',
 };
 
 const scoreOptions = Array.from({ length: 11 }, (_, index) => String(index));
@@ -491,13 +489,13 @@ function calculateBranchMetrics(form: InvestmentForm): BranchMetrics {
 }
 
 function isInvestmentPage(value: unknown): value is InvestmentNavigationPage {
-  return value === 'dashboard' || value === 'new' || value === 'library' || value === 'reports';
+  return value === 'new' || value === 'library';
 }
 
 function readInitialPage(): InvestmentDecisionPage {
-  if (typeof window === 'undefined') return 'dashboard';
+  if (typeof window === 'undefined') return 'new';
   const saved = window.localStorage.getItem(INVESTMENT_PAGE_STORAGE_KEY);
-  return isInvestmentPage(saved) ? saved : 'dashboard';
+  return isInvestmentPage(saved) ? saved : 'new';
 }
 
 function readInvestmentDrafts(): InvestmentDraft[] {
@@ -904,9 +902,7 @@ export default function InvestmentDecisionEngine() {
   };
 
   const content =
-    activePage === 'dashboard' ? (
-      <DashboardPage drafts={drafts} />
-    ) : activePage === 'new' ? (
+    activePage === 'new' ? (
       <NewInvestmentPage
         form={form}
         analysis={analysis}
@@ -925,13 +921,11 @@ export default function InvestmentDecisionEngine() {
         onDeleteDraft={deleteDraft}
         onClearAll={clearAllDrafts}
       />
-    ) : activePage === 'singleReport' ? (
+    ) : (
       <SingleInvestmentReportPage
         draft={drafts.find((draft) => draft.id === reportDraftId)}
         onBack={backToLibrary}
       />
-    ) : (
-      <InvestmentReportsPage drafts={drafts} />
     );
 
   return (
