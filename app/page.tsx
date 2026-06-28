@@ -2592,12 +2592,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
 
         {/* Homepage with centered logo */}
         {openWindows.length === 0 && (
-          <div className="flex h-full w-full items-center justify-center px-4 py-8">
-            <div className="flex w-full max-w-[640px] flex-col items-center gap-3.5">
+          <div className="relative isolate flex h-full w-full items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_28%,rgba(14,165,233,0.26),transparent_34%),radial-gradient(circle_at_50%_58%,rgba(16,185,129,0.16),transparent_30%),linear-gradient(135deg,#1e3a5f_0%,#2f4b63_48%,#16283f_100%)] px-4 py-8">
+            <div className="pointer-events-none absolute inset-x-[18%] top-[12%] h-72 rounded-full bg-cyan-300/18 blur-3xl" />
+            <div className="pointer-events-none absolute inset-x-[24%] bottom-[14%] h-64 rounded-full bg-emerald-300/12 blur-3xl" />
+            <div className="relative z-10 flex w-full max-w-[640px] flex-col items-center gap-3.5">
               <div className="relative flex h-[304px] w-[min(552px,84vw)] flex-col items-center justify-center transition duration-300 hover:-translate-y-0.5">
-                <div className="absolute inset-10 rounded-full bg-sky-300/20 blur-3xl" />
-                <div className="absolute inset-20 translate-x-10 rounded-full bg-emerald-300/15 blur-3xl" />
-                <div className="absolute inset-0 rounded-[28px] border border-slate-300 bg-white/88 shadow-[0_24px_76px_rgba(15,23,42,0.14),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-md" />
+                <div className="absolute inset-10 rounded-full bg-sky-300/28 blur-3xl" />
+                <div className="absolute inset-20 translate-x-10 rounded-full bg-emerald-300/20 blur-3xl" />
+                <div className="absolute inset-0 rounded-[28px] border border-slate-500/55 bg-white/92 shadow-[0_32px_94px_rgba(2,8,23,0.36),0_8px_24px_rgba(15,23,42,0.18),inset_0_1px_0_rgba(255,255,255,0.96)] backdrop-blur-md" />
                 <Image
                   src="/logo.png"
                   alt="AUTOCLUB"
@@ -2617,7 +2619,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={openHomepageIncome}
-                  className="group rounded-2xl border border-emerald-400 bg-white px-3.5 py-2.5 text-center shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition duration-200 hover:-translate-y-px hover:border-emerald-600 hover:bg-emerald-50"
+                  className="group rounded-2xl border border-emerald-500 bg-emerald-50 px-3.5 py-2.5 text-center shadow-[0_14px_30px_rgba(2,8,23,0.22)] transition duration-200 hover:-translate-y-px hover:border-emerald-700 hover:bg-emerald-100"
                 >
                   <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">Quick entry</span>
                   <span className="mt-0.5 block text-[13px] font-black text-emerald-950">+ Καταχώρηση Εσόδου</span>
@@ -2625,33 +2627,33 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={openHomepageExpense}
-                  className="group rounded-2xl border border-rose-400 bg-white px-3.5 py-2.5 text-center shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition duration-200 hover:-translate-y-px hover:border-rose-700 hover:bg-rose-50"
+                  className="group rounded-2xl border border-rose-500 bg-rose-50 px-3.5 py-2.5 text-center shadow-[0_14px_30px_rgba(2,8,23,0.22)] transition duration-200 hover:-translate-y-px hover:border-rose-700 hover:bg-rose-100"
                 >
                   <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-rose-800">Quick entry</span>
                   <span className="mt-0.5 block text-[13px] font-black text-rose-950">+ Καταχώρηση Εξόδου</span>
                 </button>
               </div>
 
-              <div className="grid w-full max-w-[600px] gap-2.5 lg:grid-cols-3">
+              <div className="grid w-full max-w-[528px] gap-2 lg:grid-cols-3">
                 <button
                   type="button"
                   onClick={() => openWindow('Έσοδα')}
-                  className="group cursor-pointer rounded-2xl border border-emerald-300 bg-white p-3 text-left shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition duration-200 hover:-translate-y-px hover:border-emerald-500 hover:bg-emerald-50"
+                  className="group cursor-pointer rounded-2xl border border-emerald-400 bg-white/96 p-2 text-left shadow-[0_12px_26px_rgba(2,8,23,0.22)] transition duration-200 hover:-translate-y-px hover:border-emerald-600 hover:bg-emerald-50"
                 >
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-800">
+                  <p className="text-[9px] font-black uppercase tracking-[0.12em] leading-tight text-emerald-800">
                     Τελευταίες Καταχωρήσεις Εσόδων
                   </p>
-                  <div className="mt-2.5 space-y-1.5">
-                    {latestIncomeTransactions.length === 0 && <p className="text-xs text-zinc-500">Δεν υπάρχουν εγγραφές.</p>}
+                  <div className="mt-1.5 space-y-1">
+                    {latestIncomeTransactions.length === 0 && <p className="text-[11px] leading-tight text-zinc-500">Δεν υπάρχουν εγγραφές.</p>}
                     {latestIncomeTransactions.map((transaction) => (
-                      <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-300 bg-emerald-100 px-2.5 py-1.5">
+                      <div key={transaction.id} className="flex min-h-[30px] items-center justify-between gap-2 rounded-lg border border-emerald-300 bg-emerald-100 px-2 py-1">
                         <div className="min-w-0">
-                          <p className="truncate text-xs font-bold text-slate-900">
+                          <p className="truncate text-[13px] font-bold leading-tight text-slate-900">
                             {transaction.contract_number || 'Χωρίς συμβόλαιο'}
                           </p>
-                          <p className="text-[11px] text-zinc-500">{formatDate(transaction.date)}</p>
+                          <p className="text-[11px] leading-tight text-zinc-500">{formatDate(transaction.date)}</p>
                         </div>
-                        <p className="shrink-0 text-sm font-black text-emerald-950">{formatMoney(transaction.amount)}</p>
+                        <p className="shrink-0 text-[15px] font-black leading-tight text-emerald-950">{formatMoney(transaction.amount)}</p>
                       </div>
                     ))}
                   </div>
@@ -2660,22 +2662,22 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={() => openWindow('Έξοδα')}
-                  className="group cursor-pointer rounded-2xl border border-rose-300 bg-white p-3 text-left shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition duration-200 hover:-translate-y-px hover:border-rose-600 hover:bg-rose-50"
+                  className="group cursor-pointer rounded-2xl border border-rose-400 bg-white/96 p-2 text-left shadow-[0_12px_26px_rgba(2,8,23,0.22)] transition duration-200 hover:-translate-y-px hover:border-rose-700 hover:bg-rose-50"
                 >
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-rose-800">
+                  <p className="text-[9px] font-black uppercase tracking-[0.12em] leading-tight text-rose-800">
                     Τελευταίες Καταχωρήσεις Εξόδων
                   </p>
-                  <div className="mt-2.5 space-y-1.5">
-                    {latestExpenseTransactions.length === 0 && <p className="text-xs text-zinc-500">Δεν υπάρχουν εγγραφές.</p>}
+                  <div className="mt-1.5 space-y-1">
+                    {latestExpenseTransactions.length === 0 && <p className="text-[11px] leading-tight text-zinc-500">Δεν υπάρχουν εγγραφές.</p>}
                     {latestExpenseTransactions.map((transaction) => (
-                      <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl border border-rose-300 bg-rose-100 px-2.5 py-1.5">
+                      <div key={transaction.id} className="flex min-h-[30px] items-center justify-between gap-2 rounded-lg border border-rose-300 bg-rose-100 px-2 py-1">
                         <div className="min-w-0">
-                          <p className="truncate text-xs font-bold text-slate-900">
+                          <p className="truncate text-[13px] font-bold leading-tight text-slate-900">
                             {transaction.category || transaction.supplier_name || transaction.supplier || '-'}
                           </p>
-                          <p className="text-[11px] text-zinc-500">{formatDate(transaction.date)}</p>
+                          <p className="text-[11px] leading-tight text-zinc-500">{formatDate(transaction.date)}</p>
                         </div>
-                        <p className="shrink-0 text-sm font-black text-rose-950">{formatMoney(transaction.amount)}</p>
+                        <p className="shrink-0 text-[15px] font-black leading-tight text-rose-950">{formatMoney(transaction.amount)}</p>
                       </div>
                     ))}
                   </div>
@@ -2684,14 +2686,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={() => openWindow('Γραμμάτια')}
-                  className="group cursor-pointer rounded-2xl border border-amber-300 bg-white p-3 text-left shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition duration-200 hover:-translate-y-px hover:border-amber-600 hover:bg-amber-50"
+                  className="group cursor-pointer rounded-2xl border border-amber-400 bg-white/96 p-2 text-left shadow-[0_12px_26px_rgba(2,8,23,0.22)] transition duration-200 hover:-translate-y-px hover:border-amber-600 hover:bg-amber-50"
                 >
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-800">
+                  <p className="text-[9px] font-black uppercase tracking-[0.12em] leading-tight text-amber-800">
                     Alert Γραμματίων
                   </p>
-                  <div className="mt-2.5 rounded-xl border border-amber-300 bg-amber-100 px-3 py-2.5 transition duration-200 group-hover:border-amber-500">
-                    <p className="text-2xl font-black text-amber-950">{formatMoney(homeAlertDebtsTotal)}</p>
-                    <p className="mt-1 text-sm font-bold text-amber-900">
+                  <div className="mt-1.5 rounded-lg border border-amber-300 bg-amber-100 px-2 py-1.5 transition duration-200 group-hover:border-amber-500">
+                    <p className="text-xl font-black leading-tight text-amber-950">{formatMoney(homeAlertDebtsTotal)}</p>
+                    <p className="mt-0.5 text-[13px] font-bold leading-tight text-amber-900">
                       {homeAlertDebtsTotal > 0
                         ? `${homeAlertDebts.length} ληξιπρόθεσμα / σήμερα`
                         : '0 για σήμερα'}
