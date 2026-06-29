@@ -305,10 +305,12 @@ const topMenuEntries: TopMenuEntry[] = [
 function DesktopTopNavigation({
   activeWindow,
   userEmail,
+  homeMode = false,
   unreadCount,
   notifications,
   showNotifications,
   onWindowOpen,
+  onHomeClick,
   onLogout,
   onToggleNotifications,
   onMarkNotificationRead,
@@ -316,10 +318,12 @@ function DesktopTopNavigation({
 }: {
   activeWindow: WindowId | null;
   userEmail: string;
+  homeMode?: boolean;
   unreadCount: number;
   notifications: NotificationRecord[];
   showNotifications: boolean;
   onWindowOpen: (windowId: string) => void;
+  onHomeClick: () => void;
   onLogout: () => void;
   onToggleNotifications: () => void;
   onMarkNotificationRead: (notification: NotificationRecord) => void;
@@ -344,15 +348,11 @@ function DesktopTopNavigation({
   }, []);
 
   return (
-    <header className="fixed left-0 right-0 top-0 z-[9200] flex h-16 items-center border-b border-slate-400/70 bg-white/96 px-4 text-slate-900 shadow-[0_14px_34px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+    <header className={`fixed left-0 right-0 top-0 z-[9200] flex h-16 items-center border-b px-4 shadow-[0_14px_34px_rgba(15,23,42,0.14)] backdrop-blur-xl ${homeMode ? 'border-white/10 bg-slate-950/72 text-white' : 'border-slate-400/70 bg-white/96 text-slate-900'}`}>
       <div className="flex min-w-0 flex-1 items-center gap-4">
-        <button type="button" onClick={() => onWindowOpen('Πίνακας')} className="flex items-center gap-3 rounded-2xl px-2 py-1.5 transition hover:bg-slate-100">
-          <span className="relative block h-10 w-28 overflow-hidden rounded-xl bg-[#073f5d] shadow-sm">
-            <Image src="/logo.png" alt="AUTOCLUB" fill priority className="object-cover object-center" sizes="112px" />
-          </span>
-          <span className="hidden text-left xl:block">
-            <span className="block text-[15px] font-black leading-4 text-slate-950">AUTOCLUB ERP</span>
-            <span className="block text-[11px] font-black uppercase tracking-[0.14em] text-sky-800">Operations</span>
+        <button type="button" onClick={onHomeClick} className={`flex items-center rounded-2xl px-2 py-1.5 transition ${homeMode ? 'hover:bg-white/10' : 'hover:bg-slate-900/10'}`} aria-label="Go to home">
+          <span className="relative block h-10 w-32 overflow-hidden rounded-xl bg-slate-950/88 shadow-[0_0_20px_rgba(56,189,248,0.20)] ring-1 ring-cyan-200/25">
+            <Image src="/logo.png" alt="AUTOCLUB" fill priority className="object-cover object-center opacity-100 brightness-110" sizes="112px" />
           </span>
         </button>
 
@@ -369,7 +369,7 @@ function DesktopTopNavigation({
                     setOpenDropdown(null);
                     onWindowOpen(entry.windowId);
                   }}
-                  className={`h-10 rounded-xl px-3 text-[15px] font-black transition ${active ? 'bg-sky-800 text-white shadow-[0_8px_18px_rgba(7,89,133,0.28)]' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
+                  className={`h-10 rounded-xl px-3 text-[15px] font-black transition ${active ? 'bg-sky-800 text-white shadow-[0_8px_18px_rgba(7,89,133,0.28)]' : homeMode ? 'text-slate-100 hover:bg-white/10 hover:text-white' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
                 >
                   {entry.label}
                 </button>
@@ -383,12 +383,12 @@ function DesktopTopNavigation({
                 <button
                   type="button"
                   onClick={() => setOpenDropdown((current) => (current === entry.label ? null : entry.label))}
-                  className={`flex h-10 items-center gap-1 rounded-xl px-3 text-[15px] font-black transition ${active ? 'bg-sky-800 text-white shadow-[0_8px_18px_rgba(7,89,133,0.28)]' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
+                  className={`flex h-10 items-center gap-1 rounded-xl px-3 text-[15px] font-black transition ${active ? 'bg-sky-800 text-white shadow-[0_8px_18px_rgba(7,89,133,0.28)]' : homeMode ? 'text-slate-100 hover:bg-white/10 hover:text-white' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
                 >
                   {entry.label}
                   <ChevronDown className="h-4 w-4" />
                 </button>
-                <div className={`${isOpen ? 'visible translate-y-1 opacity-100' : 'invisible translate-y-2 opacity-0'} absolute left-0 top-full z-[9300] min-w-[250px] rounded-2xl border border-slate-300 bg-white p-2 shadow-[0_22px_60px_rgba(15,23,42,0.2)] transition`}>
+                <div className={`${isOpen ? 'visible translate-y-1 opacity-100' : 'invisible translate-y-2 opacity-0'} absolute left-0 top-full z-[9300] min-w-[250px] rounded-2xl border p-2 shadow-[0_22px_60px_rgba(15,23,42,0.2)] transition ${homeMode ? 'border-white/10 bg-slate-950/94 shadow-[0_22px_60px_rgba(0,0,0,0.46)] backdrop-blur-xl' : 'border-slate-300 bg-white'}`}>
                   {entry.items.map((item) => (
                     <button
                       key={item.label}
@@ -397,7 +397,7 @@ function DesktopTopNavigation({
                         setOpenDropdown(null);
                         onWindowOpen(item.windowId);
                       }}
-                      className={`flex h-10 w-full items-center rounded-xl px-3 text-left text-[15px] font-black transition ${activeWindow === item.windowId ? 'bg-sky-100 text-sky-900' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
+                      className={`flex h-10 w-full items-center rounded-xl px-3 text-left text-[15px] font-black transition ${activeWindow === item.windowId ? 'bg-sky-800 text-white' : homeMode ? 'text-slate-100 hover:bg-white/10 hover:text-white' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
                     >
                       {item.label}
                     </button>
@@ -410,11 +410,11 @@ function DesktopTopNavigation({
       </div>
 
       <div className="ml-5 flex shrink-0 items-center gap-4">
-        <div className="hidden max-w-[220px] truncate rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-xs font-black text-slate-800 xl:block">
+        <div className={`hidden max-w-[220px] truncate rounded-xl border px-3 py-2 text-xs font-black xl:block ${homeMode ? 'border-white/10 bg-white/8 text-slate-100' : 'border-slate-300 bg-slate-100 text-slate-800'}`}>
           {userEmail}
         </div>
         <NotificationBell notifications={notifications} unreadCount={unreadCount} isOpen={showNotifications} onToggle={onToggleNotifications} onMarkRead={onMarkNotificationRead} onMarkAllRead={onMarkAllNotificationsRead} embedded />
-        <button type="button" onClick={onLogout} className="flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-800 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-800">
+        <button type="button" onClick={onLogout} className={`flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-black transition ${homeMode ? 'border-white/10 bg-white/8 text-slate-100 hover:border-rose-300/40 hover:bg-rose-500/10 hover:text-rose-100' : 'border-slate-300 bg-white text-slate-800 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-800'}`}>
           <LogOut className="h-4 w-4" />
           <span className="hidden lg:inline">Logout</span>
         </button>
@@ -455,6 +455,19 @@ export default function Home() {
   const hasOpenWindow = (windowId: WindowId) => openWindows.some((windowItem) => windowItem.id === windowId);
   const canOpenWindow = (windowId: WindowId | string) =>
     userRole === 'admin' || windowId === 'Κρατήσεις' || windowId === 'Πίνακας';
+
+  const goToHome = () => {
+    setOpenWindows((currentWindows) =>
+      currentWindows.map((windowItem) => ({
+        ...windowItem,
+        isMinimized: true,
+      }))
+    );
+    setShowNotifications(false);
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      window.history.pushState(null, '', '/');
+    }
+  };
 
   useEffect(() => {
     document.documentElement.style.setProperty('--autoclub-sidebar-width', `${sidebarWidth}px`);
@@ -2447,10 +2460,12 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         <DesktopTopNavigation
           activeWindow={activeWindow}
           userEmail={userEmail}
+          homeMode={visibleWindows.length === 0}
           unreadCount={unreadNotificationsCount}
           notifications={notifications}
           showNotifications={showNotifications}
           onWindowOpen={handleWindowOpen}
+          onHomeClick={goToHome}
           onLogout={handleLogout}
           onToggleNotifications={() => setShowNotifications((current) => !current)}
           onMarkNotificationRead={handleNotificationClick}
@@ -2520,7 +2535,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         </>
       )}
       <main
-        className={`fixed bottom-0 right-0 overflow-hidden bg-[radial-gradient(circle_at_45%_22%,rgba(3,105,161,0.12),transparent_30%),radial-gradient(circle_at_78%_18%,rgba(4,120,87,0.10),transparent_26%),linear-gradient(180deg,#e3ebf4_0%,#d8e3ef_100%)] transition-[left] duration-200 ${isPhoneViewport ? 'top-[64px]' : 'top-[64px]'}`}
+        className={`fixed bottom-0 right-0 overflow-hidden bg-[radial-gradient(circle_at_center_20%,rgba(42,130,190,0.35),transparent_35%),linear-gradient(135deg,#020814_0%,#061426_45%,#020814_100%)] transition-[left] duration-200 ${isPhoneViewport ? 'top-[64px]' : 'top-[64px]'}`}
         style={{ left: 0 }}
       >
         {openWindows.length > 0 && (
@@ -2591,26 +2606,31 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         )}
 
         {/* Homepage with centered logo */}
-        {openWindows.length === 0 && (
-          <div className="relative isolate flex h-full w-full items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_28%,rgba(14,165,233,0.26),transparent_34%),radial-gradient(circle_at_50%_58%,rgba(16,185,129,0.16),transparent_30%),linear-gradient(135deg,#1e3a5f_0%,#2f4b63_48%,#16283f_100%)] px-4 py-8">
-            <div className="pointer-events-none absolute inset-x-[18%] top-[12%] h-72 rounded-full bg-cyan-300/18 blur-3xl" />
-            <div className="pointer-events-none absolute inset-x-[24%] bottom-[14%] h-64 rounded-full bg-emerald-300/12 blur-3xl" />
-            <div className="relative z-10 flex w-full max-w-[640px] flex-col items-center gap-3.5">
-              <div className="relative flex h-[304px] w-[min(552px,84vw)] flex-col items-center justify-center transition duration-300 hover:-translate-y-0.5">
-                <div className="absolute inset-10 rounded-full bg-sky-300/28 blur-3xl" />
-                <div className="absolute inset-20 translate-x-10 rounded-full bg-emerald-300/20 blur-3xl" />
-                <div className="absolute inset-0 rounded-[28px] border border-slate-500/55 bg-white/92 shadow-[0_32px_94px_rgba(2,8,23,0.36),0_8px_24px_rgba(15,23,42,0.18),inset_0_1px_0_rgba(255,255,255,0.96)] backdrop-blur-md" />
-                <Image
-                  src="/logo.png"
-                  alt="AUTOCLUB"
-                  fill
-                  priority
-                  className="relative object-cover object-center opacity-95"
-                  sizes="552px"
-                />
-                <p className="absolute bottom-8 text-[11px] font-bold uppercase tracking-[0.28em] text-slate-500">
-                  Enterprise Fleet ERP
-                </p>
+        {visibleWindows.length === 0 && (
+          <div className="relative isolate flex h-full w-full items-center justify-center overflow-hidden px-4 py-8">
+            <div className="pointer-events-none absolute left-1/2 top-[20%] h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-sky-400/22 blur-[94px]" />
+            <div className="pointer-events-none absolute left-1/2 top-[42%] h-[280px] w-[580px] -translate-x-1/2 rounded-full bg-cyan-300/8 blur-3xl" />
+            <div className="relative z-10 flex w-full max-w-[720px] flex-col items-center gap-3">
+              <div className="relative flex h-[330px] w-[330px] flex-col items-center justify-center rounded-full border border-cyan-300/42 bg-slate-950/58 shadow-[0_0_118px_rgba(56,189,248,0.46),0_30px_86px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl transition duration-300 hover:-translate-y-0.5">
+                <div className="absolute inset-4 rounded-full border border-white/8 bg-[radial-gradient(circle_at_50%_35%,rgba(14,165,233,0.18),transparent_54%)]" />
+                <div className="relative z-10 flex flex-col items-center justify-center text-center">
+                  <div className="relative h-[168px] w-[286px]">
+                    <Image
+                      src="/logo.png"
+                      alt="AUTOCLUB"
+                      fill
+                      priority
+                      className="object-contain object-center opacity-100 brightness-110"
+                      sizes="286px"
+                    />
+                  </div>
+                  <p className="mt-6 text-[18px] font-black uppercase tracking-[0.32em] text-cyan-50/95">
+                    Rhodes
+                  </p>
+                  <p className="mt-5 text-[11px] font-black uppercase tracking-[0.28em] text-cyan-100/90">
+                    Enterprise Fleet ERP
+                  </p>
+                </div>
               </div>
 
               {userRole === 'admin' && (
@@ -2619,41 +2639,41 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={openHomepageIncome}
-                  className="group rounded-2xl border border-emerald-500 bg-emerald-50 px-3.5 py-2.5 text-center shadow-[0_14px_30px_rgba(2,8,23,0.22)] transition duration-200 hover:-translate-y-px hover:border-emerald-700 hover:bg-emerald-100"
+                  className="group rounded-2xl border border-emerald-400/65 bg-slate-950/52 px-3.5 py-2.5 text-center shadow-[0_0_32px_rgba(16,185,129,0.18),0_14px_34px_rgba(0,0,0,0.36)] backdrop-blur-xl transition duration-200 hover:-translate-y-px hover:border-emerald-300 hover:bg-emerald-950/30"
                 >
-                  <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">Quick entry</span>
-                  <span className="mt-0.5 block text-[13px] font-black text-emerald-950">+ Καταχώρηση Εσόδου</span>
+                  <span className="block text-[11px] font-black uppercase tracking-[0.15em] text-emerald-300">Quick entry</span>
+                  <span className="mt-0.5 block text-sm font-black text-emerald-50">+ Καταχώρηση Εσόδου</span>
                 </button>
                 <button
                   type="button"
                   onClick={openHomepageExpense}
-                  className="group rounded-2xl border border-rose-500 bg-rose-50 px-3.5 py-2.5 text-center shadow-[0_14px_30px_rgba(2,8,23,0.22)] transition duration-200 hover:-translate-y-px hover:border-rose-700 hover:bg-rose-100"
+                  className="group rounded-2xl border border-rose-400/65 bg-slate-950/52 px-3.5 py-2.5 text-center shadow-[0_0_32px_rgba(244,63,94,0.18),0_14px_34px_rgba(0,0,0,0.36)] backdrop-blur-xl transition duration-200 hover:-translate-y-px hover:border-rose-300 hover:bg-rose-950/30"
                 >
-                  <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-rose-800">Quick entry</span>
-                  <span className="mt-0.5 block text-[13px] font-black text-rose-950">+ Καταχώρηση Εξόδου</span>
+                  <span className="block text-[11px] font-black uppercase tracking-[0.15em] text-rose-300">Quick entry</span>
+                  <span className="mt-0.5 block text-sm font-black text-rose-50">+ Καταχώρηση Εξόδου</span>
                 </button>
               </div>
 
-              <div className="grid w-full max-w-[528px] gap-2 lg:grid-cols-3">
+              <div className="grid w-full max-w-[600px] gap-3 lg:grid-cols-3">
                 <button
                   type="button"
                   onClick={() => openWindow('Έσοδα')}
-                  className="group cursor-pointer rounded-2xl border border-emerald-400 bg-white/96 p-2 text-left shadow-[0_12px_26px_rgba(2,8,23,0.22)] transition duration-200 hover:-translate-y-px hover:border-emerald-600 hover:bg-emerald-50"
+                  className="group cursor-pointer rounded-2xl border border-emerald-400/45 bg-slate-950/56 p-3 text-left shadow-[0_0_28px_rgba(16,185,129,0.15),0_16px_42px_rgba(0,0,0,0.34)] backdrop-blur-xl transition duration-200 hover:-translate-y-px hover:border-emerald-300 hover:bg-emerald-950/24"
                 >
-                  <p className="text-[9px] font-black uppercase tracking-[0.12em] leading-tight text-emerald-800">
+                  <p className="text-[11px] font-black uppercase tracking-[0.12em] leading-tight text-emerald-300">
                     Τελευταίες Καταχωρήσεις Εσόδων
                   </p>
-                  <div className="mt-1.5 space-y-1">
-                    {latestIncomeTransactions.length === 0 && <p className="text-[11px] leading-tight text-zinc-500">Δεν υπάρχουν εγγραφές.</p>}
+                  <div className="mt-2 space-y-1.5">
+                    {latestIncomeTransactions.length === 0 && <p className="text-[11px] leading-tight text-slate-400">Δεν υπάρχουν εγγραφές.</p>}
                     {latestIncomeTransactions.map((transaction) => (
-                      <div key={transaction.id} className="flex min-h-[30px] items-center justify-between gap-2 rounded-lg border border-emerald-300 bg-emerald-100 px-2 py-1">
+                      <div key={transaction.id} className="flex min-h-[36px] items-center justify-between gap-2 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5">
                         <div className="min-w-0">
-                          <p className="truncate text-[13px] font-bold leading-tight text-slate-900">
+                          <p className="truncate text-[15px] font-bold leading-tight text-slate-50">
                             {transaction.contract_number || 'Χωρίς συμβόλαιο'}
                           </p>
-                          <p className="text-[11px] leading-tight text-zinc-500">{formatDate(transaction.date)}</p>
+                          <p className="text-[11px] leading-tight text-slate-400">{formatDate(transaction.date)}</p>
                         </div>
-                        <p className="shrink-0 text-[15px] font-black leading-tight text-emerald-950">{formatMoney(transaction.amount)}</p>
+                        <p className="shrink-0 text-[17px] font-black leading-tight text-emerald-300">{formatMoney(transaction.amount)}</p>
                       </div>
                     ))}
                   </div>
@@ -2662,22 +2682,22 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={() => openWindow('Έξοδα')}
-                  className="group cursor-pointer rounded-2xl border border-rose-400 bg-white/96 p-2 text-left shadow-[0_12px_26px_rgba(2,8,23,0.22)] transition duration-200 hover:-translate-y-px hover:border-rose-700 hover:bg-rose-50"
+                  className="group cursor-pointer rounded-2xl border border-rose-400/45 bg-slate-950/56 p-3 text-left shadow-[0_0_28px_rgba(244,63,94,0.15),0_16px_42px_rgba(0,0,0,0.34)] backdrop-blur-xl transition duration-200 hover:-translate-y-px hover:border-rose-300 hover:bg-rose-950/24"
                 >
-                  <p className="text-[9px] font-black uppercase tracking-[0.12em] leading-tight text-rose-800">
+                  <p className="text-[11px] font-black uppercase tracking-[0.12em] leading-tight text-rose-300">
                     Τελευταίες Καταχωρήσεις Εξόδων
                   </p>
-                  <div className="mt-1.5 space-y-1">
-                    {latestExpenseTransactions.length === 0 && <p className="text-[11px] leading-tight text-zinc-500">Δεν υπάρχουν εγγραφές.</p>}
+                  <div className="mt-2 space-y-1.5">
+                    {latestExpenseTransactions.length === 0 && <p className="text-[11px] leading-tight text-slate-400">Δεν υπάρχουν εγγραφές.</p>}
                     {latestExpenseTransactions.map((transaction) => (
-                      <div key={transaction.id} className="flex min-h-[30px] items-center justify-between gap-2 rounded-lg border border-rose-300 bg-rose-100 px-2 py-1">
+                      <div key={transaction.id} className="flex min-h-[36px] items-center justify-between gap-2 rounded-lg border border-rose-400/20 bg-rose-400/10 px-3 py-1.5">
                         <div className="min-w-0">
-                          <p className="truncate text-[13px] font-bold leading-tight text-slate-900">
+                          <p className="truncate text-[15px] font-bold leading-tight text-slate-50">
                             {transaction.category || transaction.supplier_name || transaction.supplier || '-'}
                           </p>
-                          <p className="text-[11px] leading-tight text-zinc-500">{formatDate(transaction.date)}</p>
+                          <p className="text-[11px] leading-tight text-slate-400">{formatDate(transaction.date)}</p>
                         </div>
-                        <p className="shrink-0 text-[15px] font-black leading-tight text-rose-950">{formatMoney(transaction.amount)}</p>
+                        <p className="shrink-0 text-[17px] font-black leading-tight text-rose-300">{formatMoney(transaction.amount)}</p>
                       </div>
                     ))}
                   </div>
@@ -2686,14 +2706,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
                 <button
                   type="button"
                   onClick={() => openWindow('Γραμμάτια')}
-                  className="group cursor-pointer rounded-2xl border border-amber-400 bg-white/96 p-2 text-left shadow-[0_12px_26px_rgba(2,8,23,0.22)] transition duration-200 hover:-translate-y-px hover:border-amber-600 hover:bg-amber-50"
+                  className="group cursor-pointer rounded-2xl border border-amber-400/45 bg-slate-950/56 p-3 text-left shadow-[0_0_28px_rgba(245,158,11,0.15),0_16px_42px_rgba(0,0,0,0.34)] backdrop-blur-xl transition duration-200 hover:-translate-y-px hover:border-amber-300 hover:bg-amber-950/24"
                 >
-                  <p className="text-[9px] font-black uppercase tracking-[0.12em] leading-tight text-amber-800">
+                  <p className="text-[11px] font-black uppercase tracking-[0.12em] leading-tight text-amber-300">
                     Alert Γραμματίων
                   </p>
-                  <div className="mt-1.5 rounded-lg border border-amber-300 bg-amber-100 px-2 py-1.5 transition duration-200 group-hover:border-amber-500">
-                    <p className="text-xl font-black leading-tight text-amber-950">{formatMoney(homeAlertDebtsTotal)}</p>
-                    <p className="mt-0.5 text-[13px] font-bold leading-tight text-amber-900">
+                  <div className="mt-2 rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-2 transition duration-200 group-hover:border-amber-300/40">
+                    <p className="text-2xl font-black leading-tight text-amber-300">{formatMoney(homeAlertDebtsTotal)}</p>
+                    <p className="mt-1 text-sm font-bold leading-tight text-amber-200">
                       {homeAlertDebtsTotal > 0
                         ? `${homeAlertDebts.length} ληξιπρόθεσμα / σήμερα`
                         : '0 για σήμερα'}
