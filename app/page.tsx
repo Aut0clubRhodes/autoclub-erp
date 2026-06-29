@@ -2608,111 +2608,376 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         {/* Homepage with centered logo */}
         {visibleWindows.length === 0 && (
           <div className="relative isolate flex h-full w-full items-center justify-center overflow-hidden px-4 py-8">
-            <div className="pointer-events-none absolute left-1/2 top-[20%] h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-sky-400/22 blur-[94px]" />
-            <div className="pointer-events-none absolute left-1/2 top-[42%] h-[280px] w-[580px] -translate-x-1/2 rounded-full bg-cyan-300/8 blur-3xl" />
-            <div className="relative z-10 flex w-full max-w-[720px] flex-col items-center gap-3">
-              <div className="relative flex h-[330px] w-[330px] flex-col items-center justify-center rounded-full border border-cyan-300/42 bg-slate-950/58 shadow-[0_0_118px_rgba(56,189,248,0.46),0_30px_86px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl transition duration-300 hover:-translate-y-0.5">
-                <div className="absolute inset-4 rounded-full border border-white/8 bg-[radial-gradient(circle_at_50%_35%,rgba(14,165,233,0.18),transparent_54%)]" />
-                <div className="relative z-10 flex flex-col items-center justify-center text-center">
-                  <div className="relative h-[168px] w-[286px]">
-                    <Image
-                      src="/logo.png"
-                      alt="AUTOCLUB"
-                      fill
-                      priority
-                      className="object-contain object-center opacity-100 brightness-110"
-                      sizes="286px"
-                    />
-                  </div>
-                  <p className="mt-6 text-[18px] font-black uppercase tracking-[0.32em] text-cyan-50/95">
-                    Rhodes
+            <style>{`
+              .erp-home {
+                width: 100%;
+                max-width: 1120px;
+                margin: 0 auto;
+                padding: 42px 24px 40px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+              }
+
+              .erp-hero-orb {
+                position: relative;
+                width: 360px;
+                height: 360px;
+                border-radius: 9999px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-bottom: 28px;
+              }
+
+              .erp-hero-orb::before {
+                content: "";
+                position: absolute;
+                width: 560px;
+                height: 560px;
+                left: 50%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                background: radial-gradient(circle, rgba(0,132,255,.5) 0%, rgba(0,132,255,.24) 40%, transparent 72%);
+                filter: blur(42px);
+                z-index: 0;
+                pointer-events: none;
+              }
+
+              .erp-hero-ring {
+                position: absolute;
+                inset: 0;
+                border-radius: 9999px;
+                border: 2px solid rgba(46,181,255,.95);
+                box-shadow: 0 0 20px rgba(46,181,255,.85), 0 0 58px rgba(0,132,255,.48), inset 0 0 22px rgba(46,181,255,.12);
+                z-index: 2;
+              }
+
+              .erp-hero-inner {
+                position: absolute;
+                inset: 13px;
+                border-radius: 9999px;
+                background: radial-gradient(circle at 50% 36%, rgba(16,39,58,.98), rgba(3,12,23,.99) 72%);
+                border: 1px solid rgba(255,255,255,.07);
+                box-shadow: inset 0 0 70px rgba(0,0,0,.55), inset 0 0 20px rgba(50,170,255,.08);
+                z-index: 1;
+              }
+
+              .erp-hero-content {
+                position: relative;
+                z-index: 3;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                width: 100%;
+              }
+
+              .erp-hero-subtitle {
+                font-size: 12px;
+                font-weight: 800;
+                letter-spacing: 5px;
+                color: rgba(255,255,255,.88);
+                margin: 38px 0 0 0;
+                text-transform: uppercase;
+              }
+
+              .erp-hero-brand {
+                margin: 0;
+                font-size: 42px;
+                line-height: 1;
+                font-weight: 900;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+              }
+
+              .erp-hero-brand-auto {
+                color: #129ee8;
+              }
+
+              .erp-hero-brand-club {
+                color: #66d927;
+              }
+
+              .erp-hero-rhodes {
+                margin: 6px 0 0 0;
+                font-size: 15px;
+                line-height: 1;
+                font-weight: 700;
+                letter-spacing: 8px;
+                color: rgba(255,255,255,.82);
+                text-transform: uppercase;
+              }
+
+              .erp-quick-row {
+                display: flex;
+                gap: 18px;
+                justify-content: center;
+                align-items: center;
+                margin-bottom: 24px;
+              }
+
+              .erp-quick-button {
+                width: 285px;
+                height: 66px;
+                border-radius: 14px;
+                background: rgba(7,25,43,.82);
+                backdrop-filter: blur(14px);
+                display: flex;
+                align-items: center;
+                gap: 14px;
+                padding: 0 20px;
+                transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease, background .25s ease;
+              }
+
+              .erp-quick-button:hover {
+                transform: translateY(-4px);
+              }
+
+              .erp-quick-icon {
+                width: 38px;
+                height: 38px;
+                border-radius: 9999px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 21px;
+                font-weight: 900;
+                line-height: 1;
+              }
+
+              .erp-quick-button-income {
+                border: 1px solid rgba(0,255,160,.85);
+                box-shadow: 0 0 22px rgba(0,255,160,.12);
+              }
+
+              .erp-quick-button-income .erp-quick-icon {
+                background: rgba(0,255,160,.12);
+                color: rgb(110,255,200);
+              }
+
+              .erp-quick-button-expense {
+                border: 1px solid rgba(255,83,112,.85);
+                box-shadow: 0 0 22px rgba(255,83,112,.12);
+              }
+
+              .erp-quick-button-expense .erp-quick-icon {
+                background: rgba(255,83,112,.12);
+                color: rgb(255,150,170);
+              }
+
+              .erp-card-grid {
+                width: 760px;
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                gap: 18px;
+              }
+
+              .erp-dashboard-card {
+                min-height: 255px;
+                border-radius: 16px;
+                background: rgba(5,17,31,.86);
+                backdrop-filter: blur(14px);
+                padding: 18px;
+                transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease, background .25s ease;
+              }
+
+              .erp-dashboard-card:hover {
+                transform: translateY(-3px);
+              }
+
+              .erp-dashboard-card-income {
+                border: 1px solid rgba(0,255,160,.5);
+                box-shadow: 0 0 28px rgba(0,255,160,.12), 0 18px 46px rgba(0,0,0,.34);
+              }
+
+              .erp-dashboard-card-expense {
+                border: 1px solid rgba(255,83,112,.5);
+                box-shadow: 0 0 28px rgba(255,83,112,.12), 0 18px 46px rgba(0,0,0,.34);
+              }
+
+              .erp-dashboard-card-alert {
+                border: 1px solid rgba(245,190,70,.54);
+                box-shadow: 0 0 28px rgba(245,190,70,.12), 0 18px 46px rgba(0,0,0,.34);
+              }
+
+              .erp-card-row {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                min-height: 44px;
+                border-radius: 10px;
+                padding: 8px 10px;
+                margin-bottom: 8px;
+              }
+
+              .erp-card-icon {
+                width: 30px;
+                height: 30px;
+                border-radius: 9999px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex: 0 0 auto;
+                font-size: 15px;
+                font-weight: 900;
+              }
+
+              .erp-card-link {
+                margin-top: 16px;
+                display: block;
+                font-size: 12px;
+                font-weight: 900;
+                letter-spacing: .14em;
+                text-transform: uppercase;
+              }
+
+              @media (max-width: 767px) {
+                .erp-home {
+                  padding: 28px 16px 32px;
+                }
+
+                .erp-hero-orb {
+                  width: 300px;
+                  height: 300px;
+                }
+
+                .erp-hero-orb::before {
+                  width: 430px;
+                  height: 430px;
+                }
+
+                .erp-hero-brand {
+                  font-size: 34px;
+                }
+
+                .erp-hero-rhodes {
+                  font-size: 12px;
+                  letter-spacing: 6px;
+                }
+
+                .erp-quick-row {
+                  flex-direction: column;
+                  width: 100%;
+                }
+
+                .erp-quick-button {
+                  width: 100%;
+                  max-width: 340px;
+                }
+
+                .erp-card-grid {
+                  width: 100%;
+                  max-width: 360px;
+                  grid-template-columns: 1fr;
+                }
+              }
+            `}</style>
+            <div className="erp-home relative z-10">
+              <div className="erp-hero-orb">
+                <div className="erp-hero-ring" />
+                <div className="erp-hero-inner" />
+                <div className="erp-hero-content">
+                  <p className="erp-hero-brand">
+                    <span className="erp-hero-brand-auto">AUTO</span>
+                    <span className="erp-hero-brand-club">CLUB</span>
                   </p>
-                  <p className="mt-5 text-[11px] font-black uppercase tracking-[0.28em] text-cyan-100/90">
-                    Enterprise Fleet ERP
-                  </p>
+                  <p className="erp-hero-rhodes">RHODES</p>
+                  <p className="erp-hero-subtitle">Enterprise Fleet ERP</p>
                 </div>
               </div>
 
               {userRole === 'admin' && (
                 <>
-              <div className="grid w-full max-w-[500px] gap-2.5 sm:grid-cols-2">
+              <div className="erp-quick-row">
                 <button
                   type="button"
                   onClick={openHomepageIncome}
-                  className="group rounded-2xl border border-emerald-400/65 bg-slate-950/52 px-3.5 py-2.5 text-center shadow-[0_0_32px_rgba(16,185,129,0.18),0_14px_34px_rgba(0,0,0,0.36)] backdrop-blur-xl transition duration-200 hover:-translate-y-px hover:border-emerald-300 hover:bg-emerald-950/30"
+                  className="erp-quick-button erp-quick-button-income group text-left"
                 >
-                  <span className="block text-[11px] font-black uppercase tracking-[0.15em] text-emerald-300">Quick entry</span>
-                  <span className="mt-0.5 block text-sm font-black text-emerald-50">+ Καταχώρηση Εσόδου</span>
+                  <span className="erp-quick-icon">↑</span>
+                  <span>
+                    <span className="block text-[11px] font-black uppercase tracking-[1.8px] text-emerald-300">Quick entry</span>
+                    <span className="mt-1 block text-[14px] font-black text-emerald-50">+ Καταχώρηση Εσόδου</span>
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={openHomepageExpense}
-                  className="group rounded-2xl border border-rose-400/65 bg-slate-950/52 px-3.5 py-2.5 text-center shadow-[0_0_32px_rgba(244,63,94,0.18),0_14px_34px_rgba(0,0,0,0.36)] backdrop-blur-xl transition duration-200 hover:-translate-y-px hover:border-rose-300 hover:bg-rose-950/30"
+                  className="erp-quick-button erp-quick-button-expense group text-left"
                 >
-                  <span className="block text-[11px] font-black uppercase tracking-[0.15em] text-rose-300">Quick entry</span>
-                  <span className="mt-0.5 block text-sm font-black text-rose-50">+ Καταχώρηση Εξόδου</span>
+                  <span className="erp-quick-icon">↓</span>
+                  <span>
+                    <span className="block text-[11px] font-black uppercase tracking-[1.8px] text-rose-300">Quick entry</span>
+                    <span className="mt-1 block text-[14px] font-black text-rose-50">+ Καταχώρηση Εξόδου</span>
+                  </span>
                 </button>
               </div>
 
-              <div className="grid w-full max-w-[600px] gap-3 lg:grid-cols-3">
+              <div className="erp-card-grid">
                 <button
                   type="button"
                   onClick={() => openWindow('Έσοδα')}
-                  className="group cursor-pointer rounded-2xl border border-emerald-400/45 bg-slate-950/56 p-3 text-left shadow-[0_0_28px_rgba(16,185,129,0.15),0_16px_42px_rgba(0,0,0,0.34)] backdrop-blur-xl transition duration-200 hover:-translate-y-px hover:border-emerald-300 hover:bg-emerald-950/24"
+                  className="erp-dashboard-card erp-dashboard-card-income group cursor-pointer text-left hover:border-emerald-300 hover:bg-emerald-950/24"
                 >
-                  <p className="text-[11px] font-black uppercase tracking-[0.12em] leading-tight text-emerald-300">
+                  <p className="text-[12px] font-black uppercase tracking-[0.5px] leading-[1.1] text-emerald-300">
                     Τελευταίες Καταχωρήσεις Εσόδων
                   </p>
                   <div className="mt-2 space-y-1.5">
                     {latestIncomeTransactions.length === 0 && <p className="text-[11px] leading-tight text-slate-400">Δεν υπάρχουν εγγραφές.</p>}
                     {latestIncomeTransactions.map((transaction) => (
-                      <div key={transaction.id} className="flex min-h-[36px] items-center justify-between gap-2 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5">
+                      <div key={transaction.id} className="erp-card-row border border-emerald-400/20 bg-emerald-400/10">
+                        <span className="erp-card-icon bg-emerald-400/15 text-emerald-300">↑</span>
                         <div className="min-w-0">
-                          <p className="truncate text-[15px] font-bold leading-tight text-slate-50">
+                          <p className="truncate text-[14px] font-bold leading-tight text-slate-50">
                             {transaction.contract_number || 'Χωρίς συμβόλαιο'}
                           </p>
-                          <p className="text-[11px] leading-tight text-slate-400">{formatDate(transaction.date)}</p>
+                          <p className="text-[10px] leading-tight text-slate-400">{formatDate(transaction.date)}</p>
                         </div>
-                        <p className="shrink-0 text-[17px] font-black leading-tight text-emerald-300">{formatMoney(transaction.amount)}</p>
+                        <p className="shrink-0 text-[15px] font-black leading-tight text-emerald-300">{formatMoney(transaction.amount)}</p>
                       </div>
                     ))}
                   </div>
+                  <span className="erp-card-link text-emerald-300">Προβολή όλων →</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => openWindow('Έξοδα')}
-                  className="group cursor-pointer rounded-2xl border border-rose-400/45 bg-slate-950/56 p-3 text-left shadow-[0_0_28px_rgba(244,63,94,0.15),0_16px_42px_rgba(0,0,0,0.34)] backdrop-blur-xl transition duration-200 hover:-translate-y-px hover:border-rose-300 hover:bg-rose-950/24"
+                  className="erp-dashboard-card erp-dashboard-card-expense group cursor-pointer text-left hover:border-rose-300 hover:bg-rose-950/24"
                 >
-                  <p className="text-[11px] font-black uppercase tracking-[0.12em] leading-tight text-rose-300">
+                  <p className="text-[12px] font-black uppercase tracking-[0.5px] leading-[1.1] text-rose-300">
                     Τελευταίες Καταχωρήσεις Εξόδων
                   </p>
                   <div className="mt-2 space-y-1.5">
                     {latestExpenseTransactions.length === 0 && <p className="text-[11px] leading-tight text-slate-400">Δεν υπάρχουν εγγραφές.</p>}
                     {latestExpenseTransactions.map((transaction) => (
-                      <div key={transaction.id} className="flex min-h-[36px] items-center justify-between gap-2 rounded-lg border border-rose-400/20 bg-rose-400/10 px-3 py-1.5">
+                      <div key={transaction.id} className="erp-card-row border border-rose-400/20 bg-rose-400/10">
+                        <span className="erp-card-icon bg-rose-400/15 text-rose-300">↓</span>
                         <div className="min-w-0">
-                          <p className="truncate text-[15px] font-bold leading-tight text-slate-50">
+                          <p className="truncate text-[14px] font-bold leading-tight text-slate-50">
                             {transaction.category || transaction.supplier_name || transaction.supplier || '-'}
                           </p>
-                          <p className="text-[11px] leading-tight text-slate-400">{formatDate(transaction.date)}</p>
+                          <p className="text-[10px] leading-tight text-slate-400">{formatDate(transaction.date)}</p>
                         </div>
-                        <p className="shrink-0 text-[17px] font-black leading-tight text-rose-300">{formatMoney(transaction.amount)}</p>
+                        <p className="shrink-0 text-[15px] font-black leading-tight text-rose-300">{formatMoney(transaction.amount)}</p>
                       </div>
                     ))}
                   </div>
+                  <span className="erp-card-link text-rose-300">Προβολή όλων →</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => openWindow('Γραμμάτια')}
-                  className="group cursor-pointer rounded-2xl border border-amber-400/45 bg-slate-950/56 p-3 text-left shadow-[0_0_28px_rgba(245,158,11,0.15),0_16px_42px_rgba(0,0,0,0.34)] backdrop-blur-xl transition duration-200 hover:-translate-y-px hover:border-amber-300 hover:bg-amber-950/24"
+                  className="erp-dashboard-card erp-dashboard-card-alert group cursor-pointer text-left hover:border-amber-300 hover:bg-amber-950/24"
                 >
-                  <p className="text-[11px] font-black uppercase tracking-[0.12em] leading-tight text-amber-300">
+                  <p className="text-[12px] font-black uppercase tracking-[0.5px] leading-[1.1] text-amber-300">
                     Alert Γραμματίων
                   </p>
-                  <div className="mt-2 rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-2 transition duration-200 group-hover:border-amber-300/40">
-                    <p className="text-2xl font-black leading-tight text-amber-300">{formatMoney(homeAlertDebtsTotal)}</p>
+                  <div className="mt-2 rounded-lg border border-amber-400/20 bg-amber-400/10 p-[14px] transition duration-200 group-hover:border-amber-300/40">
+                    <p className="text-[26px] font-black leading-tight text-amber-300">{formatMoney(homeAlertDebtsTotal)}</p>
                     <p className="mt-1 text-sm font-bold leading-tight text-amber-200">
                       {homeAlertDebtsTotal > 0
                         ? `${homeAlertDebts.length} ληξιπρόθεσμα / σήμερα`
