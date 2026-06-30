@@ -643,3 +643,45 @@ body {
   background: #f1f5f9;
   color: #0f172a;
 }
+
+.erp-module-light-content button.booking-filter-button,
+button.booking-filter-button {
+  border-color: #059669 !important;
+  background: #ffffff !important;
+  color: #065f46 !important;
+  box-shadow: 0 4px 10px rgba(5, 150, 105, 0.08) !important;
+}
+
+.erp-module-light-content button.booking-filter-button:hover,
+button.booking-filter-button:hover {
+  border-color: #059669 !important;
+  background: #ecfdf5 !important;
+  color: #065f46 !important;
+}
+
+.erp-module-light-content button.booking-filter-button[aria-pressed='true'],
+.erp-module-light-content button.booking-filter-button[data-state='on'],
+.erp-module-light-content button.booking-filter-button.selected,
+.erp-module-light-content button.booking-filter-button.active,
+button.booking-filter-button[aria-pressed='true'],
+button.booking-filter-button[data-state='on'],
+button.booking-filter-button.selected,
+button.booking-filter-button.active {
+  border-color: #059669 !important;
+  background: #059669 !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(5, 150, 105, 0.22) !important;
+}
+
+.erp-module-light-content button.booking-filter-button[aria-pressed='true']:hover,
+.erp-module-light-content button.booking-filter-button[data-state='on']:hover,
+.erp-module-light-content button.booking-filter-button.selected:hover,
+.erp-module-light-content button.booking-filter-button.active:hover,
+button.booking-filter-button[aria-pressed='true']:hover,
+button.booking-filter-button[data-state='on']:hover,
+button.booking-filter-button.selected:hover,
+button.booking-filter-button.active:hover {
+  border-color: #047857 !important;
+  background: #047857 !important;
+  color: #ffffff !important;
+}

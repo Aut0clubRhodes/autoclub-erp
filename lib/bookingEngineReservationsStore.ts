@@ -51,6 +51,14 @@ export type BookingEngineWebsiteReservation = {
   customFields: BookingEngineReservationCustomField[];
   paymentMethod: string;
   total: number;
+  driverAgeConfirmed?: boolean;
+  licenceFrontUrl?: string;
+  licenceBackUrl?: string;
+  licenceNumber?: string;
+  licenceIssueDate?: string;
+  licenceExpiryDate?: string;
+  licenceUploadedAt?: string;
+  cancellationRequested?: boolean;
   status: BookingEngineReservationStatus;
   createdAt: string;
   processed: boolean;

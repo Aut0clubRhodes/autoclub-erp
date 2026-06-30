@@ -83,6 +83,14 @@ type BeReservationRow = {
   payment_method?: string | null;
   payment_link?: string | null;
   total_price?: string | number | null;
+  driver_age_confirmed?: boolean | null;
+  licence_front_url?: string | null;
+  licence_back_url?: string | null;
+  licence_number?: string | null;
+  licence_issue_date?: string | null;
+  licence_expiry_date?: string | null;
+  licence_uploaded_at?: string | null;
+  cancellation_requested?: boolean | null;
   status?: string | null;
   notes?: string | null;
   flight_number?: string | null;
@@ -300,6 +308,14 @@ const mapBeReservation = (row: BeReservationRow): WebsiteReservation => {
     paymentMethod: row.payment_method || '',
     paymentLink: row.payment_link || '',
     total: Number(row.total_price || 0),
+    driverAgeConfirmed: Boolean(row.driver_age_confirmed),
+    licenceFrontUrl: row.licence_front_url || '',
+    licenceBackUrl: row.licence_back_url || '',
+    licenceNumber: row.licence_number || '',
+    licenceIssueDate: row.licence_issue_date || '',
+    licenceExpiryDate: row.licence_expiry_date || '',
+    licenceUploadedAt: row.licence_uploaded_at || '',
+    cancellationRequested: Boolean(row.cancellation_requested),
     status: boardStatus,
     createdAt: row.created_at || new Date().toISOString(),
     processed,
@@ -904,6 +920,8 @@ export default function AutoClubRhodesReservationsBoard() {
                     <div className="min-w-0 pr-3">
                       <p className="truncate font-black text-slate-900">{reservation.customerName}</p>
                       <p className="mt-0.5 font-mono text-[10px] text-slate-400">{reservation.id}</p>
+                      <LicenceStatusBadge reservation={reservation} />
+                      <CancellationStatusBadge reservation={reservation} />
                     </div>
                     <span className="truncate pr-3 text-xs font-semibold text-slate-700">
                       {reservation.fullPhone || reservation.phone}
@@ -985,6 +1003,8 @@ export default function AutoClubRhodesReservationsBoard() {
                     </span>
                     <span className="truncate pr-3 font-black text-slate-900">
                       {reservation.customerName}
+                      <LicenceStatusBadge reservation={reservation} />
+                      <CancellationStatusBadge reservation={reservation} />
                     </span>
                     <span className="truncate pr-3 text-xs font-semibold text-slate-700">
                       {reservation.fullPhone || reservation.phone}
@@ -1251,6 +1271,19 @@ function ReservationEditor({
                 <Printer className="h-4 w-4" />
                 Print
               </button>
+              {(draft.licenceFrontUrl || draft.licenceBackUrl) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (draft.licenceFrontUrl) window.open(draft.licenceFrontUrl, '_blank', 'noopener,noreferrer');
+                    if (draft.licenceBackUrl) window.open(draft.licenceBackUrl, '_blank', 'noopener,noreferrer');
+                  }}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-700 bg-emerald-700 px-3 text-xs font-black text-white transition hover:bg-emerald-800"
+                >
+                  <Eye className="h-4 w-4" />
+                  View licence
+                </button>
+              )}
             </div>
           </div>
         </section>
@@ -1423,6 +1456,46 @@ function ReservationEditor({
               className="mt-1.5 w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
             />
           </label>
+          <section className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 md:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-slate-900">Driver licence</p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {draft.licenceUploadedAt
+                    ? `Uploaded ${new Date(draft.licenceUploadedAt).toLocaleString('en-GB')}`
+                    : 'No licence uploaded yet.'}
+                </p>
+              </div>
+              <LicenceStatusBadge reservation={draft} />
+              <CancellationStatusBadge reservation={draft} />
+            </div>
+            {(draft.licenceFrontUrl || draft.licenceBackUrl || draft.licenceNumber || draft.licenceIssueDate || draft.licenceExpiryDate) ? (
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.07em] text-slate-500">Licence number</p>
+                  <p className="mt-1 text-sm font-bold text-slate-900">{draft.licenceNumber || '-'}</p>
+                </div>
+                <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.07em] text-slate-500">Licence issue</p>
+                  <p className="mt-1 text-sm font-bold text-slate-900">{draft.licenceIssueDate || '-'}</p>
+                </div>
+                <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.07em] text-slate-500">Licence expiry</p>
+                  <p className="mt-1 text-sm font-bold text-slate-900">{draft.licenceExpiryDate || '-'}</p>
+                </div>
+                {draft.licenceFrontUrl && (
+                  <LicencePreview label="Front" url={draft.licenceFrontUrl} />
+                )}
+                {draft.licenceBackUrl && (
+                  <LicencePreview label="Back" url={draft.licenceBackUrl} />
+                )}
+              </div>
+            ) : (
+              <p className="mt-3 rounded-lg border border-dashed border-emerald-200 bg-white px-3 py-3 text-xs font-semibold text-slate-500">
+                The customer has not uploaded driver licence files.
+              </p>
+            )}
+          </section>
           <section className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -1670,6 +1743,51 @@ function CarCell({ reservation }: { reservation: WebsiteReservation }) {
       <span className="mt-0.5 inline-flex rounded border border-cyan-200 bg-cyan-50 px-1.5 py-0.5 text-[9px] font-black text-cyan-800">
         GROUP {reservation.groupCode}
       </span>
+    </div>
+  );
+}
+
+function LicenceStatusBadge({ reservation }: { reservation: WebsiteReservation }) {
+  const uploaded = Boolean(reservation.licenceFrontUrl || reservation.licenceBackUrl || reservation.licenceUploadedAt);
+  return (
+    <span
+      className={`mt-1 inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.06em] ${
+        uploaded
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          : 'border-slate-200 bg-slate-50 text-slate-500'
+      }`}
+    >
+      {uploaded ? 'Licence uploaded' : 'No licence'}
+    </span>
+  );
+}
+
+function CancellationStatusBadge({ reservation }: { reservation: WebsiteReservation }) {
+  if (!reservation.cancellationRequested) return null;
+  return (
+    <span className="mt-1 inline-flex w-fit items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.06em] text-rose-700">
+      Cancellation requested
+    </span>
+  );
+}
+
+function LicencePreview({ label, url }: { label: string; url: string }) {
+  const isPdf = url.toLowerCase().includes('.pdf');
+  return (
+    <div className="rounded-lg border border-emerald-100 bg-white p-2">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-[10px] font-black uppercase tracking-[0.07em] text-slate-500">Licence {label}</p>
+        <a href={url} target="_blank" rel="noreferrer" className="text-xs font-black text-emerald-700 underline">
+          Open
+        </a>
+      </div>
+      {isPdf ? (
+        <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-xs font-bold text-slate-500">
+          PDF uploaded
+        </div>
+      ) : (
+        <img src={url} alt={`Licence ${label}`} className="h-32 w-full rounded-lg object-cover" />
+      )}
     </div>
   );
 }

@@ -381,28 +381,64 @@ type ReportsExpenseTransactionRow = {
   notes: string | null;
 };
 
+const SUPABASE_PAGE_SIZE = 1000;
+
 async function loadSharedExpensesFromReportsExpenses(): Promise<{ expenses: ErpSharedExpense[]; error?: string }> {
   if (!supabase) {
     return { expenses: [], error: 'Δεν βρέθηκε πηγή εξόδων από Αναφορές > Έξοδα.' };
   }
 
-  const { data, error } = await supabase
-    .from('transactions')
-    .select('id, date, amount, payment_method, type, source, category, notes')
-    .in('type', ['expense', 'supplier_payment'])
-    .order('date', { ascending: false });
+  const rows: ReportsExpenseTransactionRow[] = [];
+  let expectedCount: number | null = null;
+  let from = 0;
 
-  if (error) {
-    console.error('INVESTMENT EXPENSE SOURCE ERROR', {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
+  while (true) {
+    const to = from + SUPABASE_PAGE_SIZE - 1;
+    const { data, error, count } = await supabase
+      .from('transactions')
+      .select('id, date, amount, payment_method, type, source, category, notes', { count: 'exact' })
+      .in('type', ['expense', 'supplier_payment'])
+      .order('date', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      console.error('INVESTMENT EXPENSE SOURCE ERROR', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      return { expenses: [], error: 'Δεν βρέθηκε πηγή εξόδων από Αναφορές > Έξοδα.' };
+    }
+
+    if (expectedCount === null) {
+      expectedCount = count ?? null;
+      console.log('INVESTMENT EXPENSE SOURCE SUPABASE COUNT', expectedCount);
+    }
+
+    const pageRows = (data || []) as ReportsExpenseTransactionRow[];
+    rows.push(...pageRows);
+    console.log('INVESTMENT EXPENSE SOURCE FETCH PAGE', {
+      from,
+      to,
+      fetchedRows: pageRows.length,
+      totalFetchedRows: rows.length,
+      supabaseCount: expectedCount,
     });
-    return { expenses: [], error: 'Δεν βρέθηκε πηγή εξόδων από Αναφορές > Έξοδα.' };
+
+    if (pageRows.length < SUPABASE_PAGE_SIZE) break;
+    if (expectedCount !== null && rows.length >= expectedCount) break;
+    from += SUPABASE_PAGE_SIZE;
   }
 
-  const expenses = ((data || []) as ReportsExpenseTransactionRow[])
+  console.log('INVESTMENT EXPENSE SOURCE FETCH SUMMARY', {
+    fetchedRows: rows.length,
+    supabaseCount: expectedCount,
+    complete: expectedCount === null ? true : rows.length >= expectedCount,
+  });
+
+  const expenses = rows
     .filter((transaction) => {
       const type = String(transaction.type || '');
       const paymentMethod = String(transaction.payment_method || '').toLowerCase();

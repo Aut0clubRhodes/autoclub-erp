@@ -1,5 +1,7 @@
 import { supabase } from './supabaseClient';
 
+const SUPABASE_PAGE_SIZE = 1000;
+
 export type SupplierLedgerRow = {
   supplier_id: number;
   supplier_name: string;
@@ -8,47 +10,104 @@ export type SupplierLedgerRow = {
   outstanding_balance: number;
 };
 
+async function fetchAllRows(table: string, columns: string, orderColumn?: string) {
+  const rows: any[] = [];
+  let expectedCount: number | null = null;
+  let from = 0;
+
+  while (true) {
+    const to = from + SUPABASE_PAGE_SIZE - 1;
+    let query = supabase.from(table).select(columns, { count: 'exact' }).range(from, to);
+
+    if (orderColumn) {
+      query = query.order(orderColumn, { ascending: true });
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      return { rows: [], error, count: expectedCount };
+    }
+
+    if (expectedCount === null) {
+      expectedCount = count ?? null;
+      console.log('SUPPLIER LEDGER SOURCE COUNT', { table, count: expectedCount });
+    }
+
+    const pageRows = data || [];
+    rows.push(...pageRows);
+    console.log('SUPPLIER LEDGER SOURCE PAGE', {
+      table,
+      from,
+      to,
+      fetchedRows: pageRows.length,
+      totalFetchedRows: rows.length,
+      supabaseCount: expectedCount,
+    });
+
+    if (pageRows.length < SUPABASE_PAGE_SIZE) break;
+    if (expectedCount !== null && rows.length >= expectedCount) break;
+    from += SUPABASE_PAGE_SIZE;
+  }
+
+  console.log('SUPPLIER LEDGER SOURCE SUMMARY', {
+    table,
+    fetchedRows: rows.length,
+    supabaseCount: expectedCount,
+    complete: expectedCount === null ? true : rows.length >= expectedCount,
+  });
+
+  return { rows, error: null, count: expectedCount };
+}
+
 export const fetchSupplierLedger = async (): Promise<SupplierLedgerRow[]> => {
-  const [
-    { data: suppliers, error: suppliersError },
-    { data: transactions, error: transactionsError },
-    { data: debts, error: debtsError },
-  ] = await Promise.all([
-    supabase.from('suppliers').select('id, name'),
-    supabase.from('transactions').select('id, type, amount, payment_method, supplier_id'),
-    supabase.from('debts').select('id, supplier_id, original_amount, remaining_amount'),
+  const [suppliersResult, transactionsResult, debtsResult] = await Promise.all([
+    fetchAllRows('suppliers', 'id, name', 'name'),
+    fetchAllRows('transactions', 'id, type, amount, payment_method, supplier_id', 'id'),
+    fetchAllRows('debts', 'id, supplier_id, original_amount, remaining_amount', 'id'),
   ]);
 
-  if (suppliersError) {
+  if (suppliersResult.error) {
     console.error('Fetch supplier ledger suppliers error:', {
-      message: suppliersError.message,
-      details: suppliersError.details,
-      hint: suppliersError.hint,
-      code: suppliersError.code,
+      message: suppliersResult.error.message,
+      details: suppliersResult.error.details,
+      hint: suppliersResult.error.hint,
+      code: suppliersResult.error.code,
     });
     return [];
   }
 
-  if (transactionsError) {
+  if (transactionsResult.error) {
     console.error('Fetch supplier ledger transactions error:', {
-      message: transactionsError.message,
-      details: transactionsError.details,
-      hint: transactionsError.hint,
-      code: transactionsError.code,
+      message: transactionsResult.error.message,
+      details: transactionsResult.error.details,
+      hint: transactionsResult.error.hint,
+      code: transactionsResult.error.code,
     });
     return [];
   }
 
-  if (debtsError) {
+  if (debtsResult.error) {
     console.error('Fetch supplier ledger debts error:', {
-      message: debtsError.message,
-      details: debtsError.details,
-      hint: debtsError.hint,
-      code: debtsError.code,
+      message: debtsResult.error.message,
+      details: debtsResult.error.details,
+      hint: debtsResult.error.hint,
+      code: debtsResult.error.code,
     });
   }
 
-  return (suppliers || [])
+  const suppliers = suppliersResult.rows;
+  const transactions = transactionsResult.rows;
+  const debts = debtsResult.rows;
+
+  console.log('SUPPLIER LEDGER EXPENSE SOURCE SUMMARY', {
+    transactionRows: transactions.length,
+    expenseRows: transactions.filter(
+      (transaction) => transaction.type === 'expense' || transaction.type === 'supplier_payment'
+    ).length,
+  });
+
+  return suppliers
     .map((supplier) => {
       const supplierTransactions = (transactions || []).filter(
         (transaction) => Number(transaction.supplier_id) === Number(supplier.id)

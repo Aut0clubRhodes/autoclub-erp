@@ -1,5 +1,7 @@
 import { supabase } from './supabaseClient';
 
+const SUPABASE_PAGE_SIZE = 1000;
+
 export type ExpenseCategory = {
   id: number;
   name: string;
@@ -20,18 +22,55 @@ export const DEFAULT_EXPENSE_CATEGORIES = [
 ];
 
 export const fetchExpenseCategories = async (): Promise<ExpenseCategory[]> => {
-  const { data, error } = await supabase.from('expense_categories').select('*').order('name');
-  if (error) {
-    console.error('Fetch expense categories error:', {
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-      code: error.code,
+  const rows: ExpenseCategory[] = [];
+  let expectedCount: number | null = null;
+  let from = 0;
+
+  while (true) {
+    const to = from + SUPABASE_PAGE_SIZE - 1;
+    const { data, error, count } = await supabase
+      .from('expense_categories')
+      .select('*', { count: 'exact' })
+      .order('name')
+      .range(from, to);
+
+    if (error) {
+      console.error('Fetch expense categories error:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
+      return [];
+    }
+
+    if (expectedCount === null) {
+      expectedCount = count ?? null;
+      console.log('EXPENSE CATEGORIES SUPABASE COUNT', expectedCount);
+    }
+
+    const pageRows = data || [];
+    rows.push(...pageRows);
+    console.log('EXPENSE CATEGORIES FETCH PAGE', {
+      from,
+      to,
+      fetchedRows: pageRows.length,
+      totalFetchedRows: rows.length,
+      supabaseCount: expectedCount,
     });
-    return [];
+
+    if (pageRows.length < SUPABASE_PAGE_SIZE) break;
+    if (expectedCount !== null && rows.length >= expectedCount) break;
+    from += SUPABASE_PAGE_SIZE;
   }
 
-  return data || [];
+  console.log('EXPENSE CATEGORIES FETCH SUMMARY', {
+    fetchedRows: rows.length,
+    supabaseCount: expectedCount,
+    complete: expectedCount === null ? true : rows.length >= expectedCount,
+  });
+
+  return rows;
 };
 
 export const seedDefaultExpenseCategories = async () => {

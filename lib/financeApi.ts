@@ -47,6 +47,10 @@ export async function fetchTransactions() {
   console.log('TRANSACTIONS FETCH SUMMARY', {
     fetchedRows: rows.length,
     supabaseCount: expectedCount,
+    incomeRows: rows.filter((transaction: any) => transaction.type === 'income').length,
+    expenseRows: rows.filter(
+      (transaction: any) => transaction.type === 'expense' || transaction.type === 'supplier_payment'
+    ).length,
     complete: expectedCount === null ? true : rows.length >= expectedCount,
   });
 

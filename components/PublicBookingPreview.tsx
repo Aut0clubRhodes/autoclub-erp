@@ -16,6 +16,9 @@ import {
   Plus,
   ShieldCheck,
   Sparkles,
+  Trash2,
+  Upload,
+  X,
 } from 'lucide-react';
 import {
   bookingEngineLocalConfig,
@@ -745,8 +748,8 @@ export default function PublicBookingPreview({
   const [beSiteId, setBeSiteId] = useState('');
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [configError, setConfigError] = useState('');
-  const [selectedFeatureFilter, setSelectedFeatureFilter] = useState('');
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [selectedPassengerFilter, setSelectedPassengerFilter] = useState('All');
+  const [selectedTransmissionFilter, setSelectedTransmissionFilter] = useState('All');
   const [activeBenefitTooltip, setActiveBenefitTooltip] = useState<string | null>(null);
   const activeLocations = useMemo(
     () => bookingEngineConfig.locations.filter((location) => location.active),
@@ -804,11 +807,25 @@ export default function PublicBookingPreview({
   const [couponFeedback, setCouponFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
+  const [driverAgeConfirmed, setDriverAgeConfirmed] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [submittedReservationId, setSubmittedReservationId] = useState('');
+  const [submittedReservationDbId, setSubmittedReservationDbId] = useState('');
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [submittingReservation, setSubmittingReservation] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [licenceUploadOpen, setLicenceUploadOpen] = useState(false);
+  const [licenceFrontFile, setLicenceFrontFile] = useState<File | null>(null);
+  const [licenceBackFile, setLicenceBackFile] = useState<File | null>(null);
+  const [licenceNumber, setLicenceNumber] = useState('');
+  const [licenceIssueDate, setLicenceIssueDate] = useState('');
+  const [licenceExpiryDate, setLicenceExpiryDate] = useState('');
+  const [licenceFullName, setLicenceFullName] = useState('');
+  const [licenceUploading, setLicenceUploading] = useState(false);
+  const [licenceUploadFeedback, setLicenceUploadFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [deleteBookingOpen, setDeleteBookingOpen] = useState(false);
+  const [deletingBooking, setDeletingBooking] = useState(false);
+  const [deleteBookingFeedback, setDeleteBookingFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const activeCoupons = bookingEngineConfig.coupons.filter((coupon) => coupon.status === 'Active');
 
   useEffect(() => {
@@ -1136,11 +1153,39 @@ export default function PublicBookingPreview({
   );
   const selectedCategoryCode =
     search.carCategory === 'All categories' ? '' : search.carCategory.split(' - ')[0] || '';
+  const getCarFeatureNames = (featureIds: string[]) =>
+    featureIds
+      .map((featureId) => bookingEngineConfig.features.find((feature) => feature.id === featureId)?.name)
+      .filter(Boolean) as string[];
+  const normalizeFeatureName = (value: string) => value.trim().toLowerCase();
+  const carMatchesPassengerFilter = (featureNames: string[]) => {
+    if (selectedPassengerFilter === 'All') return true;
+    const normalizedTarget = selectedPassengerFilter;
+    return featureNames.some((featureName) => {
+      const normalized = normalizeFeatureName(featureName);
+      return (
+        normalized === normalizedTarget ||
+        normalized.includes(`${normalizedTarget} seat`) ||
+        normalized.includes(`${normalizedTarget} passenger`)
+      );
+    });
+  };
+  const carMatchesTransmissionFilter = (featureNames: string[]) => {
+    if (selectedTransmissionFilter === 'All') return true;
+    return featureNames.some((featureName) => {
+      const normalized = normalizeFeatureName(featureName);
+      if (selectedTransmissionFilter === 'Manual') return normalized.includes('manual');
+      return normalized.includes('auto') || normalized.includes('automatic');
+    });
+  };
   const visibleCars = bookingEngineConfig.cars
     .filter((car) => car.status !== 'Hidden')
     .filter((car) => !selectedPickupLocation || car.locationIds.includes(selectedPickupLocation.id))
     .filter((car) => !selectedCategoryCode || car.groupCode === selectedCategoryCode)
-    .filter((car) => !selectedFeatureFilter || car.featureIds.includes(selectedFeatureFilter))
+    .filter((car) => {
+      const featureNames = getCarFeatureNames(car.featureIds);
+      return carMatchesPassengerFilter(featureNames) && carMatchesTransmissionFilter(featureNames);
+    })
     .map((car, index) => {
       const group = bookingEngineConfig.groups.find((item) => item.code === car.groupCode);
       const matchingSeason = bookingEngineConfig.pricingSeasons.find(
@@ -1158,9 +1203,7 @@ export default function PublicBookingPreview({
           : priceOnRequest || car.status === 'On Request' || seasonMode === 'On Request'
             ? 'On Request'
             : 'Open';
-      const featureNames = car.featureIds
-        .map((featureId) => bookingEngineConfig.features.find((feature) => feature.id === featureId)?.name)
-        .filter(Boolean) as string[];
+      const featureNames = getCarFeatureNames(car.featureIds);
       return {
         ...car,
         groupName: group?.name || car.groupCode,
@@ -1214,10 +1257,134 @@ export default function PublicBookingPreview({
     }));
   };
 
+  const uploadLicenceFile = async (file: File, side: 'front' | 'back') => {
+    if (!beSiteId || !submittedReservationDbId) throw new Error('Reservation is not ready for licence upload.');
+    const extension = file.name.split('.').pop()?.toLowerCase() || 'file';
+    const path = `${beSiteId}/${submittedReservationDbId}/${side}.${extension}`;
+    const { error } = await supabase.storage.from('be-licences').upload(path, file, {
+      cacheControl: '3600',
+      upsert: true,
+    });
+    if (error) throw error;
+    const { data } = supabase.storage.from('be-licences').getPublicUrl(path);
+    return data.publicUrl;
+  };
+
+  const sendLicenceUploadAdminNotice = async () => {
+    const adminEmail =
+      bookingEngineConfig.siteSettings.bookingNotificationEmail ||
+      bookingEngineConfig.siteSettings.adminEmail ||
+      bookingEngineConfig.emailSettings.adminEmail;
+    if (!adminEmail) return;
+    try {
+      await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: adminEmail,
+          subject: `Driver licence uploaded for reservation ${submittedReservationId}`,
+          html_body: `
+            <div style="font-family:Arial,sans-serif;line-height:1.55;color:#102033;">
+              <h2 style="margin:0 0 12px;color:#073f5d;">Driver licence uploaded</h2>
+              <p>Driver licence files were uploaded for reservation <strong>${submittedReservationId}</strong>.</p>
+              <p><strong>Customer:</strong> ${licenceFullName || customer.fullName}</p>
+              <p><strong>Licence number:</strong> ${licenceNumber || '-'}</p>
+              <p><strong>Licence issue:</strong> ${licenceIssueDate || '-'}</p>
+              <p><strong>Licence expiry:</strong> ${licenceExpiryDate || '-'}</p>
+            </div>
+          `,
+        }),
+      });
+    } catch (error) {
+      console.error('LICENCE UPLOAD ADMIN EMAIL ERROR', error);
+    }
+  };
+
+  const submitLicenceUpload = async () => {
+    setLicenceUploadFeedback(null);
+    if (!submittedReservationDbId || !beSiteId) {
+      setLicenceUploadFeedback({ type: 'error', text: 'Reservation reference is missing. Please refresh and try again.' });
+      return;
+    }
+    if (!licenceFrontFile || !licenceBackFile) {
+      setLicenceUploadFeedback({ type: 'error', text: 'Please upload both the front and back of the driving licence.' });
+      return;
+    }
+
+    setLicenceUploading(true);
+    try {
+      const [frontUrl, backUrl] = await Promise.all([
+        uploadLicenceFile(licenceFrontFile, 'front'),
+        uploadLicenceFile(licenceBackFile, 'back'),
+      ]);
+
+      const updatePayload = {
+        customer_name: licenceFullName.trim() || customer.fullName.trim(),
+        licence_front_url: frontUrl,
+        licence_back_url: backUrl,
+        licence_number: licenceNumber.trim(),
+        licence_issue_date: licenceIssueDate || null,
+        licence_expiry_date: licenceExpiryDate || null,
+        licence_uploaded_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('be_reservations')
+        .update(updatePayload)
+        .eq('id', submittedReservationDbId);
+
+      if (error) throw error;
+      await sendLicenceUploadAdminNotice();
+      setLicenceUploadFeedback({ type: 'success', text: 'Your driving licence was uploaded successfully.' });
+    } catch (error) {
+      console.error('LICENCE UPLOAD ERROR', error);
+      setLicenceUploadFeedback({
+        type: 'error',
+        text: 'Licence upload failed. Please check the storage bucket and reservation columns, then try again.',
+      });
+    } finally {
+      setLicenceUploading(false);
+    }
+  };
+
+  const deleteBookingRequest = async () => {
+    setDeleteBookingFeedback(null);
+    if (!submittedReservationDbId) {
+      setDeleteBookingFeedback({ type: 'error', text: 'Reservation reference is missing. Please contact us on WhatsApp.' });
+      return;
+    }
+
+    setDeletingBooking(true);
+    try {
+      const { error } = await supabase
+        .from('be_reservations')
+        .update({ status: 'CANCELLED' })
+        .eq('id', submittedReservationDbId);
+
+      if (error) throw error;
+
+      const cancellationFlagResult = await supabase
+        .from('be_reservations')
+        .update({ cancellation_requested: true })
+        .eq('id', submittedReservationDbId);
+
+      if (cancellationFlagResult.error) {
+        console.warn('CANCELLATION REQUESTED COLUMN UPDATE WARNING', cancellationFlagResult.error);
+      }
+
+      setDeleteBookingFeedback({ type: 'success', text: 'Your booking request has been cancelled.' });
+    } catch (error) {
+      console.error('DELETE BOOKING REQUEST ERROR', error);
+      setDeleteBookingFeedback({ type: 'error', text: 'We could not cancel this request automatically. Please contact us on WhatsApp.' });
+    } finally {
+      setDeletingBooking(false);
+    }
+  };
+
   const submitReservation = async () => {
     setSubmitAttempted(true);
     setSubmitError('');
-    if (!selectedCar || !acceptTerms || requiredFieldsMissing || submittingReservation) return;
+    if (!selectedCar || !acceptTerms || !driverAgeConfirmed || requiredFieldsMissing || submittingReservation) return;
     if (!beSiteId) {
       setSubmitError('Booking site is not loaded. Please refresh and try again.');
       return;
@@ -1273,15 +1440,28 @@ export default function PublicBookingPreview({
       payment_method: paymentMethod,
       total_price: selectedCar.priceOnRequest ? 0 : finalTotal,
       status: selectedCar.mode === 'Open' ? 'PENDING' : 'ON_REQUEST',
+      driver_age_confirmed: driverAgeConfirmed,
     };
 
     setSubmittingReservation(true);
     console.log('PUBLIC BOOKING RESERVATION INSERT PAYLOAD', payload);
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('be_reservations')
       .insert(payload)
       .select('id, reservation_id')
       .single();
+
+    if (error && (error.code === '42703' || error.message.toLowerCase().includes('driver_age_confirmed'))) {
+      console.warn('PUBLIC BOOKING DRIVER AGE COLUMN MISSING - retrying insert without driver_age_confirmed', error);
+      const { driver_age_confirmed: _driverAgeConfirmed, ...fallbackPayload } = payload;
+      const retryResult = await supabase
+        .from('be_reservations')
+        .insert(fallbackPayload)
+        .select('id, reservation_id')
+        .single();
+      data = retryResult.data;
+      error = retryResult.error;
+    }
 
     console.log('PUBLIC BOOKING RESERVATION INSERT RESULT', data);
 
@@ -1297,7 +1477,8 @@ export default function PublicBookingPreview({
       return;
     }
 
-    const savedReservationId = data?.reservation_id || data?.id || reservationId;
+    const savedReservationDbId = data?.id || '';
+    const savedReservationId = data?.reservation_id || savedReservationDbId || reservationId;
     const emailEventPayload = buildBookingEmailEventPayload({
       eventType: selectedCar.mode === 'Open' ? 'new_reservation_confirmed' : 'reservation_onrequest',
       templates: bookingEngineConfig.emailSettings.templates,
@@ -1341,6 +1522,8 @@ export default function PublicBookingPreview({
     await sendBookingEngineEmailEvent(emailEventPayload);
 
     setSubmittedReservationId(savedReservationId);
+    setSubmittedReservationDbId(savedReservationDbId);
+    setLicenceFullName(customer.fullName.trim());
     setSubmittingReservation(false);
     setStep('success');
   };
@@ -1370,12 +1553,6 @@ export default function PublicBookingPreview({
             </div>
           </div>
           <div className="flex items-center gap-3 text-sm font-bold text-slate-600">
-            <button
-              type="button"
-              className="rounded-full border border-[#073f5d]/20 bg-white px-3 py-2 text-xs font-black text-[#073f5d] shadow-sm transition hover:border-[#073f5d] hover:bg-slate-50 sm:px-4 sm:text-sm"
-            >
-              Manage my booking
-            </button>
             <div className="hidden items-center gap-5 md:flex">
             <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Full insurance included</span>
             <span>EN <ChevronDown className="inline h-4 w-4" /></span>
@@ -1492,30 +1669,17 @@ export default function PublicBookingPreview({
               </div>
             </div>
 
-            <div className="mb-4 lg:hidden">
-              <button
-                type="button"
-                onClick={() => setFiltersOpen((current) => !current)}
-                className="h-10 rounded-xl border border-[#b8c7d6] bg-white px-4 text-sm font-black text-[#0b3551] shadow-sm"
-              >
-                Filters
-              </button>
-              {filtersOpen && (
-                <div className="mt-3">
-                  <FeatureFilterPanel
-                    features={bookingEngineConfig.features}
-                    selectedFeatureFilter={selectedFeatureFilter}
-                    onSelectFeature={(featureId) => {
-                      setSelectedFeatureFilter(featureId);
-                      setFiltersOpen(false);
-                    }}
-                  />
-                </div>
-              )}
+            <div className="mb-4">
+              <FeatureFilterPanel
+                selectedPassengerFilter={selectedPassengerFilter}
+                selectedTransmissionFilter={selectedTransmissionFilter}
+                onSelectPassenger={setSelectedPassengerFilter}
+                onSelectTransmission={setSelectedTransmissionFilter}
+              />
             </div>
 
-            <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
-              <div className="grid items-stretch justify-center gap-4 sm:[grid-template-columns:repeat(auto-fit,minmax(360px,420px))]">
+            <div className="grid items-start gap-5">
+              <div className="grid items-stretch justify-start gap-6 md:grid-cols-2 xl:grid-cols-3 xl:gap-8">
               {visibleCars.map((car) => {
                 const primaryPromoBadge = car.promoBadges[0];
                 const secondaryPromoBadges = car.promoBadges.slice(1, 3);
@@ -1587,25 +1751,35 @@ export default function PublicBookingPreview({
                       )}
                       <div className="mt-auto pt-4">
                         <div className="flex flex-col gap-3 border-t border-slate-100 pt-4">
-                          <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Total</p>
+                          <div className="flex items-end justify-between gap-4 rounded-[14px] border border-slate-200 bg-[#fbfcfe] p-4 md:p-3">
+                            <div className="min-w-0">
+                              <p className="text-base font-bold leading-tight text-[#1f2937]">
+                                Duration: {rentalDays} Day{rentalDays === 1 ? '' : 's'}
+                              </p>
+                              <p className="mt-2 text-[13px] font-bold text-[#374151]">Status:</p>
+                              <p className={`mt-0.5 inline-flex items-center gap-2 text-base font-bold ${car.mode === 'Open' ? 'text-[#16a34a]' : 'text-orange-600'}`}>
+                                <span className={`h-2 w-2 rounded-full ${car.mode === 'Open' ? 'bg-emerald-500' : 'bg-orange-500'}`} />
+                                {car.mode === 'Open' ? 'Available' : 'On Request'}
+                              </p>
                               {car.marketingMessage && (
-                                <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.05em] text-emerald-800 shadow-sm">
+                                <span className="mt-2 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.05em] text-emerald-800 shadow-sm">
                                   {car.marketingMessage}
                                 </span>
                               )}
-                          </div>
-                          <p className="mt-0.5 text-[30px] font-black leading-tight text-[#073f5d]">
-                              {car.priceOnRequest ? (
-                                <span className="text-xl">On request</span>
-                              ) : (
-                                formatEuro(car.pricePerDay * rentalDays)
-                              )}
-                          </p>
-                          <p className="mt-1 text-sm font-black text-slate-500">
-                            {car.priceOnRequest ? 'Price on request' : <>{formatEuro(car.pricePerDay)} / day</>}
-                          </p>
+                            </div>
+                            <div className="shrink-0 text-center">
+                              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Total</p>
+                              <p className="mt-0.5 text-[34px] font-extrabold leading-none text-[#073f5d] md:text-[32px]">
+                                  {car.priceOnRequest ? (
+                                    <span className="text-xl">On request</span>
+                                  ) : (
+                                    formatEuro(car.pricePerDay * rentalDays)
+                                  )}
+                              </p>
+                              <p className="mt-1 text-[13px] font-bold text-slate-500">
+                                {car.priceOnRequest ? 'Price on request' : <>{formatEuro(car.pricePerDay)} / day</>}
+                              </p>
+                            </div>
                           </div>
                           <button type="button" onClick={() => selectCar(car)} className={`h-12 w-full rounded-[14px] px-5 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 ${car.mode === 'Open' ? 'bg-emerald-600 shadow-emerald-900/20 hover:bg-emerald-700' : 'bg-orange-500 shadow-orange-900/20 hover:bg-orange-600'}`}>
                             {car.mode === 'Open' ? 'Reserve Now' : 'Request Booking'}
@@ -1617,13 +1791,6 @@ export default function PublicBookingPreview({
                 );
               })}
               </div>
-              <aside className="sticky top-4 hidden lg:block">
-                <FeatureFilterPanel
-                  features={bookingEngineConfig.features}
-                  selectedFeatureFilter={selectedFeatureFilter}
-                  onSelectFeature={setSelectedFeatureFilter}
-                />
-              </aside>
             </div>
           </section>
         )}
@@ -1748,28 +1915,61 @@ export default function PublicBookingPreview({
                 <div className="order-1 rounded-[22px] border border-slate-200 bg-white p-4 shadow-[0_14px_36px_rgba(7,63,93,0.08)] sm:p-5">
                   <h2 className="text-xl font-black text-[#073f5d]">Add extras</h2>
                   <p className="mt-1 text-sm text-slate-500">Make your trip more comfortable with optional equipment.</p>
-                  <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                  <div className="mt-4 space-y-2.5">
                     {activeExtras.map((extra) => (
-                      <article key={extra.id} className="flex flex-col rounded-2xl border border-slate-200 bg-slate-50/70 p-3 shadow-sm">
-                        <div className="flex h-16 items-center justify-center overflow-hidden rounded-xl bg-[linear-gradient(135deg,#e0f2fe_0%,#ecfdf5_100%)]">
+                      <article key={extra.id} className="flex min-h-[76px] items-center gap-3 rounded-xl border border-[#dbe7f3] bg-white px-3 py-2.5 transition hover:border-[#a8cfe8] hover:bg-[#fbfdff] hover:shadow-[0_8px_22px_rgba(7,63,93,0.08)] sm:px-3.5">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-cyan-100 bg-[linear-gradient(135deg,#e0f2fe_0%,#ecfdf5_100%)]">
                           {extra.imageUrl ? (
                             <img src={extra.imageUrl} alt={extra.name} className="h-full w-full object-cover" />
                           ) : (
-                            <ShieldCheck className="h-8 w-8 text-[#087f9c]" strokeWidth={1.4} />
+                            <ShieldCheck className="h-5 w-5 text-[#087f9c]" strokeWidth={1.6} />
                           )}
                         </div>
-                        <div className="mt-3 flex-1">
-                          <p className="font-black text-[#073f5d]">{extra.name}</p>
-                          <p className="mt-1 text-sm leading-5 text-slate-500">{extra.description}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-black leading-5 text-[#073f5d]">{extra.name}</p>
+                          {extra.description && <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-slate-500">{extra.description}</p>}
+                          <span className="mt-1 block text-[15px] font-black leading-5 text-[#047857]">
+                            {formatEuro(extra.price)}
+                            <span className="ml-1 text-sm font-bold text-slate-500">
+                              {extra.pricingMode === 'Per Day'
+                                ? ' / day'
+                                : extra.pricingMode === 'Per Booking'
+                                  ? ' / rental'
+                                  : ''}
+                            </span>
+                          </span>
                         </div>
-                        <div className="mt-3 flex items-center justify-between gap-3">
-                          <span className="text-sm font-black text-[#073f5d]">{formatEuro(extra.price)}<span className="font-semibold text-slate-500">{extra.pricingMode === 'Per Day' ? '/day' : ''}</span></span>
-                          <div className="grid min-w-[112px] grid-cols-[36px_40px_36px] items-center overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
-                            <button type="button" onClick={() => changeExtraQuantity(extra, -1)} className="flex h-9 items-center justify-center border-r border-slate-200 bg-[#073f5d] text-white transition hover:bg-[#052f46]" aria-label={`Remove ${extra.name}`}><Minus className="h-4 w-4" /></button>
-                            <span className="text-center text-sm font-black text-slate-950">{extras[extra.id] || 0}</span>
-                            <button type="button" onClick={() => changeExtraQuantity(extra, 1)} className="flex h-9 items-center justify-center bg-[#0891b2] text-white transition hover:bg-[#087f9c]" aria-label={`Add ${extra.name}`}><Plus className="h-4 w-4" /></button>
-                          </div>
-                        </div>
+                        {(() => {
+                          const quantity = extras[extra.id] || 0;
+                          const maxQuantity = Number(extra.maximumQuantity || 3);
+                          const canDecrease = quantity > 0;
+                          const canIncrease = quantity < maxQuantity;
+                          return (
+                            <div className="ml-auto grid min-w-[116px] grid-cols-[38px_40px_38px] items-center overflow-hidden rounded-xl border border-emerald-300 bg-white shadow-[0_6px_16px_rgba(5,150,105,0.12)]">
+                              <button
+                                type="button"
+                                onClick={() => changeExtraQuantity(extra, -1)}
+                                disabled={!canDecrease}
+                                className="flex h-9 items-center justify-center border-r border-emerald-200 bg-[#059669] text-white transition hover:bg-[#047857] active:bg-[#065f46] disabled:bg-slate-200 disabled:text-slate-600 disabled:hover:bg-slate-200"
+                                aria-label={`Remove ${extra.name}`}
+                              >
+                                <Minus className="h-4 w-4" />
+                              </button>
+                              <span className="flex h-9 items-center justify-center border-x border-emerald-100 bg-white text-sm font-black text-slate-950">
+                                {quantity}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => changeExtraQuantity(extra, 1)}
+                                disabled={!canIncrease}
+                                className="flex h-9 items-center justify-center border-l border-emerald-200 bg-[#059669] text-white transition hover:bg-[#047857] active:bg-[#065f46] disabled:bg-slate-200 disabled:text-slate-600 disabled:hover:bg-slate-200"
+                                aria-label={`Add ${extra.name}`}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </article>
                     ))}
                   </div>
@@ -1797,9 +1997,9 @@ export default function PublicBookingPreview({
 
               <aside className="order-2 h-fit rounded-[24px] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(7,63,93,0.16)] xl:order-2 xl:sticky xl:top-4">
                 <p className="text-xs font-black uppercase text-[#087f9c]">Reservation summary</p>
-                <div className={`mt-3 flex h-24 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br ${selectedCar.accent}`}>
+                <div className={`mt-3 flex h-[124px] items-center justify-center overflow-hidden rounded-[14px] border border-slate-100 bg-gradient-to-br ${selectedCar.accent}`}>
                   {selectedCar.imageUrl ? (
-                    <img src={selectedCar.imageUrl} alt={selectedCar.name} className="h-full w-full object-cover" />
+                    <img src={selectedCar.imageUrl} alt={selectedCar.name} className="h-full w-full rounded-[14px] object-cover object-center" />
                   ) : (
                     <Car className="h-16 w-16 text-[#0e7490]/80" strokeWidth={1.2} />
                   )}
@@ -1865,6 +2065,15 @@ export default function PublicBookingPreview({
                     <span>I accept the rental terms and conditions.</span>
                   </label>
                   <label className="flex cursor-pointer items-start gap-3 text-sm font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={driverAgeConfirmed}
+                      onChange={(event) => setDriverAgeConfirmed(event.target.checked)}
+                      className="mt-0.5 h-5 w-5 accent-emerald-600"
+                    />
+                    <span>I confirm that the main driver is at least 23 years old and has a valid driving licence.</span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-3 text-sm font-semibold text-slate-700">
                     <input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} className="mt-0.5 h-5 w-5 accent-[#0891b2]" />
                     <span>I would like to receive AutoClub Rhodes offers.</span>
                   </label>
@@ -1874,12 +2083,17 @@ export default function PublicBookingPreview({
                     Please accept the rental terms before continuing.
                   </p>
                 )}
+                {submitAttempted && !driverAgeConfirmed && (
+                  <p className="mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
+                    Please confirm that the main driver is at least 23 years old and has a valid driving licence.
+                  </p>
+                )}
                 {submitError && (
                   <p className="mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">
                     {submitError}
                   </p>
                 )}
-                <button type="button" disabled={submittingReservation} aria-disabled={!acceptTerms || requiredFieldsMissing || submittingReservation} onClick={submitReservation} className={`flex h-[54px] w-full items-center justify-center gap-2 rounded-xl px-6 text-base font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70 ${selectedCar.mode === 'Open' ? 'bg-emerald-600 shadow-emerald-900/20 hover:bg-emerald-700' : 'bg-[#0891b2] shadow-cyan-900/20 hover:bg-[#087f9c]'}`}>
+                <button type="button" disabled={!acceptTerms || !driverAgeConfirmed || requiredFieldsMissing || submittingReservation} aria-disabled={!acceptTerms || !driverAgeConfirmed || requiredFieldsMissing || submittingReservation} onClick={submitReservation} className={`flex h-[54px] w-full items-center justify-center gap-2 rounded-xl px-6 text-base font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70 ${selectedCar.mode === 'Open' ? 'bg-emerald-600 shadow-emerald-900/20 hover:bg-emerald-700' : 'bg-[#0891b2] shadow-cyan-900/20 hover:bg-[#087f9c]'}`}>
                   {submittingReservation ? 'Saving...' : selectedCar.mode === 'Open' ? 'Confirm Booking' : 'Send Request'} <ArrowRight className="h-5 w-5" />
                 </button>
                 <p className="mt-2 text-center text-xs text-slate-400">Preview only - no payment will be taken</p>
@@ -1959,13 +2173,141 @@ export default function PublicBookingPreview({
                   </p>
                 </div>
               </div>
-              <button type="button" onClick={() => { setSelectedCar(null); setStep('search'); setAcceptTerms(false); setSubmittedReservationId(''); }} className="mt-5 rounded-xl bg-[#073f5d] px-7 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/15 transition hover:bg-[#052f46]">
-                Make another reservation
-              </button>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteBookingFeedback(null);
+                    setDeleteBookingOpen(true);
+                  }}
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-rose-300 bg-white px-5 text-sm font-black text-rose-700 shadow-sm transition hover:border-rose-400 hover:bg-rose-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete my booking
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLicenceFullName(customer.fullName.trim());
+                    setLicenceUploadFeedback(null);
+                    setLicenceUploadOpen(true);
+                  }}
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-emerald-700 bg-emerald-600 px-5 text-sm font-black text-white shadow-lg shadow-emerald-900/15 transition hover:bg-emerald-700"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload my driver licence
+                </button>
+              </div>
             </div>
           </section>
         )}
       </main>
+      {licenceUploadOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-[24px] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(7,63,93,0.18)]">
+            <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.12em] text-emerald-700">Driver licence upload</p>
+                <h2 className="mt-1 text-xl font-black text-[#073f5d]">{submittedReservationId}</h2>
+                <p className="mt-1 text-sm text-slate-500">Upload files for the main driver linked to this reservation.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLicenceUploadOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-100"
+                aria-label="Close licence upload"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <div className="grid gap-3 p-5 sm:grid-cols-2">
+              <CustomerField label="Full Name" value={licenceFullName} onChange={setLicenceFullName} />
+              <CustomerField label="Licence Number" value={licenceNumber} onChange={setLicenceNumber} />
+              <CustomerField label="Licence Issue Date" type="date" value={licenceIssueDate} onChange={setLicenceIssueDate} />
+              <CustomerField label="Licence Expiry Date" type="date" value={licenceExpiryDate} onChange={setLicenceExpiryDate} />
+              <label className="block sm:col-span-2">
+                <span className="text-xs font-black text-slate-700">Driving licence front</span>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(event) => setLicenceFrontFile(event.target.files?.[0] || null)}
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-50 file:px-3 file:py-1.5 file:text-xs file:font-black file:text-emerald-800"
+                />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="text-xs font-black text-slate-700">Driving licence back</span>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(event) => setLicenceBackFile(event.target.files?.[0] || null)}
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-50 file:px-3 file:py-1.5 file:text-xs file:font-black file:text-emerald-800"
+                />
+              </label>
+              {licenceUploadFeedback && (
+                <p className={`rounded-xl border px-3 py-2 text-sm font-bold sm:col-span-2 ${licenceUploadFeedback.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
+                  {licenceUploadFeedback.text}
+                </p>
+              )}
+            </div>
+            <footer className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setLicenceUploadOpen(false)}
+                className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={licenceUploading}
+                onClick={submitLicenceUpload}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-600 px-4 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-70"
+              >
+                <Upload className="h-4 w-4" />
+                {licenceUploading ? 'Uploading...' : 'Save licence'}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
+      {deleteBookingOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[24px] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(7,63,93,0.18)]">
+            <header className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-rose-700">Delete booking request?</p>
+              <h2 className="mt-1 text-xl font-black text-[#073f5d]">Delete booking request?</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                This will cancel your booking request. If you made a mistake, you can also contact us on WhatsApp.
+              </p>
+            </header>
+            <div className="p-5">
+              {deleteBookingFeedback && (
+                <p className={`rounded-xl border px-3 py-2 text-sm font-bold ${deleteBookingFeedback.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
+                  {deleteBookingFeedback.text}
+                </p>
+              )}
+            </div>
+            <footer className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setDeleteBookingOpen(false)}
+                className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+              >
+                Keep booking
+              </button>
+              <button
+                type="button"
+                disabled={deletingBooking || deleteBookingFeedback?.type === 'success'}
+                onClick={deleteBookingRequest}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-600 bg-rose-600 px-4 text-sm font-black text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deletingBooking ? 'Deleting...' : 'Delete booking'}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2044,54 +2386,82 @@ function HomeBookingSearchForm({
 }
 
 function FeatureFilterPanel({
-  features,
-  selectedFeatureFilter,
-  onSelectFeature,
+  selectedPassengerFilter,
+  selectedTransmissionFilter,
+  onSelectPassenger,
+  onSelectTransmission,
 }: {
-  features: BookingEngineFeature[];
-  selectedFeatureFilter: string;
-  onSelectFeature: (featureId: string) => void;
+  selectedPassengerFilter: string;
+  selectedTransmissionFilter: string;
+  onSelectPassenger: (value: string) => void;
+  onSelectTransmission: (value: string) => void;
 }) {
+  const hasActiveFilter = selectedPassengerFilter !== 'All' || selectedTransmissionFilter !== 'All';
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_14px_36px_rgba(7,63,93,0.08)]">
+    <div className="rounded-[20px] border border-[#d7e7f5] bg-[linear-gradient(180deg,#f8fcff_0%,#eef7ff_100%)] px-4 py-3 shadow-[0_10px_25px_rgba(26,78,130,0.08)]">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-black text-[#073f5d]">Filter by features</p>
-        {selectedFeatureFilter && (
+        <p className="text-sm font-black text-[#073f5d]">Filters</p>
+        {hasActiveFilter && (
           <button
             type="button"
-            onClick={() => onSelectFeature('')}
-            className="text-xs font-black text-[#087f9c] hover:text-[#073f5d]"
+            onClick={() => {
+              onSelectPassenger('All');
+              onSelectTransmission('All');
+            }}
+            className="booking-filter-button rounded-full border px-2.5 py-1 text-xs font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B73C9]/30"
           >
             Clear
           </button>
         )}
       </div>
-      <div className="mt-3 grid gap-2">
-        {features.map((feature) => {
-          const selected = selectedFeatureFilter === feature.id;
+      <div className="mt-3 grid gap-3.5 md:grid-cols-2 md:items-end">
+        <SegmentedFilterGroup
+          label="Number of Passengers"
+          options={['All', '4', '5', '7', '9']}
+          value={selectedPassengerFilter}
+          onChange={onSelectPassenger}
+        />
+        <SegmentedFilterGroup
+          label="Transmission Type"
+          options={['All', 'Manual', 'Auto']}
+          value={selectedTransmissionFilter}
+          onChange={onSelectTransmission}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SegmentedFilterGroup({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <p className="mb-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-[#31566d]">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((option) => {
+          const selected = value === option;
           return (
             <button
-              key={feature.id}
+              key={`${label}-${option}`}
               type="button"
-              onClick={() => onSelectFeature(selected ? '' : feature.id)}
-              className={`flex min-h-9 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left text-[13px] font-black transition ${
-                selected
-                  ? 'border-[#0b6f9f] bg-[#0b6f9f] text-white shadow-sm'
-                  : 'border-[#b8c7d6] bg-white text-[#0b3551] hover:bg-[#eaf6fb]'
-              }`}
+              aria-pressed={selected}
+              data-state={selected ? 'on' : 'off'}
+              onClick={() => onChange(option)}
+              className="booking-filter-button h-8 rounded-full border px-3 text-xs font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30"
             >
-              <span>{feature.name}</span>
-              <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${selected ? 'border-white bg-white/20' : 'border-[#b8c7d6]'}`}>
-                {selected && <Check className="h-3 w-3" />}
-              </span>
+              {option}
             </button>
           );
         })}
-        {features.length === 0 && (
-          <p className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-xs font-semibold text-slate-500">
-            No feature filters yet.
-          </p>
-        )}
       </div>
     </div>
   );
