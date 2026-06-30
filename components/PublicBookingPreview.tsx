@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import {
   bookingEngineLocalConfig,
+  type BookingEngineIncludedBenefit,
   type BookingEngineGroup,
   type BookingEngineCarConfig,
   type BookingEngineCheckoutField,
@@ -43,6 +44,17 @@ import { supabase } from '@/lib/supabaseClient';
 
 type PreviewStep = 'search' | 'results' | 'checkout' | 'success';
 type BookingMode = 'Open' | 'On Request' | 'Hidden';
+type PublicBookingPreviewVariant = 'fullFlow' | 'homepageEmbed';
+type BookingSearchLayout = 'stackedCard' | 'wideBar';
+type BookingSearchState = {
+  pickupLocation: string;
+  returnLocation: string;
+  pickupDate: string;
+  pickupTime: string;
+  returnDate: string;
+  returnTime: string;
+  carCategory: string;
+};
 type SelectedPreviewCar = BookingEngineCarConfig & {
   groupName: string;
   featureNames: string[];
@@ -84,6 +96,10 @@ type BeVehicleCategoryRow = {
   description?: string | null;
   image_url?: string | null;
   feature_ids?: string[] | null;
+  included_benefits?: Array<string | Partial<BookingEngineIncludedBenefit>> | null;
+  promo_badges?: string[] | null;
+  marketing_message?: string | null;
+  display_priority?: string | number | null;
   location_ids?: string[] | null;
   status?: string | null;
 };
@@ -299,6 +315,21 @@ const normalizeBookingMode = (
   return fallback;
 };
 
+const normalizeIncludedBenefits = (
+  value: Array<string | Partial<BookingEngineIncludedBenefit>> | null | undefined,
+): BookingEngineIncludedBenefit[] =>
+  Array.isArray(value)
+    ? value
+        .map((item) => {
+          if (typeof item === 'string') return { label: item.trim(), tooltip: '' };
+          return {
+            label: String(item?.label || '').trim(),
+            tooltip: String(item?.tooltip || '').trim(),
+          };
+        })
+        .filter((item) => item.label)
+    : [];
+
 const mapSiteSettings = (row: BeSiteRow): BookingEngineSiteSettings => ({
   companyName: (row.name || '').trim(),
   domain: (row.domain || '').trim(),
@@ -330,6 +361,10 @@ const mapCar = (row: BeVehicleCategoryRow): BookingEngineCarConfig => ({
   description: row.description || '',
   imageUrl: row.image_url || '',
   featureIds: Array.isArray(row.feature_ids) ? row.feature_ids : [],
+  includedBenefits: normalizeIncludedBenefits(row.included_benefits),
+  promoBadges: Array.isArray(row.promo_badges) ? row.promo_badges : [],
+  marketingMessage: row.marketing_message || '',
+  displayPriority: String(row.display_priority ?? '0'),
   status: normalizeBookingMode(row.status),
   locationIds: Array.isArray(row.location_ids) ? row.location_ids : [],
 });
@@ -507,7 +542,202 @@ function getCouponDiscount(coupon: BookingEngineCoupon | undefined, subtotal: nu
   return Math.min(subtotal, Math.round(discount * 100) / 100);
 }
 
-export default function PublicBookingPreview() {
+type PublicBookingPreviewProps = {
+  variant?: PublicBookingPreviewVariant;
+  embedLayout?: BookingSearchLayout;
+};
+
+export function HomepageSearchEmbedPreview() {
+  return (
+    <div className="h-full min-h-0 overflow-y-auto bg-slate-100 text-slate-950">
+      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center justify-center px-4 py-8 sm:px-6">
+        <p className="mb-4 text-center text-xs font-black uppercase tracking-[0.18em] text-slate-600">
+          HOMEPAGE SEARCH EMBED PREVIEW
+        </p>
+        <HomeBookingSearch />
+      </div>
+    </div>
+  );
+}
+
+export function HomeBookingSearch({ layout = 'stackedCard' }: { layout?: BookingSearchLayout }) {
+  const [locationOptions, setLocationOptions] = useState<string[]>(['Rhodes Airport']);
+  const [categoryOptions, setCategoryOptions] = useState<string[]>(['All categories']);
+  const [minimumRentalDays, setMinimumRentalDays] = useState(3);
+  const [minimumRentalMessage, setMinimumRentalMessage] = useState('');
+  const [search, setSearch] = useState<BookingSearchState>(() => {
+    const pickupDate = toLocalDateInputValue(new Date());
+    return {
+      pickupLocation: 'Rhodes Airport',
+      returnLocation: 'Same as pickup',
+      pickupDate,
+      pickupTime: '10:00',
+      returnDate: addDaysToDateInput(pickupDate, 3),
+      returnTime: '10:00',
+      carCategory: 'All categories',
+    };
+  });
+
+  const returnLocationOptions = useMemo(
+    () => ['Same as pickup', ...locationOptions],
+    [locationOptions],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadHomepageSearchData = async () => {
+      const { data: sites, error: siteError } = await supabase
+        .from('be_sites')
+        .select('*')
+        .order('domain', { ascending: true });
+
+      if (siteError) {
+        console.error('Homepage Search Embed site load failed:', {
+          message: siteError.message,
+          code: siteError.code,
+          details: siteError.details,
+          hint: siteError.hint,
+        });
+        return;
+      }
+
+      const site = ((sites || []) as BeSiteRow[]).find(
+        (item) => item.domain === 'autoclub-rhodes.com',
+      );
+      if (!site?.id) return;
+
+      const [groupsResult, locationsResult, bookingSettingsResult] = await Promise.all([
+        supabase.from('be_groups').select('*').eq('site_id', site.id).order('code', { ascending: true }),
+        supabase.from('be_locations').select('*').eq('site_id', site.id).order('name', { ascending: true }),
+        supabase.from('be_booking_settings').select('*').eq('site_id', site.id).maybeSingle(),
+      ]);
+
+      const loadErrors = [
+        ['groups', groupsResult.error],
+        ['locations', locationsResult.error],
+        ['booking settings', bookingSettingsResult.error],
+      ].filter(([, error]) => error);
+
+      if (loadErrors.length > 0) {
+        loadErrors.forEach(([label, error]) => {
+          const supabaseError = error as NonNullable<typeof groupsResult.error>;
+          console.error(`Homepage Search Embed ${label} load failed:`, {
+            message: supabaseError.message,
+            code: supabaseError.code,
+            details: supabaseError.details,
+            hint: supabaseError.hint,
+          });
+        });
+        return;
+      }
+
+      if (cancelled) return;
+
+      const nextLocations = ((locationsResult.data || []) as BeLocationRow[])
+        .map(mapLocation)
+        .filter((location) => location.active)
+        .map((location) => location.name);
+      const nextCategories = ((groupsResult.data || []) as BeGroupRow[])
+        .map(mapGroup)
+        .map((group) => `${group.code} - ${group.name}`);
+      const bookingSettings = bookingSettingsResult.data as BeBookingSettingsRow | null;
+
+      setLocationOptions(nextLocations.length ? nextLocations : ['Rhodes Airport']);
+      setCategoryOptions(['All categories', ...nextCategories]);
+      setMinimumRentalDays(Math.max(1, Number(bookingSettings?.minimum_rental_days) || 3));
+    };
+
+    void loadHomepageSearchData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!locationOptions.length) return;
+
+    setSearch((current) => {
+      const nextPickupLocation = locationOptions.includes(current.pickupLocation)
+        ? current.pickupLocation
+        : locationOptions[0];
+      const nextReturnLocation =
+        current.returnLocation === 'Same as pickup' || locationOptions.includes(current.returnLocation)
+          ? current.returnLocation
+          : 'Same as pickup';
+
+      if (
+        current.pickupLocation === nextPickupLocation &&
+        current.returnLocation === nextReturnLocation
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        pickupLocation: nextPickupLocation,
+        returnLocation: nextReturnLocation,
+      };
+    });
+  }, [locationOptions]);
+
+  useEffect(() => {
+    setSearch((current) => {
+      const minimumReturnDate = addDaysToDateInput(current.pickupDate, minimumRentalDays);
+      if (current.returnDate >= minimumReturnDate) return current;
+      return { ...current, returnDate: minimumReturnDate };
+    });
+  }, [minimumRentalDays]);
+
+  const changePickupDate = (value: string) => {
+    setSearch((current) => {
+      const minimumReturnDate = addDaysToDateInput(value, minimumRentalDays);
+      const nextReturnDate = current.returnDate >= minimumReturnDate ? current.returnDate : minimumReturnDate;
+      return { ...current, pickupDate: value, returnDate: nextReturnDate };
+    });
+    setMinimumRentalMessage('');
+  };
+
+  const changeReturnDate = (value: string) => {
+    setSearch((current) => {
+      const minimumReturnDate = addDaysToDateInput(current.pickupDate, minimumRentalDays);
+      if (value < minimumReturnDate) {
+        setMinimumRentalMessage(`Minimum rental period is ${minimumRentalDays} days.`);
+        return { ...current, returnDate: minimumReturnDate };
+      }
+      setMinimumRentalMessage('');
+      return { ...current, returnDate: value };
+    });
+  };
+
+  const submitHomepageSearch = () => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('autoclub_homepage_search_params', JSON.stringify(search));
+    window.dispatchEvent(new CustomEvent('autoclub-homepage-search', { detail: search }));
+  };
+
+  return (
+    <HomeBookingSearchForm
+      layout={layout}
+      search={search}
+      locationOptions={locationOptions}
+      returnLocationOptions={returnLocationOptions}
+      categoryOptions={categoryOptions}
+      minimumRentalMessage={minimumRentalMessage}
+      onSearchChange={(patch) => setSearch((current) => ({ ...current, ...patch }))}
+      onPickupDateChange={changePickupDate}
+      onReturnDateChange={changeReturnDate}
+      onSearch={submitHomepageSearch}
+    />
+  );
+}
+
+export default function PublicBookingPreview({
+  variant = 'fullFlow',
+  embedLayout = 'stackedCard',
+}: PublicBookingPreviewProps = {}) {
+  const isHomepageEmbed = variant === 'homepageEmbed';
   const [step, setStep] = useState<PreviewStep>('search');
   const [selectedCar, setSelectedCar] = useState<SelectedPreviewCar | null>(null);
   const [bookingEngineConfig, setBookingEngineConfig] =
@@ -515,6 +745,9 @@ export default function PublicBookingPreview() {
   const [beSiteId, setBeSiteId] = useState('');
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [configError, setConfigError] = useState('');
+  const [selectedFeatureFilter, setSelectedFeatureFilter] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [activeBenefitTooltip, setActiveBenefitTooltip] = useState<string | null>(null);
   const activeLocations = useMemo(
     () => bookingEngineConfig.locations.filter((location) => location.active),
     [bookingEngineConfig.locations],
@@ -550,7 +783,8 @@ export default function PublicBookingPreview() {
       pickupTime: '10:00',
       returnDate: addDaysToDateInput(pickupDate, 3),
       returnTime: '10:00',
-    };
+      carCategory: 'All categories',
+    } satisfies BookingSearchState;
   });
   const [customer, setCustomer] = useState({
     fullName: '',
@@ -797,6 +1031,14 @@ export default function PublicBookingPreview() {
   }, [beSiteId, bookingEngineConfig.pricingSeasons, search.pickupDate]);
 
   useEffect(() => {
+    if (!activeBenefitTooltip) return;
+
+    const closeTooltip = () => setActiveBenefitTooltip(null);
+    window.addEventListener('click', closeTooltip);
+    return () => window.removeEventListener('click', closeTooltip);
+  }, [activeBenefitTooltip]);
+
+  useEffect(() => {
     setSearch((current) => {
       const minimumReturnDate = addDaysToDateInput(current.pickupDate, minimumRentalDays);
       if (!minimumReturnDate || current.returnDate >= minimumReturnDate) return current;
@@ -888,9 +1130,17 @@ export default function PublicBookingPreview() {
   const requiredFieldsMissing = validationErrors.length > 0;
   const currentStepIndex = STEP_INDEX[step];
   const selectedPickupLocation = activeLocations.find((location) => location.name === search.pickupLocation);
+  const categoryOptions = useMemo(
+    () => ['All categories', ...bookingEngineConfig.groups.map((group) => `${group.code} - ${group.name}`)],
+    [bookingEngineConfig.groups],
+  );
+  const selectedCategoryCode =
+    search.carCategory === 'All categories' ? '' : search.carCategory.split(' - ')[0] || '';
   const visibleCars = bookingEngineConfig.cars
     .filter((car) => car.status !== 'Hidden')
     .filter((car) => !selectedPickupLocation || car.locationIds.includes(selectedPickupLocation.id))
+    .filter((car) => !selectedCategoryCode || car.groupCode === selectedCategoryCode)
+    .filter((car) => !selectedFeatureFilter || car.featureIds.includes(selectedFeatureFilter))
     .map((car, index) => {
       const group = bookingEngineConfig.groups.find((item) => item.code === car.groupCode);
       const matchingSeason = bookingEngineConfig.pricingSeasons.find(
@@ -910,9 +1160,7 @@ export default function PublicBookingPreview() {
             : 'Open';
       const featureNames = car.featureIds
         .map((featureId) => bookingEngineConfig.features.find((feature) => feature.id === featureId)?.name)
-        .filter(Boolean)
-        .slice(0, 5) as string[];
-
+        .filter(Boolean) as string[];
       return {
         ...car,
         groupName: group?.name || car.groupCode,
@@ -923,7 +1171,14 @@ export default function PublicBookingPreview() {
         accent: carAccentByIndex[index % carAccentByIndex.length],
       };
     })
-    .filter((car) => car.mode !== 'Hidden');
+    .filter((car) => car.mode !== 'Hidden')
+    .sort((a, b) => {
+      const priorityDiff = (Number(b.displayPriority) || 0) - (Number(a.displayPriority) || 0);
+      if (priorityDiff !== 0) return priorityDiff;
+      const aPrice = a.priceOnRequest ? Number.POSITIVE_INFINITY : a.pricePerDay;
+      const bPrice = b.priceOnRequest ? Number.POSITIVE_INFINITY : b.pricePerDay;
+      return aPrice - bPrice;
+    });
 
   const selectCar = (car: SelectedPreviewCar) => {
     setSelectedCar(car);
@@ -1091,7 +1346,8 @@ export default function PublicBookingPreview() {
   };
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#f8fafc_34%,#eef2f7_100%)] text-slate-950">
+    <div className={isHomepageEmbed ? 'h-full min-h-0 text-slate-950' : 'h-full min-h-0 overflow-y-auto bg-[radial-gradient(circle_at_top_left,#e0f2fe_0,#f8fafc_34%,#eef2f7_100%)] text-slate-950'}>
+      {!isHomepageEmbed && (
       <header className="border-b border-slate-200/80 bg-white/95 shadow-sm backdrop-blur">
         <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-10">
           <div className="flex items-center gap-3">
@@ -1127,7 +1383,9 @@ export default function PublicBookingPreview() {
           </div>
         </div>
       </header>
+      )}
 
+      {!isHomepageEmbed && (
       <div className="border-b border-slate-200/80 bg-white/85 backdrop-blur">
         <div className="mx-auto flex max-w-4xl items-start justify-between px-4 py-3 sm:px-6">
           {STEP_ITEMS.map((item, itemIndex) => {
@@ -1158,8 +1416,9 @@ export default function PublicBookingPreview() {
           })}
         </div>
       </div>
+      )}
 
-      <main className="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6 lg:px-8 lg:py-5">
+      <main className={isHomepageEmbed ? 'mx-auto w-full' : 'mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6 lg:px-8 lg:py-5'}>
         {loadingConfig && (
           <div className="mb-4 rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-black text-cyan-900">
             Loading booking engine data from Supabase...
@@ -1171,51 +1430,48 @@ export default function PublicBookingPreview() {
           </div>
         )}
         {step === 'search' && (
-          <section className="mx-auto max-w-6xl">
-            <div className="mb-4 max-w-2xl">
-              <span className="mb-2 inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1 text-xs font-black uppercase text-[#087f9c]">
-                <Sparkles className="h-3.5 w-3.5" /> Rhodes made easy
-              </span>
-              <h1 className="text-3xl font-black tracking-tight text-[#073f5d] sm:text-4xl lg:text-5xl">Find your car in Rhodes</h1>
-              <p className="mt-2 text-base font-medium text-slate-600 sm:text-lg">
-                Transparent prices, full insurance and friendly local support.
-              </p>
-            </div>
-
-            <div className="rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-[0_24px_70px_rgba(7,63,93,0.14)] sm:p-5 lg:p-6">
-              <div className="grid gap-4 md:grid-cols-2">
-                <SelectField label="Pickup Location" icon={<MapPin className="h-4 w-4" />} value={search.pickupLocation} options={locationOptions} onChange={(value) => setSearch((current) => ({ ...current, pickupLocation: value }))} />
-                <SelectField label="Return Location" icon={<MapPin className="h-4 w-4" />} value={search.returnLocation} options={returnLocationOptions} onChange={(value) => setSearch((current) => ({ ...current, returnLocation: value }))} />
-              </div>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <InputField label="Pickup Date" icon={<CalendarDays className="h-4 w-4" />} type="date" value={search.pickupDate} onChange={changePickupDate} />
-                <InputField label="Pickup Time" icon={<Clock3 className="h-4 w-4" />} type="time" value={search.pickupTime} onChange={(value) => setSearch((current) => ({ ...current, pickupTime: value }))} />
-                <InputField label="Return Date" icon={<CalendarDays className="h-4 w-4" />} type="date" value={search.returnDate} onChange={changeReturnDate} />
-                <InputField label="Return Time" icon={<Clock3 className="h-4 w-4" />} type="time" value={search.returnTime} onChange={(value) => setSearch((current) => ({ ...current, returnTime: value }))} />
-              </div>
-              {minimumRentalMessage && (
-                <p className="mt-2 text-xs font-bold text-amber-700">
-                  {minimumRentalMessage}
+          <section className={isHomepageEmbed ? 'mx-auto w-full' : 'mx-auto max-w-6xl'}>
+            {!isHomepageEmbed && (
+              <div className="mb-4 max-w-2xl">
+                <span className="mb-2 inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1 text-xs font-black uppercase text-[#087f9c]">
+                  <Sparkles className="h-3.5 w-3.5" /> Rhodes made easy
+                </span>
+                <h1 className="text-3xl font-black tracking-tight text-[#073f5d] sm:text-4xl lg:text-5xl">Find your car in Rhodes</h1>
+                <p className="mt-2 text-base font-medium text-slate-600 sm:text-lg">
+                  Transparent prices, full insurance and friendly local support.
                 </p>
-              )}
-              <button type="button" onClick={() => setStep('results')} className="mt-5 flex h-[54px] w-full items-center justify-center gap-2 rounded-xl bg-[#073f5d] px-8 text-base font-black text-white shadow-[0_14px_32px_rgba(7,63,93,0.34)] transition hover:-translate-y-0.5 hover:bg-[#052f46]">
-                Search Cars <ArrowRight className="h-5 w-5" />
-              </button>
-            </div>
+              </div>
+            )}
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              {[
-                ['Zero excess', 'No surprise charges'],
-                ['No deposit', 'Keep your holiday budget free'],
-                ['Local support', 'Friendly help throughout Rhodes'],
-              ].map(([title, description]) => (
-                <div key={title} className="rounded-xl border border-slate-200 bg-white p-4">
-                  <CheckCircle2 className="mb-2 h-5 w-5 text-emerald-600" />
-                  <p className="font-black text-slate-900">{title}</p>
-                  <p className="mt-1 text-sm text-slate-500">{description}</p>
-                </div>
-              ))}
-            </div>
+            <BookingSearchForm
+              variant={variant}
+              layout={embedLayout}
+              search={search}
+              locationOptions={locationOptions}
+              returnLocationOptions={returnLocationOptions}
+              categoryOptions={categoryOptions}
+              minimumRentalMessage={minimumRentalMessage}
+              onSearchChange={(patch) => setSearch((current) => ({ ...current, ...patch }))}
+              onPickupDateChange={changePickupDate}
+              onReturnDateChange={changeReturnDate}
+              onSearch={() => setStep('results')}
+            />
+
+            {!isHomepageEmbed && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {[
+                  ['Zero excess', 'No surprise charges'],
+                  ['No deposit', 'Keep your holiday budget free'],
+                  ['Local support', 'Friendly help throughout Rhodes'],
+                ].map(([title, description]) => (
+                  <div key={title} className="rounded-xl border border-slate-200 bg-white p-4">
+                    <CheckCircle2 className="mb-2 h-5 w-5 text-emerald-600" />
+                    <p className="font-black text-slate-900">{title}</p>
+                    <p className="mt-1 text-sm text-slate-500">{description}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
@@ -1236,63 +1492,138 @@ export default function PublicBookingPreview() {
               </div>
             </div>
 
-            <div className="grid items-stretch gap-4 lg:grid-cols-3">
-              {visibleCars.map((car) => (
-                <article key={car.id} className="flex h-full flex-col overflow-hidden rounded-[24px] border border-slate-200/90 bg-white shadow-[0_18px_48px_rgba(7,63,93,0.1)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_26px_70px_rgba(7,63,93,0.16)]">
-                  <div className={`relative flex h-40 items-center justify-center overflow-hidden bg-gradient-to-br sm:h-44 ${car.accent}`}>
-                    <div className="absolute left-4 top-4 rounded-full border border-white/90 bg-white/95 px-3 py-1 text-xs font-black text-[#073f5d] shadow-sm">Group {car.groupCode}</div>
-                    {car.imageUrl ? (
-                      <img src={car.imageUrl} alt={car.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <>
-                        <Car className="h-24 w-24 text-[#0e7490]/80" strokeWidth={1.15} />
-                        <span className="absolute bottom-3 text-[10px] font-bold uppercase text-slate-400">Car image placeholder</span>
-                      </>
-                    )}
-                  </div>
-                  <div className="flex flex-1 flex-col p-4 sm:p-5">
-                    <h2 className="text-xl font-black leading-tight text-[#073f5d]">{car.name}</h2>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-700">
-                        Active
-                      </span>
-                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${
-                        car.mode === 'Open'
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                          : 'border-amber-200 bg-amber-50 text-amber-700'
-                      }`}>
-                        {car.mode}
-                      </span>
+            <div className="mb-4 lg:hidden">
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((current) => !current)}
+                className="h-10 rounded-xl border border-[#b8c7d6] bg-white px-4 text-sm font-black text-[#0b3551] shadow-sm"
+              >
+                Filters
+              </button>
+              {filtersOpen && (
+                <div className="mt-3">
+                  <FeatureFilterPanel
+                    features={bookingEngineConfig.features}
+                    selectedFeatureFilter={selectedFeatureFilter}
+                    onSelectFeature={(featureId) => {
+                      setSelectedFeatureFilter(featureId);
+                      setFiltersOpen(false);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
+              <div className="grid items-stretch justify-center gap-4 sm:[grid-template-columns:repeat(auto-fit,minmax(360px,420px))]">
+              {visibleCars.map((car) => {
+                const primaryPromoBadge = car.promoBadges[0];
+                const secondaryPromoBadges = car.promoBadges.slice(1, 3);
+
+                return (
+                  <article key={car.id} className="flex h-full w-full max-w-[440px] flex-col overflow-hidden rounded-[26px] border border-slate-200/90 bg-white shadow-[0_18px_48px_rgba(7,63,93,0.11)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_28px_74px_rgba(7,63,93,0.17)]">
+                    <div className={`relative flex h-52 items-center justify-center overflow-hidden bg-gradient-to-br sm:h-56 ${car.accent}`}>
+                      <div className="absolute left-4 top-4 z-10 rounded-full border border-white/90 bg-white/95 px-3 py-1 text-xs font-black text-[#073f5d] shadow-sm">Group {car.groupCode}</div>
+                      {car.imageUrl ? (
+                        <img src={car.imageUrl} alt={car.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <>
+                          <Car className="h-28 w-28 text-[#0e7490]/80" strokeWidth={1.15} />
+                          <span className="absolute bottom-3 text-[10px] font-bold uppercase text-slate-400">Car image placeholder</span>
+                        </>
+                      )}
                     </div>
-                    <p className="mt-2 min-h-11 text-sm leading-6 text-slate-600">{car.description}</p>
-                    <div className="mt-4 border-t border-slate-100 pt-3">
-                      <p className="mb-2 text-xs font-black uppercase text-slate-500">Included in price</p>
-                      <div className="grid gap-1.5">
-                        {car.featureNames.map((feature) => (
-                          <span key={feature} className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                            <Check className="h-4 w-4 text-emerald-600" /> {feature}
+                    <div className="flex min-w-0 flex-1 flex-col p-[22px] sm:p-6">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-xl font-black leading-tight text-[#073f5d]">{car.name}</h2>
+                        {primaryPromoBadge && (
+                          <span className="rounded-full border border-emerald-300 bg-gradient-to-r from-[#0b6f9f] to-emerald-500 px-3 py-1 text-[10px] font-black uppercase tracking-[0.06em] text-white shadow-[0_8px_18px_rgba(11,111,159,0.22)]">
+                            {primaryPromoBadge}
+                          </span>
+                        )}
+                        {secondaryPromoBadges.map((badge) => (
+                          <span key={badge} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.04em] text-slate-600">
+                            {badge}
                           </span>
                         ))}
                       </div>
-                    </div>
-                    <div className="mt-auto flex items-end justify-between gap-3 border-t border-slate-100 pt-4">
-                      <div>
-                        <p className="text-xs font-bold text-slate-500">From</p>
-                        <p className="text-2xl font-black text-[#073f5d]">
-                          {car.priceOnRequest ? (
-                            <span className="text-lg">Price on request</span>
-                          ) : (
-                            <>{formatEuro(car.pricePerDay)}<span className="text-sm font-bold text-slate-500">/day</span></>
-                          )}
-                        </p>
+                      {car.description && <p className="mt-1.5 text-sm leading-5 text-slate-600">{car.description}</p>}
+                        {car.includedBenefits.length > 0 && (
+                          <div className="mt-3 border-t border-slate-100 pt-3">
+                            <p className="mb-1.5 text-[11px] font-black uppercase tracking-[0.06em] text-slate-500">Included in price</p>
+                            <div className="grid gap-x-5 gap-y-1 lg:grid-cols-2">
+                            {car.includedBenefits.map((benefit, index) => (
+                              <span key={`${car.id}-benefit-${benefit.label}-${index}`} className="flex items-center gap-2 text-[13px] font-semibold leading-5 text-slate-700">
+                                <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600" />
+                                {benefit.label}
+                                {benefit.tooltip && (
+                                  <span className="relative inline-flex">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setActiveBenefitTooltip((current) =>
+                                          current === `${car.id}-${index}` ? null : `${car.id}-${index}`,
+                                        );
+                                      }}
+                                      onMouseEnter={() => setActiveBenefitTooltip(`${car.id}-${index}`)}
+                                      onMouseLeave={() => setActiveBenefitTooltip(null)}
+                                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] font-black text-slate-500 hover:border-[#0b6f9f] hover:text-[#0b6f9f]"
+                                      aria-label={`More information about ${benefit.label}`}
+                                    >
+                                      i
+                                    </button>
+                                    {activeBenefitTooltip === `${car.id}-${index}` && (
+                                      <span className="absolute left-1/2 top-6 z-30 w-48 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold leading-5 text-slate-700 shadow-xl">
+                                        {benefit.tooltip}
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="mt-auto pt-4">
+                        <div className="flex flex-col gap-3 border-t border-slate-100 pt-4">
+                          <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Total</p>
+                              {car.marketingMessage && (
+                                <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-[0.05em] text-emerald-800 shadow-sm">
+                                  {car.marketingMessage}
+                                </span>
+                              )}
+                          </div>
+                          <p className="mt-0.5 text-[30px] font-black leading-tight text-[#073f5d]">
+                              {car.priceOnRequest ? (
+                                <span className="text-xl">On request</span>
+                              ) : (
+                                formatEuro(car.pricePerDay * rentalDays)
+                              )}
+                          </p>
+                          <p className="mt-1 text-sm font-black text-slate-500">
+                            {car.priceOnRequest ? 'Price on request' : <>{formatEuro(car.pricePerDay)} / day</>}
+                          </p>
+                          </div>
+                          <button type="button" onClick={() => selectCar(car)} className={`h-12 w-full rounded-[14px] px-5 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 ${car.mode === 'Open' ? 'bg-emerald-600 shadow-emerald-900/20 hover:bg-emerald-700' : 'bg-orange-500 shadow-orange-900/20 hover:bg-orange-600'}`}>
+                            {car.mode === 'Open' ? 'Reserve Now' : 'Request Booking'}
+                          </button>
+                        </div>
                       </div>
-                      <button type="button" onClick={() => selectCar(car)} className={`min-h-11 min-w-28 rounded-xl px-4 py-2.5 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 ${car.mode === 'Open' ? 'bg-emerald-600 shadow-emerald-900/15 hover:bg-emerald-700' : 'bg-amber-500 shadow-amber-900/15 hover:bg-amber-600'}`}>
-                        {car.mode === 'Open' ? 'Book Now' : 'On Request'}
-                      </button>
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
+              </div>
+              <aside className="sticky top-4 hidden lg:block">
+                <FeatureFilterPanel
+                  features={bookingEngineConfig.features}
+                  selectedFeatureFilter={selectedFeatureFilter}
+                  onSelectFeature={setSelectedFeatureFilter}
+                />
+              </aside>
             </div>
           </section>
         )}
@@ -1639,22 +1970,250 @@ export default function PublicBookingPreview() {
   );
 }
 
-function SelectField({ label, icon, value, options, onChange }: { label: string; icon: React.ReactNode; value: string; options: string[]; onChange: (value: string) => void }) {
+function HomeBookingSearchForm({
+  layout,
+  search,
+  locationOptions,
+  returnLocationOptions,
+  categoryOptions,
+  minimumRentalMessage,
+  onSearchChange,
+  onPickupDateChange,
+  onReturnDateChange,
+  onSearch,
+}: {
+  layout: BookingSearchLayout;
+  search: BookingSearchState;
+  locationOptions: string[];
+  returnLocationOptions: string[];
+  categoryOptions: string[];
+  minimumRentalMessage: string;
+  onSearchChange: (patch: Partial<BookingSearchState>) => void;
+  onPickupDateChange: (value: string) => void;
+  onReturnDateChange: (value: string) => void;
+  onSearch: () => void;
+}) {
+  const buttonClass =
+    'flex w-full items-center justify-center rounded-xl border-0 bg-[#198754] px-5 text-sm font-extrabold text-white shadow-[0_12px_26px_rgba(25,135,84,0.26)] transition hover:-translate-y-0.5 hover:bg-[#157347] active:translate-y-0 active:bg-[#146c43] disabled:bg-[#198754] disabled:text-white disabled:opacity-80';
+
+  if (layout === 'wideBar') {
+    return (
+      <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
+        <div className="grid items-end gap-2 lg:grid-cols-[1.2fr_1.2fr_1fr_0.8fr_1fr_0.8fr_1fr_150px]">
+          <CompactSelectField label="Pickup Location" value={search.pickupLocation} options={locationOptions} onChange={(value) => onSearchChange({ pickupLocation: value })} />
+          <CompactSelectField label="Return Location" value={search.returnLocation} options={returnLocationOptions} onChange={(value) => onSearchChange({ returnLocation: value })} />
+          <CompactInputField label="Pickup Date" type="date" value={search.pickupDate} onChange={onPickupDateChange} />
+          <CompactInputField label="Pickup Time" type="time" value={search.pickupTime} onChange={(value) => onSearchChange({ pickupTime: value })} />
+          <CompactInputField label="Return Date" type="date" value={search.returnDate} onChange={onReturnDateChange} />
+          <CompactInputField label="Return Time" type="time" value={search.returnTime} onChange={(value) => onSearchChange({ returnTime: value })} />
+          <CompactSelectField label="Car Category" value={search.carCategory} options={categoryOptions} onChange={(value) => onSearchChange({ carCategory: value })} />
+          <button type="button" onClick={onSearch} className={`${buttonClass} h-11`}>
+            Search
+          </button>
+        </div>
+        {minimumRentalMessage && <p className="mt-2 text-xs font-bold text-amber-700">{minimumRentalMessage}</p>}
+      </div>
+    );
+  }
+
   return (
-    <label className="grid gap-1.5">
-      <span className="flex items-center gap-2 text-sm font-black text-slate-700">{icon}{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="min-h-13 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-950 shadow-sm outline-none transition focus:border-[#0891b2] focus:ring-4 focus:ring-cyan-100">
+    <div className="w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_48px_rgba(15,23,42,0.12)] sm:p-5">
+      <div className="grid gap-3 md:grid-cols-2">
+        <SelectField label="Pickup Location" icon={<MapPin className="h-4 w-4" />} value={search.pickupLocation} options={locationOptions} onChange={(value) => onSearchChange({ pickupLocation: value })} compact />
+        <SelectField label="Return Location" icon={<MapPin className="h-4 w-4" />} value={search.returnLocation} options={returnLocationOptions} onChange={(value) => onSearchChange({ returnLocation: value })} compact />
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <InputField label="Pickup Date" icon={<CalendarDays className="h-4 w-4" />} type="date" value={search.pickupDate} onChange={onPickupDateChange} compact />
+        <InputField label="Pickup Time" icon={<Clock3 className="h-4 w-4" />} type="time" value={search.pickupTime} onChange={(value) => onSearchChange({ pickupTime: value })} compact />
+        <InputField label="Return Date" icon={<CalendarDays className="h-4 w-4" />} type="date" value={search.returnDate} onChange={onReturnDateChange} compact />
+        <InputField label="Return Time" icon={<Clock3 className="h-4 w-4" />} type="time" value={search.returnTime} onChange={(value) => onSearchChange({ returnTime: value })} compact />
+      </div>
+      {minimumRentalMessage && (
+        <p className="mt-2 text-xs font-bold text-amber-700">
+          {minimumRentalMessage}
+        </p>
+      )}
+      <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
+        <SelectField label="Car Category" icon={<Car className="h-4 w-4" />} value={search.carCategory} options={categoryOptions} onChange={(value) => onSearchChange({ carCategory: value })} compact />
+        <button type="button" onClick={onSearch} className={`${buttonClass} h-12 md:self-end`}>
+          Search
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FeatureFilterPanel({
+  features,
+  selectedFeatureFilter,
+  onSelectFeature,
+}: {
+  features: BookingEngineFeature[];
+  selectedFeatureFilter: string;
+  onSelectFeature: (featureId: string) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_14px_36px_rgba(7,63,93,0.08)]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-black text-[#073f5d]">Filter by features</p>
+        {selectedFeatureFilter && (
+          <button
+            type="button"
+            onClick={() => onSelectFeature('')}
+            className="text-xs font-black text-[#087f9c] hover:text-[#073f5d]"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="mt-3 grid gap-2">
+        {features.map((feature) => {
+          const selected = selectedFeatureFilter === feature.id;
+          return (
+            <button
+              key={feature.id}
+              type="button"
+              onClick={() => onSelectFeature(selected ? '' : feature.id)}
+              className={`flex min-h-9 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left text-[13px] font-black transition ${
+                selected
+                  ? 'border-[#0b6f9f] bg-[#0b6f9f] text-white shadow-sm'
+                  : 'border-[#b8c7d6] bg-white text-[#0b3551] hover:bg-[#eaf6fb]'
+              }`}
+            >
+              <span>{feature.name}</span>
+              <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${selected ? 'border-white bg-white/20' : 'border-[#b8c7d6]'}`}>
+                {selected && <Check className="h-3 w-3" />}
+              </span>
+            </button>
+          );
+        })}
+        {features.length === 0 && (
+          <p className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-xs font-semibold text-slate-500">
+            No feature filters yet.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BookingSearchForm({
+  variant,
+  layout,
+  search,
+  locationOptions,
+  returnLocationOptions,
+  categoryOptions,
+  minimumRentalMessage,
+  onSearchChange,
+  onPickupDateChange,
+  onReturnDateChange,
+  onSearch,
+}: {
+  variant: PublicBookingPreviewVariant;
+  layout: BookingSearchLayout;
+  search: BookingSearchState;
+  locationOptions: string[];
+  returnLocationOptions: string[];
+  categoryOptions: string[];
+  minimumRentalMessage: string;
+  onSearchChange: (patch: Partial<BookingSearchState>) => void;
+  onPickupDateChange: (value: string) => void;
+  onReturnDateChange: (value: string) => void;
+  onSearch: () => void;
+}) {
+  const isHomepageEmbed = variant === 'homepageEmbed';
+  const isWideBar = isHomepageEmbed && layout === 'wideBar';
+
+  if (isWideBar) {
+    return (
+      <div className="w-full rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_48px_rgba(15,23,42,0.12)]">
+        <div className="grid items-end gap-2 lg:grid-cols-[1.2fr_1.2fr_1fr_0.8fr_1fr_0.8fr_1fr_150px]">
+          <CompactSelectField label="Pickup Location" value={search.pickupLocation} options={locationOptions} onChange={(value) => onSearchChange({ pickupLocation: value })} />
+          <CompactSelectField label="Return Location" value={search.returnLocation} options={returnLocationOptions} onChange={(value) => onSearchChange({ returnLocation: value })} />
+          <CompactInputField label="Pickup Date" type="date" value={search.pickupDate} onChange={onPickupDateChange} />
+          <CompactInputField label="Pickup Time" type="time" value={search.pickupTime} onChange={(value) => onSearchChange({ pickupTime: value })} />
+          <CompactInputField label="Return Date" type="date" value={search.returnDate} onChange={onReturnDateChange} />
+          <CompactInputField label="Return Time" type="time" value={search.returnTime} onChange={(value) => onSearchChange({ returnTime: value })} />
+          <CompactSelectField label="Car Category" value={search.carCategory} options={categoryOptions} onChange={(value) => onSearchChange({ carCategory: value })} />
+          <button type="button" onClick={onSearch} className="flex h-11 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-black text-white shadow-[0_12px_26px_rgba(5,150,105,0.24)] transition hover:-translate-y-0.5 hover:bg-emerald-700">
+            Search
+          </button>
+        </div>
+        {minimumRentalMessage && <p className="mt-2 text-xs font-bold text-amber-700">{minimumRentalMessage}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className={isHomepageEmbed ? 'rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_48px_rgba(15,23,42,0.12)] sm:p-5' : 'rounded-[24px] border border-slate-200/90 bg-white p-4 shadow-[0_24px_70px_rgba(7,63,93,0.14)] sm:p-5 lg:p-6'}>
+      <div className="grid gap-3 md:grid-cols-2">
+        <SelectField label="Pickup Location" icon={<MapPin className="h-4 w-4" />} value={search.pickupLocation} options={locationOptions} onChange={(value) => onSearchChange({ pickupLocation: value })} compact={isHomepageEmbed} />
+        <SelectField label="Return Location" icon={<MapPin className="h-4 w-4" />} value={search.returnLocation} options={returnLocationOptions} onChange={(value) => onSearchChange({ returnLocation: value })} compact={isHomepageEmbed} />
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <InputField label="Pickup Date" icon={<CalendarDays className="h-4 w-4" />} type="date" value={search.pickupDate} onChange={onPickupDateChange} compact={isHomepageEmbed} />
+        <InputField label="Pickup Time" icon={<Clock3 className="h-4 w-4" />} type="time" value={search.pickupTime} onChange={(value) => onSearchChange({ pickupTime: value })} compact={isHomepageEmbed} />
+        <InputField label="Return Date" icon={<CalendarDays className="h-4 w-4" />} type="date" value={search.returnDate} onChange={onReturnDateChange} compact={isHomepageEmbed} />
+        <InputField label="Return Time" icon={<Clock3 className="h-4 w-4" />} type="time" value={search.returnTime} onChange={(value) => onSearchChange({ returnTime: value })} compact={isHomepageEmbed} />
+      </div>
+      {minimumRentalMessage && (
+        <p className="mt-2 text-xs font-bold text-amber-700">
+          {minimumRentalMessage}
+        </p>
+      )}
+      {isHomepageEmbed ? (
+        <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
+          <SelectField label="Car Category" icon={<Car className="h-4 w-4" />} value={search.carCategory} options={categoryOptions} onChange={(value) => onSearchChange({ carCategory: value })} compact />
+          <button type="button" onClick={onSearch} className="flex h-12 w-full items-center justify-center rounded-xl bg-emerald-600 px-6 text-sm font-black text-white shadow-[0_12px_26px_rgba(5,150,105,0.24)] transition hover:-translate-y-0.5 hover:bg-emerald-700 md:self-end">
+            Search
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={onSearch} className="mt-5 flex h-[54px] w-full items-center justify-center gap-2 rounded-xl bg-[#073f5d] px-8 text-base font-black text-white shadow-[0_14px_32px_rgba(7,63,93,0.34)] transition hover:-translate-y-0.5 hover:bg-[#052f46]">
+          Search Cars <ArrowRight className="h-5 w-5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CompactSelectField({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-[11px] font-black uppercase tracking-[0.06em] text-slate-600">{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-xs font-black text-slate-950 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100">
         {options.map((option) => <option key={option}>{option}</option>)}
       </select>
     </label>
   );
 }
 
-function InputField({ label, icon, type, value, onChange }: { label: string; icon: React.ReactNode; type: 'date' | 'time'; value: string; onChange: (value: string) => void }) {
+function CompactInputField({ label, type, value, onChange }: { label: string; type: 'date' | 'time'; value: string; onChange: (value: string) => void }) {
   return (
-    <label className="grid gap-1.5">
-      <span className="flex items-center gap-2 text-sm font-black text-slate-700">{icon}{label}</span>
-      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="min-h-13 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-950 shadow-sm outline-none transition focus:border-[#0891b2] focus:ring-4 focus:ring-cyan-100" />
+    <label className="grid gap-1">
+      <span className="text-[11px] font-black uppercase tracking-[0.06em] text-slate-600">{label}</span>
+      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-xs font-black text-slate-950 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" />
+    </label>
+  );
+}
+
+function SelectField({ label, icon, value, options, onChange, compact = false }: { label: string; icon: React.ReactNode; value: string; options: string[]; onChange: (value: string) => void; compact?: boolean }) {
+  return (
+    <label className={compact ? 'grid gap-1' : 'grid gap-1.5'}>
+      <span className={`flex items-center gap-2 font-black text-slate-700 ${compact ? 'text-xs' : 'text-sm'}`}>{icon}{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className={`${compact ? 'min-h-11 px-3 text-xs' : 'min-h-13 px-4 text-sm'} rounded-xl border border-slate-300 bg-white font-bold text-slate-950 shadow-sm outline-none transition focus:border-[#0891b2] focus:ring-4 focus:ring-cyan-100`}>
+        {options.map((option) => <option key={option}>{option}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function InputField({ label, icon, type, value, onChange, compact = false }: { label: string; icon: React.ReactNode; type: 'date' | 'time'; value: string; onChange: (value: string) => void; compact?: boolean }) {
+  return (
+    <label className={compact ? 'grid gap-1' : 'grid gap-1.5'}>
+      <span className={`flex items-center gap-2 font-black text-slate-700 ${compact ? 'text-xs' : 'text-sm'}`}>{icon}{label}</span>
+      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} className={`${compact ? 'min-h-11 px-3 text-xs' : 'min-h-13 px-4 text-sm'} rounded-xl border border-slate-300 bg-white font-bold text-slate-950 shadow-sm outline-none transition focus:border-[#0891b2] focus:ring-4 focus:ring-cyan-100`} />
     </label>
   );
 }

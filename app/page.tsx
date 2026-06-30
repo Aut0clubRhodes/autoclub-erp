@@ -31,7 +31,7 @@ import ExpenseCategoriesManager from '@/components/ExpenseCategoriesManager';
 import SettingsManager from '@/components/SettingsManager';
 import MarketingManager from '@/components/MarketingManager';
 import BookingEngineAdmin from '@/components/BookingEngineAdmin';
-import PublicBookingPreview from '@/components/PublicBookingPreview';
+import PublicBookingPreview, { HomepageSearchEmbedPreview } from '@/components/PublicBookingPreview';
 import ServicesManager from '@/components/ServicesManager';
 import VehicleDocumentsManager from '@/components/VehicleDocumentsManager';
 import AutoClubRhodesReservationsBoard from '@/components/AutoClubRhodesReservationsBoard';
@@ -85,6 +85,7 @@ type WindowType =
   | 'Marketing'
   | 'Booking Engine Admin'
   | 'Public Booking Preview'
+  | 'Homepage Search Embed Preview'
   | 'Ρυθμίσεις'
   | null;
 
@@ -109,7 +110,8 @@ type OpenWindow = {
 const isDefaultMaximizedWindow = (windowId: WindowId) =>
   windowId === 'Κρατήσεις' ||
   windowId === 'Booking Engine Admin' ||
-  windowId === 'Public Booking Preview';
+  windowId === 'Public Booking Preview' ||
+  windowId === 'Homepage Search Embed Preview';
 
 type TopMenuItem = { label: string; windowId: string };
 type TopMenuEntry =
@@ -278,6 +280,7 @@ const topMenuEntries: TopMenuEntry[] = [
       { label: 'ΚΡΑΤΗΣΕΙΣ AUTOCLUB-RHODES', windowId: 'Πίνακας' },
       { label: 'Booking Engine Admin', windowId: 'Booking Engine Admin' },
       { label: 'Public Booking Preview', windowId: 'Public Booking Preview' },
+      { label: 'Homepage Search Embed Preview', windowId: 'Homepage Search Embed Preview' },
     ],
   },
   {
@@ -691,6 +694,45 @@ export default function Home() {
     loadVehicleGroups();
   }, [userEmail]);
 
+  const mapTransactionRows = (transactionRows: any[], carRows = vehicles) =>
+    transactionRows.map((transaction: any) => ({
+      id: String(transaction.id ?? ''),
+      date: transaction.date ?? '',
+      amount: Number(transaction.amount) || 0,
+      payment_method: String(transaction.payment_method ?? ''),
+      type: String(transaction.type ?? ''),
+      car_id: transaction.car_id ?? null,
+      car_plate: transaction.car_id
+        ? carRows.find((vehicle: any) => String(vehicle.id) === String(transaction.car_id))?.plate ||
+          `#${transaction.car_id}`
+        : '-',
+      agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
+      representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
+      supplier_id: transaction.supplier_id ? Number(transaction.supplier_id) : null,
+      supplier: String(transaction.supplier ?? ''),
+      category: String(transaction.category ?? ''),
+      notes: String(transaction.notes ?? ''),
+      contract_number: String(transaction.contract_number ?? ''),
+      income_entry_id: transaction.income_entry_id ? String(transaction.income_entry_id) : '',
+      booking_id: transaction.booking_id ? String(transaction.booking_id) : '',
+      source: transaction.source ? String(transaction.source) : undefined,
+      agency: transaction.agency ? String(transaction.agency) : undefined,
+      representative: transaction.representative ? String(transaction.representative) : undefined,
+    }));
+
+  const replaceTransactionsFromRows = (transactionRows: any[] | null, context: string, carRows = vehicles) => {
+    if (!Array.isArray(transactionRows)) {
+      console.error('TRANSACTIONS RELOAD SKIPPED', {
+        context,
+        reason: 'fetchTransactions failed; preserving current in-memory ledger',
+      });
+      return false;
+    }
+
+    setTransactions(mapTransactionRows(transactionRows, carRows));
+    return true;
+  };
+
 const handleAddIncome = async () => {
   if (!incomeForm.amount) {
     console.warn('Amount is required');
@@ -698,6 +740,13 @@ const handleAddIncome = async () => {
   }
 
   try {
+    console.log('INCOME SAVE PAYLOAD', {
+      operation: 'insert',
+      record_id: null,
+      insert: true,
+      update: false,
+      form: incomeForm,
+    });
     const booking =
       incomeForm.income_type === 'rental'
         ? await addBooking({
@@ -776,31 +825,7 @@ if (newTransaction?.id) {
       console.log('Transaction saved successfully:', newTransaction);
       
       const updatedTransactions = await fetchTransactions();
-      setTransactions(
-        (updatedTransactions || []).map((transaction: any) => ({
-          id: String(transaction.id ?? ''),
-          date: transaction.date ?? '',
-          amount: Number(transaction.amount) || 0,
-          payment_method: String(transaction.payment_method ?? ''),
-          type: String(transaction.type ?? ''),
-          car_id: transaction.car_id ?? null,
-         car_plate: transaction.car_id
-  ? vehicles.find((vehicle: any) => String(vehicle.id) === String(transaction.car_id))?.plate || `#${transaction.car_id}`
-  : '-',
-          agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
-          representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
-          supplier_id: transaction.supplier_id ? Number(transaction.supplier_id) : null,
-          supplier: String(transaction.supplier ?? ''),
-          category: String(transaction.category ?? ''),
-          notes: String(transaction.notes ?? ''),
-          contract_number: String(transaction.contract_number ?? ''),
-          income_entry_id: transaction.income_entry_id ? String(transaction.income_entry_id) : '',
-          booking_id: transaction.booking_id ? String(transaction.booking_id) : '',
-          source: transaction.source ? String(transaction.source) : undefined,
-          agency: transaction.agency ? String(transaction.agency) : undefined,
-          representative: transaction.representative ? String(transaction.representative) : undefined,
-        }))
-      );
+      replaceTransactionsFromRows(updatedTransactions, 'income insert reload');
 
       setIncomeForm({
         income_type: 'rental',
@@ -827,32 +852,7 @@ if (newTransaction?.id) {
 
 const reloadTransactions = async () => {
   const updatedTransactions = await fetchTransactions();
-  setTransactions(
-    (updatedTransactions || []).map((transaction: any) => ({
-      id: String(transaction.id ?? ''),
-      date: transaction.date ?? '',
-      amount: Number(transaction.amount) || 0,
-      payment_method: String(transaction.payment_method ?? ''),
-      type: String(transaction.type ?? ''),
-      car_id: transaction.car_id ?? null,
-      car_plate: transaction.car_id
-        ? vehicles.find((vehicle: any) => String(vehicle.id) === String(transaction.car_id))?.plate ||
-          `#${transaction.car_id}`
-        : '-',
-      agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
-      representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
-      supplier_id: transaction.supplier_id ? Number(transaction.supplier_id) : null,
-      supplier: String(transaction.supplier ?? ''),
-      category: String(transaction.category ?? ''),
-      notes: String(transaction.notes ?? ''),
-      contract_number: String(transaction.contract_number ?? ''),
-      income_entry_id: transaction.income_entry_id ? String(transaction.income_entry_id) : '',
-      booking_id: transaction.booking_id ? String(transaction.booking_id) : '',
-      source: transaction.source ? String(transaction.source) : undefined,
-      agency: transaction.agency ? String(transaction.agency) : undefined,
-      representative: transaction.representative ? String(transaction.representative) : undefined,
-    }))
-  );
+  return replaceTransactionsFromRows(updatedTransactions, 'manual transactions reload');
 };
 
 const handleEditIncome = (transaction: Transaction) => {
@@ -905,6 +905,13 @@ const handleSaveIncome = async () => {
     return;
   }
 
+  console.log('INCOME SAVE PAYLOAD', {
+    operation: 'update',
+    record_id: editingIncomeId,
+    insert: false,
+    update: true,
+    form: incomeForm,
+  });
   const updated = await updateTransaction(Number(editingIncomeId), {
     source: incomeForm.income_type,
     category: incomeForm.income_type,
@@ -965,29 +972,7 @@ const handleAddExpense = async () => {
   }
 
   const updatedTransactions = await fetchTransactions();
-  setTransactions(
-    (updatedTransactions || []).map((transaction: any) => ({
-      id: String(transaction.id ?? ''),
-      date: transaction.date ?? '',
-      amount: Number(transaction.amount) || 0,
-      payment_method: String(transaction.payment_method ?? ''),
-      type: String(transaction.type ?? ''),
-      car_id: transaction.car_id ?? null,
-      car_plate: transaction.car_id
-        ? vehicles.find((vehicle: any) => String(vehicle.id) === String(transaction.car_id))?.plate ||
-          `#${transaction.car_id}`
-        : '-',
-      agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
-      representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
-      supplier_id: transaction.supplier_id ? Number(transaction.supplier_id) : null,
-      supplier: String(transaction.supplier ?? ''),
-      category: String(transaction.category ?? ''),
-      notes: String(transaction.notes ?? ''),
-      contract_number: String(transaction.contract_number ?? ''),
-      agency: transaction.agency ? String(transaction.agency) : undefined,
-      representative: transaction.representative ? String(transaction.representative) : undefined,
-    }))
-  );
+  replaceTransactionsFromRows(updatedTransactions, 'expense insert reload');
 
   setExpenseForm({
     movement_type: 'expense',
@@ -1291,31 +1276,7 @@ const handleSaveSupplierPayment = async () => {
     const loadFinanceTransactions = async () => {
       const transactionRows = await fetchTransactions();
       const carsData = await fetchCars();
-      setTransactions(
-        (transactionRows || []).map((transaction: any) => ({
-          id: String(transaction.id ?? ''),
-          date: transaction.date ?? '',
-          amount: Number(transaction.amount) || 0,
-          payment_method: String(transaction.payment_method ?? ''),
-          type: String(transaction.type ?? ''),
-          car_id: transaction.car_id ?? null,
-       car_plate: transaction.car_id
-  ? carsData.find((vehicle: any) => String(vehicle.id) === String(transaction.car_id))?.plate || `#${transaction.car_id}`
-  : '-',
-          agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
-          representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
-          supplier_id: transaction.supplier_id ? Number(transaction.supplier_id) : null,
-          supplier: String(transaction.supplier ?? ''),
-          category: String(transaction.category ?? ''),
-          notes: String(transaction.notes ?? ''),
-          contract_number: String(transaction.contract_number ?? ''),
-          income_entry_id: transaction.income_entry_id ? String(transaction.income_entry_id) : '',
-          booking_id: transaction.booking_id ? String(transaction.booking_id) : '',
-          source: transaction.source ? String(transaction.source) : undefined,
-          agency: transaction.agency ? String(transaction.agency) : undefined,
-          representative: transaction.representative ? String(transaction.representative) : undefined,
-        }))
-      );
+      replaceTransactionsFromRows(transactionRows, 'finance window load', carsData);
     };
 
     loadFinanceTransactions();
@@ -1370,6 +1331,8 @@ const handleSaveSupplierPayment = async () => {
         return 'Booking Engine Admin';
       case 'Public Booking Preview':
         return 'Public Booking Preview';
+      case 'Homepage Search Embed Preview':
+        return 'Homepage Search Embed Preview';
       case 'Ρυθμίσεις':
         return 'Ρυθμίσεις';
       default:
@@ -1585,30 +1548,7 @@ const handleSaveSupplierPayment = async () => {
 
       const transactionRows = await fetchTransactions();
       const carsData = await fetchCars();
-      setTransactions(
-        (transactionRows || []).map((transaction: any) => ({
-          id: String(transaction.id ?? ''),
-          date: transaction.date ?? '',
-          amount: Number(transaction.amount) || 0,
-          payment_method: String(transaction.payment_method ?? ''),
-          type: String(transaction.type ?? ''),
-          car_id: transaction.car_id ?? null,
-          car_plate: transaction.car_id
-            ? carsData.find((car: any) => String(car.id) === String(transaction.car_id))?.plate || `#${transaction.car_id}`
-            : '-',
-          agency_id: transaction.agency_id ? String(transaction.agency_id) : '',
-          representative_id: transaction.representative_id ? String(transaction.representative_id) : '',
-          supplier_id: transaction.supplier_id ? Number(transaction.supplier_id) : null,
-          supplier: String(transaction.supplier ?? ''),
-          category: String(transaction.category ?? ''),
-          notes: String(transaction.notes ?? ''),
-          contract_number: String(transaction.contract_number ?? ''),
-          booking_id: transaction.booking_id ? String(transaction.booking_id) : undefined,
-          source: transaction.source ? String(transaction.source) : undefined,
-          agency: transaction.agency ? String(transaction.agency) : undefined,
-          representative: transaction.representative ? String(transaction.representative) : undefined,
-        }))
-      );
+      replaceTransactionsFromRows(transactionRows, 'kteo expense reload', carsData);
     }
 
     return true;
@@ -2044,6 +1984,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       'Marketing',
       'Booking Engine Admin',
       'Public Booking Preview',
+      'Homepage Search Embed Preview',
       'Ρυθμίσεις',
     ];
 
@@ -2233,6 +2174,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return <BookingEngineAdmin />;
       case 'Public Booking Preview':
         return <PublicBookingPreview />;
+      case 'Homepage Search Embed Preview':
+        return <HomepageSearchEmbedPreview />;
       case 'Ρυθμίσεις':
         return <SettingsManager onSuppliersChange={setSuppliers} />;
       case 'ΚΤΕΟ': {
@@ -2325,6 +2268,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return 'Booking Engine Admin';
       case 'Public Booking Preview':
         return 'Public Booking Preview';
+      case 'Homepage Search Embed Preview':
+        return 'Homepage Search Embed Preview';
       case 'Ρυθμίσεις':
         return 'Ρυθμίσεις';
       default:
@@ -3042,7 +2987,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               initialWidth={windowItem.id === 'Αναφορές' ? 1320 : undefined}
               initialHeight={windowItem.id === 'Αναφορές' ? 792 : windowItem.id === 'Πίνακας' ? 760 : undefined}
               financeDashboard={windowItem.id === 'Ταμείο'}
-              wide={windowItem.id === 'Πίνακας' || windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Γραμμάτια' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα' || windowItem.id === 'Marketing' || windowItem.id === 'Booking Engine Admin' || windowItem.id === 'Public Booking Preview' || windowItem.id === 'Ρυθμίσεις'}
+              wide={windowItem.id === 'Πίνακας' || windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Γραμμάτια' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα' || windowItem.id === 'Marketing' || windowItem.id === 'Booking Engine Admin' || windowItem.id === 'Public Booking Preview' || windowItem.id === 'Homepage Search Embed Preview' || windowItem.id === 'Ρυθμίσεις'}
             >
               {renderWindowContent(windowItem.id)}
             </Window>

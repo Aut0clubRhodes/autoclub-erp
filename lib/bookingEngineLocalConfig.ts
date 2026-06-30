@@ -75,6 +75,11 @@ export type BookingEngineFeature = {
   name: string;
 };
 
+export type BookingEngineIncludedBenefit = {
+  label: string;
+  tooltip: string;
+};
+
 export type BookingEngineCarConfig = {
   id: string;
   name: string;
@@ -82,6 +87,10 @@ export type BookingEngineCarConfig = {
   description: string;
   imageUrl: string;
   featureIds: string[];
+  includedBenefits: BookingEngineIncludedBenefit[];
+  promoBadges: string[];
+  marketingMessage: string;
+  displayPriority: string;
   status: BookingMode;
   locationIds: string[];
 };
@@ -302,6 +311,10 @@ export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
       description: 'Compact, efficient and easy to explore Rhodes with.',
       imageUrl: '',
       featureIds: ['full-insurance', 'zero-excess', 'no-deposit', 'free-second-driver', 'road-assistance', 'manual', 'air-conditioning', 'four-seats', 'two-bags'],
+      includedBenefits: ['Full Insurance', 'Zero Excess', 'No Deposit', 'Free Second Driver', '24/7 Road Assistance'].map((label) => ({ label, tooltip: '' })),
+      promoBadges: ['Economy'],
+      marketingMessage: '',
+      displayPriority: '0',
       status: 'Open',
       locationIds: ['airport', 'rhodes-town', 'faliraki', 'ixia'],
     },
@@ -312,6 +325,10 @@ export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
       description: 'Comfortable city car with practical luggage space.',
       imageUrl: '',
       featureIds: ['full-insurance', 'zero-excess', 'no-deposit', 'free-second-driver', 'road-assistance', 'manual', 'air-conditioning', 'four-seats', 'two-bags'],
+      includedBenefits: ['Full Insurance', 'Zero Excess', 'No Deposit', 'Free Second Driver', '24/7 Road Assistance'].map((label) => ({ label, tooltip: '' })),
+      promoBadges: ['Best Value'],
+      marketingMessage: '',
+      displayPriority: '0',
       status: 'Open',
       locationIds: ['airport', 'rhodes-town', 'faliraki', 'kolymbia', 'afandou'],
     },
@@ -322,6 +339,10 @@ export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
       description: 'Open-top island driving for an unforgettable holiday.',
       imageUrl: '',
       featureIds: ['full-insurance', 'zero-excess', 'no-deposit', 'free-second-driver', 'road-assistance', 'air-conditioning'],
+      includedBenefits: ['Full Insurance', 'Zero Excess', '24/7 Road Assistance'].map((label) => ({ label, tooltip: '' })),
+      promoBadges: ['Most Popular'],
+      marketingMessage: '',
+      displayPriority: '0',
       status: 'On Request',
       locationIds: ['airport', 'rhodes-town', 'lindos', 'pefkos'],
     },

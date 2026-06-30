@@ -113,6 +113,14 @@ type BeVehicleCategoryRow = {
   imageUrl?: string | null;
   feature_ids?: string[] | null;
   featureIds?: string[] | null;
+  included_benefits?: Array<string | Partial<IncludedBenefit>> | null;
+  includedBenefits?: Array<string | Partial<IncludedBenefit>> | null;
+  promo_badges?: string[] | null;
+  promoBadges?: string[] | null;
+  marketing_message?: string | null;
+  marketingMessage?: string | null;
+  display_priority?: string | number | null;
+  displayPriority?: string | number | null;
   location_ids?: string[] | null;
   locationIds?: string[] | null;
   status?: string | null;
@@ -245,6 +253,11 @@ type BookingFeature = {
   name: string;
 };
 
+type IncludedBenefit = {
+  label: string;
+  tooltip: string;
+};
+
 type BookingEngineCar = {
   id: string;
   name: string;
@@ -252,6 +265,10 @@ type BookingEngineCar = {
   description: string;
   imageUrl: string;
   featureIds: string[];
+  includedBenefits: IncludedBenefit[];
+  promoBadges: string[];
+  marketingMessage: string;
+  displayPriority: string;
   status: CarStatus;
   locationIds: string[];
 };
@@ -375,6 +392,25 @@ const adminTabs: AdminTab[] = [
   { id: 'emails', label: 'Emails', description: 'Customer email templates and delivery settings.', icon: Mail },
 ];
 const BOOKING_ENGINE_ACTIVE_TAB_STORAGE_KEY = 'booking_engine_active_tab';
+const includedBenefitOptions = [
+  'Full Insurance',
+  'Zero Excess',
+  'No Deposit',
+  'Unlimited Kilometers',
+  'Free Second Driver',
+  '24/7 Road Assistance',
+  'Free Airport Delivery',
+].map((name) => ({ id: name, name }));
+const promoBadgeOptions = [
+  'Best Value',
+  'Most Popular',
+  '2 Cars Left',
+  'Automatic',
+  'Family Choice',
+  'Economy',
+].map((name) => ({ id: name, name }));
+const marketingMessageOptions = ['', '🔥 SAVE 30%', 'SPECIAL OFFER', 'LIMITED OFFER', 'custom'];
+
 const getStoredBookingEngineActiveTab = (): AdminTabId => {
   if (typeof window === 'undefined') return 'groups';
 
@@ -388,6 +424,10 @@ const emptyCarDraft: CarDraft = {
   description: '',
   imageUrl: '',
   featureIds: [],
+  includedBenefits: [],
+  promoBadges: [],
+  marketingMessage: '',
+  displayPriority: '0',
   status: 'Open',
   locationIds: [],
 };
@@ -580,6 +620,10 @@ const sampleCars: BookingEngineCar[] = [
     description: 'Compact city car for couples and short island trips.',
     imageUrl: '',
     featureIds: ['manual', 'air-conditioning', 'four-seats', 'two-bags'],
+    includedBenefits: ['Full Insurance', 'Zero Excess', 'No Deposit'].map((label) => ({ label, tooltip: '' })),
+    promoBadges: ['Economy'],
+    marketingMessage: '',
+    displayPriority: '0',
     status: 'Open',
     locationIds: ['airport', 'rhodes-town', 'faliraki'],
   },
@@ -590,6 +634,10 @@ const sampleCars: BookingEngineCar[] = [
     description: 'Comfortable crossover with additional luggage room.',
     imageUrl: '',
     featureIds: ['automatic', 'air-conditioning', 'five-seats', 'three-bags'],
+    includedBenefits: ['Full Insurance', 'Unlimited Kilometers', '24/7 Road Assistance'].map((label) => ({ label, tooltip: '' })),
+    promoBadges: ['Family Choice', 'Automatic'],
+    marketingMessage: '',
+    displayPriority: '0',
     status: 'On Request',
     locationIds: ['airport', 'rhodes-town', 'lindos', 'pefkos'],
   },
@@ -699,6 +747,25 @@ const locationTypeLabels: Record<LocationType, string> = {
 
 const localId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
+const normalizeIncludedBenefits = (value: Array<string | Partial<IncludedBenefit>> | null | undefined): IncludedBenefit[] =>
+  Array.isArray(value)
+    ? value
+        .map((item) => {
+          if (typeof item === 'string') {
+            return { label: item.trim(), tooltip: '' };
+          }
+
+          return {
+            label: String(item?.label || '').trim(),
+            tooltip: String(item?.tooltip || '').trim(),
+          };
+        })
+        .filter((item) => item.label)
+    : [];
+
+const normalizeStringList = (value: string[] | null | undefined): string[] =>
+  Array.isArray(value) ? value.map((item) => String(item || '').trim()).filter(Boolean) : [];
+
 const readImageFileAsDataUrl = (file: File, onLoad: (dataUrl: string) => void) => {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return;
 
@@ -736,6 +803,12 @@ export default function BookingEngineAdmin() {
   const [carsLoading, setCarsLoading] = useState(false);
   const [carsSaving, setCarsSaving] = useState(false);
   const [carsError, setCarsError] = useState('');
+  const [carOptionalColumns, setCarOptionalColumns] = useState({
+    includedBenefits: false,
+    promoBadges: false,
+    marketingMessage: false,
+    displayPriority: false,
+  });
   const [locations, setLocations] = useState<BookingLocation[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
   const [locationsError, setLocationsError] = useState('');
@@ -839,6 +912,12 @@ export default function BookingEngineAdmin() {
       : Array.isArray(row.featureIds)
         ? row.featureIds
         : [],
+    includedBenefits: normalizeIncludedBenefits(
+      Array.isArray(row.included_benefits) ? row.included_benefits : row.includedBenefits,
+    ),
+    promoBadges: normalizeStringList(Array.isArray(row.promo_badges) ? row.promo_badges : row.promoBadges),
+    marketingMessage: row.marketing_message || row.marketingMessage || '',
+    displayPriority: String(row.display_priority ?? row.displayPriority ?? '0'),
     status:
       row.status === 'On Request' || row.status === 'Hidden' || row.status === 'Open'
         ? row.status
@@ -1406,6 +1485,42 @@ export default function BookingEngineAdmin() {
     setCarsLoading(true);
     setCarsError('');
 
+    const [
+      includedBenefitsColumn,
+      promoBadgesColumn,
+      marketingMessageColumn,
+      displayPriorityColumn,
+    ] = await Promise.all([
+      supabase.from('be_vehicle_categories').select('included_benefits').eq('site_id', siteId).limit(1),
+      supabase.from('be_vehicle_categories').select('promo_badges').eq('site_id', siteId).limit(1),
+      supabase.from('be_vehicle_categories').select('marketing_message').eq('site_id', siteId).limit(1),
+      supabase.from('be_vehicle_categories').select('display_priority').eq('site_id', siteId).limit(1),
+    ]);
+
+    setCarOptionalColumns({
+      includedBenefits: !includedBenefitsColumn.error,
+      promoBadges: !promoBadgesColumn.error,
+      marketingMessage: !marketingMessageColumn.error,
+      displayPriority: !displayPriorityColumn.error,
+    });
+
+    const criticalOptionalColumnErrors = [
+      ['included_benefits', includedBenefitsColumn.error],
+      ['promo_badges', promoBadgesColumn.error],
+      ['marketing_message', marketingMessageColumn.error],
+    ].filter(([, error]) => error);
+
+    if (displayPriorityColumn.error) {
+      console.info('CAR OPTIONAL COLUMN MISSING display_priority. Apply the required SQL to enable priority sorting.');
+    }
+
+    if (criticalOptionalColumnErrors.length > 0) {
+      criticalOptionalColumnErrors.forEach(([column, error]) => console.error(`CAR OPTIONAL COLUMN ERROR ${column}`, error));
+      setCarsError(
+        'Some vehicle category UI columns are missing. Apply the required SQL before saving those fields.',
+      );
+    }
+
     const { data, error } = await supabase
       .from('be_vehicle_categories')
       .select('*')
@@ -1597,6 +1712,10 @@ export default function BookingEngineAdmin() {
       description: car.description,
       imageUrl: car.imageUrl,
       featureIds: [...car.featureIds],
+      includedBenefits: [...car.includedBenefits],
+      promoBadges: [...car.promoBadges],
+      marketingMessage: car.marketingMessage,
+      displayPriority: car.displayPriority,
       status: car.status,
       locationIds: [...car.locationIds],
     });
@@ -1609,7 +1728,7 @@ export default function BookingEngineAdmin() {
     setCarDraft(emptyCarDraft);
   };
 
-  const toggleCarRelation = (field: 'locationIds' | 'featureIds', id: string) => {
+  const toggleCarRelation = (field: 'locationIds' | 'featureIds' | 'promoBadges', id: string) => {
     setCarDraft((current) => ({
       ...current,
       [field]: current[field].includes(id)
@@ -1618,16 +1737,48 @@ export default function BookingEngineAdmin() {
     }));
   };
 
-  const carPayload = (draft: CarDraft, siteId: string) => ({
-    site_id: siteId,
-    name: draft.name.trim(),
-    group_code: draft.groupCode,
-    description: draft.description.trim(),
-    image_url: draft.imageUrl,
-    feature_ids: draft.featureIds,
-    location_ids: draft.locationIds,
-    status: draft.status,
-  });
+  const toggleIncludedBenefit = (label: string) => {
+    setCarDraft((current) => {
+      const exists = current.includedBenefits.some((benefit) => benefit.label === label);
+      return {
+        ...current,
+        includedBenefits: exists
+          ? current.includedBenefits.filter((benefit) => benefit.label !== label)
+          : [...current.includedBenefits, { label, tooltip: '' }],
+      };
+    });
+  };
+
+  const carPayload = (draft: CarDraft, siteId: string) => {
+    const payload: Record<string, string | string[] | IncludedBenefit[]> = {
+      site_id: siteId,
+      name: draft.name.trim(),
+      group_code: draft.groupCode,
+      description: draft.description.trim(),
+      image_url: draft.imageUrl,
+      feature_ids: draft.featureIds,
+      location_ids: draft.locationIds,
+      status: draft.status,
+    };
+
+    if (carOptionalColumns.includedBenefits) {
+      payload.included_benefits = draft.includedBenefits;
+    }
+
+    if (carOptionalColumns.promoBadges) {
+      payload.promo_badges = draft.promoBadges;
+    }
+
+    if (carOptionalColumns.marketingMessage) {
+      payload.marketing_message = draft.marketingMessage.trim();
+    }
+
+    if (carOptionalColumns.displayPriority) {
+      payload.display_priority = String(Number(draft.displayPriority) || 0);
+    }
+
+    return payload;
+  };
 
   const saveCar = async () => {
     const name = carDraft.name.trim();
@@ -1654,12 +1805,7 @@ export default function BookingEngineAdmin() {
     console.log('CAR SAVE RESULT', data);
 
     if (error) {
-      console.error('CAR SAVE ERROR', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-      });
+      console.error('CAR SAVE ERROR', error);
       setCarsError('Failed to save car to Supabase');
       setCarsSaving(false);
       return;
@@ -2988,6 +3134,8 @@ export default function BookingEngineAdmin() {
           onDraftChange={setCarDraft}
           onToggleLocation={(id) => toggleCarRelation('locationIds', id)}
           onToggleFeature={(id) => toggleCarRelation('featureIds', id)}
+          onToggleIncludedBenefit={toggleIncludedBenefit}
+          onTogglePromoBadge={(id) => toggleCarRelation('promoBadges', id)}
           onClose={closeCarModal}
           onSave={saveCar}
         />
@@ -5329,6 +5477,8 @@ function CarModal({
   onDraftChange,
   onToggleLocation,
   onToggleFeature,
+  onToggleIncludedBenefit,
+  onTogglePromoBadge,
   onClose,
   onSave,
 }: {
@@ -5341,6 +5491,8 @@ function CarModal({
   onDraftChange: (draft: CarDraft | ((current: CarDraft) => CarDraft)) => void;
   onToggleLocation: (id: string) => void;
   onToggleFeature: (id: string) => void;
+  onToggleIncludedBenefit: (id: string) => void;
+  onTogglePromoBadge: (id: string) => void;
   onClose: () => void;
   onSave: () => void;
 }) {
@@ -5438,6 +5590,13 @@ function CarModal({
               <option value="Hidden">Hidden</option>
             </select>
           </label>
+          <TextField
+            label="Display Priority"
+            value={draft.displayPriority}
+            placeholder="0"
+            type="number"
+            onChange={(displayPriority) => onDraftChange((current) => ({ ...current, displayPriority }))}
+          />
           <label className="block sm:col-span-2">
             <FieldLabel>Description</FieldLabel>
             <textarea
@@ -5458,6 +5617,67 @@ function CarModal({
         selectedIds={draft.featureIds}
         emptyLabel="Add features in the Features tab first."
         onToggle={onToggleFeature}
+      />
+
+      <ManagedBenefitSection
+        title="Included in price"
+        description="Benefits displayed automatically on the Choose Car card."
+        items={includedBenefitOptions}
+        selectedBenefits={draft.includedBenefits}
+        emptyLabel="No benefit options configured."
+        onToggle={onToggleIncludedBenefit}
+        customPlaceholder="Add custom included benefit"
+        onAddCustom={(value) =>
+          onDraftChange((current) => ({
+            ...current,
+            includedBenefits: current.includedBenefits.some((benefit) => benefit.label === value)
+              ? current.includedBenefits
+              : [...current.includedBenefits, { label: value, tooltip: '' }],
+          }))
+        }
+        onRemoveCustom={(value) =>
+          onDraftChange((current) => ({
+            ...current,
+            includedBenefits: current.includedBenefits.filter((item) => item.label !== value),
+          }))
+        }
+        onTooltipChange={(label, tooltip) =>
+          onDraftChange((current) => ({
+            ...current,
+            includedBenefits: current.includedBenefits.map((benefit) =>
+              benefit.label === label ? { ...benefit, tooltip } : benefit,
+            ),
+          }))
+        }
+      />
+
+      <ManagedOptionSection
+        title="Marketing badges / promo labels"
+        description="Optional labels shown on the Choose Car card."
+        items={promoBadgeOptions}
+        selectedIds={draft.promoBadges}
+        emptyLabel="No promo badge options configured."
+        onToggle={onTogglePromoBadge}
+        customPlaceholder="Add custom promo badge"
+        onAddCustom={(value) =>
+          onDraftChange((current) => ({
+            ...current,
+            promoBadges: current.promoBadges.includes(value)
+              ? current.promoBadges
+              : [...current.promoBadges, value],
+          }))
+        }
+        onRemoveCustom={(value) =>
+          onDraftChange((current) => ({
+            ...current,
+            promoBadges: current.promoBadges.filter((item) => item !== value),
+          }))
+        }
+      />
+
+      <MarketingMessageField
+        value={draft.marketingMessage}
+        onChange={(marketingMessage) => onDraftChange((current) => ({ ...current, marketingMessage }))}
       />
 
       <CheckboxSection
@@ -6608,6 +6828,269 @@ function CheckboxSection<T extends { id: string; name: string }>({
         </div>
       ) : (
         <p className="mt-3 rounded-lg border border-dashed border-white/[0.08] px-3 py-4 text-xs text-zinc-600">{emptyLabel}</p>
+      )}
+    </div>
+  );
+}
+
+function ManagedOptionSection<T extends { id: string; name: string }>({
+  title,
+  description,
+  items,
+  selectedIds,
+  emptyLabel,
+  customPlaceholder,
+  onToggle,
+  onAddCustom,
+  onRemoveCustom,
+}: {
+  title: string;
+  description: string;
+  items: T[];
+  selectedIds: string[];
+  emptyLabel: string;
+  customPlaceholder: string;
+  onToggle: (id: string) => void;
+  onAddCustom: (value: string) => void;
+  onRemoveCustom: (value: string) => void;
+}) {
+  const [customValue, setCustomValue] = useState('');
+  const defaultIds = items.map((item) => item.id);
+  const customSelectedValues = selectedIds.filter((item) => !defaultIds.includes(item));
+
+  const addCustomValue = () => {
+    const nextValue = customValue.trim();
+    if (!nextValue) return;
+    onAddCustom(nextValue);
+    setCustomValue('');
+  };
+
+  return (
+    <div className="mt-5 border-t border-white/[0.07] pt-4">
+      <FieldLabel>{title}</FieldLabel>
+      <p className="mt-1 text-[11px] text-zinc-600">{description}</p>
+      {items.length > 0 ? (
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {items.map((item) => {
+            const selected = selectedIds.includes(item.id);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onToggle(item.id)}
+                className={`flex min-h-9 items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-bold transition ${
+                  selected
+                    ? 'border-cyan-300 bg-cyan-50 text-cyan-900'
+                    : 'border-white/[0.08] bg-white/[0.025] text-zinc-500 hover:text-zinc-200'
+                }`}
+              >
+                <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${selected ? 'border-cyan-500 bg-cyan-100 text-cyan-800' : 'border-slate-400'}`}>
+                  {selected && <Check className="h-3 w-3" />}
+                </span>
+                {item.name}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-3 rounded-lg border border-dashed border-white/[0.08] px-3 py-4 text-xs text-zinc-600">{emptyLabel}</p>
+      )}
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          value={customValue}
+          onChange={(event) => setCustomValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              addCustomValue();
+            }
+          }}
+          placeholder={customPlaceholder}
+          className="h-10 flex-1 rounded-lg border border-white/[0.1] bg-black/25 px-3 text-sm font-bold text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-cyan-300/35"
+        />
+        <button
+          type="button"
+          onClick={addCustomValue}
+          className="h-10 rounded-lg border border-cyan-700 bg-cyan-700 px-4 text-xs font-black text-white transition hover:bg-cyan-800"
+        >
+          Add custom
+        </button>
+      </div>
+      {customSelectedValues.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {customSelectedValues.map((value) => (
+            <span key={value} className="inline-flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-900">
+              {value}
+              <button
+                type="button"
+                onClick={() => onRemoveCustom(value)}
+                className="rounded-full text-emerald-700 transition hover:text-rose-600"
+                aria-label={`Remove ${value}`}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MarketingMessageField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const isPreset = marketingMessageOptions.includes(value);
+  const selectValue = isPreset ? value : value ? 'custom' : '';
+
+  return (
+    <div className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
+      <FieldLabel>Marketing Message</FieldLabel>
+      <p className="mt-1 text-[11px] text-zinc-600">Optional message shown near the price area. Pricing remains unchanged.</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-[220px_minmax(0,1fr)]">
+        <select
+          value={selectValue}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            onChange(nextValue === 'custom' ? value : nextValue);
+          }}
+          className="h-10 rounded-lg border border-white/[0.1] bg-[#090f18] px-3 text-sm font-bold text-zinc-100 outline-none focus:border-cyan-300/35"
+        >
+          <option value="">none</option>
+          <option value="🔥 SAVE 30%">🔥 SAVE 30%</option>
+          <option value="SPECIAL OFFER">SPECIAL OFFER</option>
+          <option value="LIMITED OFFER">LIMITED OFFER</option>
+          <option value="custom">custom text</option>
+        </select>
+        {selectValue === 'custom' && (
+          <input
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Enter custom marketing message"
+            className="h-10 rounded-lg border border-white/[0.1] bg-black/25 px-3 text-sm font-bold text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-cyan-300/35"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ManagedBenefitSection<T extends { id: string; name: string }>({
+  title,
+  description,
+  items,
+  selectedBenefits,
+  emptyLabel,
+  customPlaceholder,
+  onToggle,
+  onAddCustom,
+  onRemoveCustom,
+  onTooltipChange,
+}: {
+  title: string;
+  description: string;
+  items: T[];
+  selectedBenefits: IncludedBenefit[];
+  emptyLabel: string;
+  customPlaceholder: string;
+  onToggle: (id: string) => void;
+  onAddCustom: (value: string) => void;
+  onRemoveCustom: (value: string) => void;
+  onTooltipChange: (label: string, tooltip: string) => void;
+}) {
+  const [customValue, setCustomValue] = useState('');
+  const defaultIds = items.map((item) => item.id);
+  const selectedLabels = selectedBenefits.map((benefit) => benefit.label);
+  const customSelectedValues = selectedBenefits.filter((benefit) => !defaultIds.includes(benefit.label));
+
+  const addCustomValue = () => {
+    const nextValue = customValue.trim();
+    if (!nextValue) return;
+    onAddCustom(nextValue);
+    setCustomValue('');
+  };
+
+  return (
+    <div className="mt-5 border-t border-white/[0.07] pt-4">
+      <FieldLabel>{title}</FieldLabel>
+      <p className="mt-1 text-[11px] text-zinc-600">{description}</p>
+      {items.length > 0 ? (
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {items.map((item) => {
+            const selected = selectedLabels.includes(item.id);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onToggle(item.id)}
+                className={`flex min-h-9 items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-bold transition ${
+                  selected
+                    ? 'border-cyan-300 bg-cyan-50 text-cyan-900'
+                    : 'border-white/[0.08] bg-white/[0.025] text-zinc-500 hover:text-zinc-200'
+                }`}
+              >
+                <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${selected ? 'border-cyan-500 bg-cyan-100 text-cyan-800' : 'border-slate-400'}`}>
+                  {selected && <Check className="h-3 w-3" />}
+                </span>
+                {item.name}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-3 rounded-lg border border-dashed border-white/[0.08] px-3 py-4 text-xs text-zinc-600">{emptyLabel}</p>
+      )}
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          value={customValue}
+          onChange={(event) => setCustomValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              addCustomValue();
+            }
+          }}
+          placeholder={customPlaceholder}
+          className="h-10 flex-1 rounded-lg border border-white/[0.1] bg-black/25 px-3 text-sm font-bold text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-cyan-300/35"
+        />
+        <button
+          type="button"
+          onClick={addCustomValue}
+          className="h-10 rounded-lg border border-cyan-700 bg-cyan-700 px-4 text-xs font-black text-white transition hover:bg-cyan-800"
+        >
+          Add custom
+        </button>
+      </div>
+      {selectedBenefits.length > 0 && (
+        <div className="mt-3 grid gap-2">
+          {selectedBenefits.map((benefit, index) => {
+            const isCustom = customSelectedValues.some((item) => item.label === benefit.label);
+            return (
+              <div key={`${isCustom ? 'custom' : 'default'}-${benefit.label}-${index}`} className="grid gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 sm:grid-cols-[180px_minmax(0,1fr)_auto] sm:items-center">
+                <span className="text-xs font-black text-zinc-200">{benefit.label}</span>
+                <input
+                  value={benefit.tooltip}
+                  onChange={(event) => onTooltipChange(benefit.label, event.target.value)}
+                  placeholder="Optional tooltip shown beside this benefit"
+                  className="h-9 rounded-lg border border-white/[0.1] bg-black/25 px-3 text-xs font-bold text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-cyan-300/35"
+                />
+                {isCustom && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveCustom(benefit.label)}
+                    className="h-8 rounded-lg border border-rose-400/30 px-3 text-xs font-black text-rose-200 transition hover:bg-rose-500/10"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

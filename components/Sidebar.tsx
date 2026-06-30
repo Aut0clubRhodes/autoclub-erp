@@ -84,6 +84,7 @@ const NAV_SECTIONS: NavSection[] = [
       },
       { label: 'Booking Engine Admin', href: '/booking-engine-admin', icon: Gauge, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
       { label: 'Public Booking Preview', href: '/public-booking-preview', icon: Globe2, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
+      { label: 'Homepage Search Embed Preview', href: '/homepage-search-embed-preview', icon: Globe2, tone: 'text-lime-300', chip: 'border-lime-400/25 bg-lime-400/10' },
     ],
   },
   {
@@ -136,6 +137,7 @@ const WINDOW_ITEMS = [
   'Marketing',
   'Booking Engine Admin',
   'Public Booking Preview',
+  'Homepage Search Embed Preview',
   'Ρυθμίσεις',
 ];
 
