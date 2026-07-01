@@ -99,6 +99,24 @@ type AuthSession = {
   };
 } | null;
 
+const clearStaleSupabaseAuthSession = async () => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const keysToRemove: string[] = [];
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (key && (key.startsWith('sb-') || key.includes('supabase.auth.token'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => window.localStorage.removeItem(key));
+    await supabase.auth.signOut({ scope: 'local' });
+  } catch (error) {
+    console.warn('Supabase stale auth cleanup warning:', error);
+  }
+};
+
 type OpenWindow = {
   id: WindowId;
   title: string;
@@ -656,13 +674,31 @@ export default function Home() {
       setAuthLoading(false);
     };
 
-    supabase.auth.getSession().then(({ data }) => {
-      void applySession(data.session as AuthSession, true);
-    });
+    supabase.auth
+      .getSession()
+      .then(async ({ data, error }) => {
+        if (error) {
+          console.warn('Supabase session load warning:', error);
+          await clearStaleSupabaseAuthSession();
+          await applySession(null, true);
+          return;
+        }
+
+        void applySession(data.session as AuthSession, true);
+      })
+      .catch(async (error) => {
+        console.warn('Supabase session load failed:', error);
+        await clearStaleSupabaseAuthSession();
+        await applySession(null, true);
+      });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT' && !session) {
+        activeSessionUserIdRef.current = null;
+      }
+
       const nextUserId = session?.user?.id || null;
       const currentUserId = activeSessionUserIdRef.current;
       const isInitialOrIdentityChange = !currentUserId || currentUserId !== nextUserId;

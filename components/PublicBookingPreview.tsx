@@ -1300,6 +1300,73 @@ export default function PublicBookingPreview({
     }
   };
 
+  const sendCancellationRequestEmails = async () => {
+    const adminEmail =
+      bookingEngineConfig.siteSettings.bookingNotificationEmail ||
+      bookingEngineConfig.siteSettings.adminEmail ||
+      bookingEngineConfig.emailSettings.adminEmail;
+    const companyName = bookingEngineConfig.siteSettings.companyName || 'AutoClub Rhodes';
+    const reservationCode = submittedReservationId;
+    const customerName = customer.fullName.trim();
+    const customerEmail = customer.email.trim();
+    const customerPhone = `${customer.countryCode} ${customer.phone}`.trim();
+    const vehicleName = selectedCar ? `${selectedCar.name} / Group ${selectedCar.groupCode}` : '';
+    const totalText = selectedCar?.priceOnRequest ? 'Price on request' : formatEuro(finalTotal);
+    const adminHtml = `
+      <div style="font-family:Arial,sans-serif;line-height:1.55;color:#102033;">
+        <h2 style="margin:0 0 12px;color:#073f5d;">Cancellation request received</h2>
+        <p>The customer requested to cancel this booking.</p>
+        <table style="width:100%;border-collapse:collapse;margin-top:14px;">
+          <tbody>
+            <tr><td style="padding:8px;border:1px solid #d8e0ea;font-weight:700;">Reservation code</td><td style="padding:8px;border:1px solid #d8e0ea;">${reservationCode}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #d8e0ea;font-weight:700;">Customer name</td><td style="padding:8px;border:1px solid #d8e0ea;">${customerName}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #d8e0ea;font-weight:700;">Phone</td><td style="padding:8px;border:1px solid #d8e0ea;">${customerPhone}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #d8e0ea;font-weight:700;">Email</td><td style="padding:8px;border:1px solid #d8e0ea;">${customerEmail}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #d8e0ea;font-weight:700;">Vehicle</td><td style="padding:8px;border:1px solid #d8e0ea;">${vehicleName}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #d8e0ea;font-weight:700;">Pickup</td><td style="padding:8px;border:1px solid #d8e0ea;">${search.pickupDate} ${search.pickupTime}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #d8e0ea;font-weight:700;">Return</td><td style="padding:8px;border:1px solid #d8e0ea;">${search.returnDate} ${search.returnTime}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #d8e0ea;font-weight:700;">Total</td><td style="padding:8px;border:1px solid #d8e0ea;">${totalText}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+    const customerHtml = `
+      <div style="font-family:Arial,sans-serif;line-height:1.55;color:#102033;">
+        <p>Dear ${customerName || 'customer'},</p>
+        <p>We received your cancellation request for reservation <strong>${reservationCode}</strong>.</p>
+        <p>Our team will review it and contact you if needed.</p>
+        <p>Thank you,<br />${companyName}</p>
+      </div>
+    `;
+    const emails = [
+      ...(adminEmail
+        ? [{
+            to: adminEmail,
+            subject: `Cancellation request received - ${reservationCode}`,
+            html_body: adminHtml,
+          }]
+        : []),
+      ...(customerEmail
+        ? [{
+            to: customerEmail,
+            subject: 'Your cancellation request was received',
+            html_body: customerHtml,
+          }]
+        : []),
+    ];
+    if (emails.length === 0) return;
+
+    console.log('INTERNAL EMAIL PAYLOAD', { event_type: 'cancellation_request', emails });
+    const response = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emails }),
+    });
+    const result = await response.json().catch(() => null);
+    console.log('INTERNAL EMAIL RESULT', result);
+    if (!response.ok) throw new Error('Cancellation request email failed.');
+  };
+
   const submitLicenceUpload = async () => {
     setLicenceUploadFeedback(null);
     if (!submittedReservationDbId || !beSiteId) {
@@ -1372,7 +1439,8 @@ export default function PublicBookingPreview({
         console.warn('CANCELLATION REQUESTED COLUMN UPDATE WARNING', cancellationFlagResult.error);
       }
 
-      setDeleteBookingFeedback({ type: 'success', text: 'Your booking request has been cancelled.' });
+      await sendCancellationRequestEmails();
+      setDeleteBookingFeedback({ type: 'success', text: 'Your booking request has been cancelled and a confirmation email has been sent.' });
     } catch (error) {
       console.error('DELETE BOOKING REQUEST ERROR', error);
       setDeleteBookingFeedback({ type: 'error', text: 'We could not cancel this request automatically. Please contact us on WhatsApp.' });
@@ -2059,12 +2127,12 @@ export default function PublicBookingPreview({
                     {selectedCar.priceOnRequest ? 'Price on request' : formatEuro(finalTotal)}
                   </span>
                 </div>
-                <div className="mb-3 space-y-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-                  <label className="flex cursor-pointer items-start gap-3 text-sm font-semibold text-slate-700">
-                    <input type="checkbox" checked={acceptTerms} onChange={(event) => setAcceptTerms(event.target.checked)} className="mt-0.5 h-5 w-5 accent-[#0891b2]" />
+                <div className="mb-3 space-y-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3.5">
+                  <label className="grid cursor-pointer grid-cols-[20px_1fr] items-start gap-3 text-sm font-semibold leading-5 text-slate-700">
+                    <input type="checkbox" checked={acceptTerms} onChange={(event) => setAcceptTerms(event.target.checked)} className="mt-0.5 h-5 w-5 accent-emerald-600" />
                     <span>I accept the rental terms and conditions.</span>
                   </label>
-                  <label className="flex cursor-pointer items-start gap-3 text-sm font-semibold text-slate-700">
+                  <label className="grid cursor-pointer grid-cols-[20px_1fr] items-start gap-3 text-sm font-semibold leading-5 text-slate-700">
                     <input
                       type="checkbox"
                       checked={driverAgeConfirmed}
@@ -2073,8 +2141,8 @@ export default function PublicBookingPreview({
                     />
                     <span>I confirm that the main driver is at least 23 years old and has a valid driving licence.</span>
                   </label>
-                  <label className="flex cursor-pointer items-start gap-3 text-sm font-semibold text-slate-700">
-                    <input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} className="mt-0.5 h-5 w-5 accent-[#0891b2]" />
+                  <label className="grid cursor-pointer grid-cols-[20px_1fr] items-start gap-3 text-sm font-semibold leading-5 text-slate-700">
+                    <input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} className="mt-0.5 h-5 w-5 accent-emerald-600" />
                     <span>I would like to receive AutoClub Rhodes offers.</span>
                   </label>
                 </div>
@@ -2093,7 +2161,7 @@ export default function PublicBookingPreview({
                     {submitError}
                   </p>
                 )}
-                <button type="button" disabled={!acceptTerms || !driverAgeConfirmed || requiredFieldsMissing || submittingReservation} aria-disabled={!acceptTerms || !driverAgeConfirmed || requiredFieldsMissing || submittingReservation} onClick={submitReservation} className={`flex h-[54px] w-full items-center justify-center gap-2 rounded-xl px-6 text-base font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70 ${selectedCar.mode === 'Open' ? 'bg-emerald-600 shadow-emerald-900/20 hover:bg-emerald-700' : 'bg-[#0891b2] shadow-cyan-900/20 hover:bg-[#087f9c]'}`}>
+                <button type="button" disabled={!acceptTerms || !driverAgeConfirmed || requiredFieldsMissing || submittingReservation} aria-disabled={!acceptTerms || !driverAgeConfirmed || requiredFieldsMissing || submittingReservation} onClick={submitReservation} className="flex h-[54px] w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 text-base font-black text-white shadow-lg shadow-emerald-900/20 transition hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-slate-300">
                   {submittingReservation ? 'Saving...' : selectedCar.mode === 'Open' ? 'Confirm Booking' : 'Send Request'} <ArrowRight className="h-5 w-5" />
                 </button>
                 <p className="mt-2 text-center text-xs text-slate-400">Preview only - no payment will be taken</p>
