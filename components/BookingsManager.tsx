@@ -29,6 +29,13 @@ import {
   type GroupAvailabilityResult,
 } from '@/lib/reservationAvailabilityEngine';
 import { DEFAULT_VEHICLE_GROUP_CODES, fetchVehicleGroups } from '@/lib/vehicleGroupsApi';
+import {
+  RESERVATION_LANGUAGES_CHANGED_EVENT,
+  loadReservationLanguages,
+  normalizeReservationLanguageValue,
+  getReservationLanguageLabel,
+  type ReservationLanguageOption,
+} from '@/lib/reservationLanguages';
 
 // Paste the real Make webhook URL here for both Send reminder buttons.
 const SEND_REMINDER_WEBHOOK_URL = 'https://hook.eu1.make.com/8hq66ccdrcx0aa56ui43o6ylpgq8bff5';
@@ -40,7 +47,7 @@ const RESERVATIONS_AUTO_REFRESH_MS = 4 * 60 * 1000;
 type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'RETURN';
 type LicenceState = 'uploaded' | 'empty';
 type VehicleGroup = string;
-type ReservationLanguage = 'English' | 'French' | 'Italian' | 'German' | 'Czech';
+type ReservationLanguage = string;
 type QuickReservationFilter =
   | 'latest20'
   | 'returnsToday'
@@ -208,7 +215,6 @@ const fallbackAgencyRepresentatives: Record<string, string[]> = {
 
 const fallbackAgencies = Object.keys(fallbackAgencyRepresentatives);
 const statuses: Array<ReservationStatus | 'ALL'> = ['ALL', 'PENDING', 'ACCEPTED', 'REJECTED', 'RETURN'];
-const languageOptions: ReservationLanguage[] = ['English', 'French', 'Italian', 'German', 'Czech'];
 const quickReservationFilters: Array<{ id: QuickReservationFilter; label: string }> = [
   { id: 'returnsToday', label: 'Επιστροφές σήμερα' },
   { id: 'pickupsToday', label: 'Παραδόσεις σήμερα' },
@@ -272,7 +278,7 @@ const initialForm: ReservationForm = {
   price: '',
   notes: '',
   status: 'PENDING',
-  language: 'English',
+  language: 'en',
   extras: emptyExtras,
 };
 
@@ -420,7 +426,7 @@ const normalizeStatus = (status: unknown): ReservationStatus =>
   status === 'ACCEPTED' ? 'ACCEPTED' : status === 'REJECTED' ? 'REJECTED' : status === 'RETURN' ? 'RETURN' : 'PENDING';
 
 const normalizeLanguage = (language: unknown): ReservationLanguage =>
-  languageOptions.includes(language as ReservationLanguage) ? (language as ReservationLanguage) : 'English';
+  normalizeReservationLanguageValue(language);
 
 const clampExtraQuantity = (value: unknown) => {
   const quantity = Number(value);
@@ -662,6 +668,7 @@ export default function BookingsManager({
   const [unreadWhatsappReservationIds, setUnreadWhatsappReservationIds] = useState<Set<string>>(new Set());
   const [showWhatsappChat, setShowWhatsappChat] = useState(false);
   const [vehicleGroups, setVehicleGroups] = useState<VehicleGroup[]>(DEFAULT_VEHICLE_GROUP_CODES);
+  const [reservationLanguages, setReservationLanguages] = useState<ReservationLanguageOption[]>(() => loadReservationLanguages());
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<(typeof statuses)[number]>('ALL');
   const [quickFilter, setQuickFilter] = useState<QuickReservationFilter>('latest20');
@@ -738,6 +745,17 @@ export default function BookingsManager({
       window.removeEventListener('pointercancel', stopResizing);
     };
   }, [isResizingDetails]);
+
+  useEffect(() => {
+    const reloadLanguages = () => setReservationLanguages(loadReservationLanguages());
+    window.addEventListener(RESERVATION_LANGUAGES_CHANGED_EVENT, reloadLanguages);
+    window.addEventListener('storage', reloadLanguages);
+
+    return () => {
+      window.removeEventListener(RESERVATION_LANGUAGES_CHANGED_EVENT, reloadLanguages);
+      window.removeEventListener('storage', reloadLanguages);
+    };
+  }, []);
 
   useEffect(() => {
     shouldSkipAutoRefreshRef.current = Boolean(editingReservation || showNewModal);
@@ -1076,6 +1094,12 @@ export default function BookingsManager({
 
   const liveAgencyNames = agencyRows.map((agency) => agency.name);
   const agencyOptions = liveAgencyNames.length > 0 ? liveAgencyNames : fallbackAgencies;
+  const activeLanguageOptions = useMemo(
+    () => reservationLanguages.filter((language) => language.active).map((language) => language.value),
+    [reservationLanguages]
+  );
+  const getLanguageLabel = (language: string) =>
+    getReservationLanguageLabel(language, reservationLanguages);
   const representativesByAgency = useMemo(() => {
     if (agencyRows.length === 0) {
       return fallbackAgencyRepresentatives;
@@ -2172,7 +2196,9 @@ export default function BookingsManager({
                         )}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-2.5 py-2"><LanguageBadge language={reservation.language} /></td>
+                    <td className="whitespace-nowrap px-2.5 py-2">
+                      <LanguageBadge language={reservation.language} getLanguageLabel={getLanguageLabel} />
+                    </td>
                     <td className="whitespace-nowrap px-2.5 py-2"><BooleanBadge active={reservation.sendReturn} /></td>
                     <td className="whitespace-nowrap px-2.5 py-2"><BooleanBadge active={reservation.confirmationSent} /></td>
                     <td className="whitespace-nowrap px-2.5 py-2"><ExtrasBadges extras={reservation.extras} /></td>
@@ -2215,6 +2241,8 @@ export default function BookingsManager({
           agencyOptions={agencyOptions}
           representativesByAgency={representativesByAgency}
           vehicleGroups={vehicleGroups}
+          languageOptions={activeLanguageOptions}
+          getLanguageLabel={getLanguageLabel}
           onUpdate={updateSelectedReservation}
           onDelete={deleteSelectedReservation}
           workflowEvents={workflowEvents}
@@ -2243,6 +2271,8 @@ export default function BookingsManager({
           agencyOptions={agencyOptions}
           representativesByAgency={representativesByAgency}
           vehicleGroups={vehicleGroups}
+          languageOptions={activeLanguageOptions}
+          getLanguageLabel={getLanguageLabel}
           onChange={setForm}
           onClose={() => setShowNewModal(false)}
           onSave={saveReservation}
@@ -2255,6 +2285,8 @@ export default function BookingsManager({
           agencyOptions={agencyOptions}
           representativesByAgency={representativesByAgency}
           vehicleGroups={vehicleGroups}
+          languageOptions={activeLanguageOptions}
+          getLanguageLabel={getLanguageLabel}
           onClose={() => setEditingReservation(null)}
           onSave={saveEditedReservation}
         />
@@ -2310,6 +2342,8 @@ function ReservationInspector({
   agencyOptions,
   representativesByAgency,
   vehicleGroups,
+  languageOptions,
+  getLanguageLabel,
   onUpdate,
   onDelete,
   workflowEvents,
@@ -2328,6 +2362,8 @@ function ReservationInspector({
   agencyOptions: string[];
   representativesByAgency: Record<string, string[]>;
   vehicleGroups: VehicleGroup[];
+  languageOptions: string[];
+  getLanguageLabel: (language: string) => string;
   onUpdate: (reservation: Reservation) => Promise<Reservation | false>;
   onDelete: () => void;
   workflowEvents: WorkflowEvent[];
@@ -2452,7 +2488,13 @@ function ReservationInspector({
               <EditableCompactInput label="Return Time" value={draft.returnTime} placeholder="18:00" onChange={(value) => updateDraft({ returnTime: value })} />
               <EditableCompactInput label="Price" type="number" value={draft.price === null ? '' : String(draft.price)} onChange={(value) => updateDraft({ price: value === '' ? null : Number(value) || null })} />
               <EditableCompactInput label="Email" type="email" value={draft.email} onChange={(value) => updateDraft({ email: value })} />
-              <EditableCompactSelect label="Language" value={draft.language} options={languageOptions} onChange={(value) => updateDraft({ language: normalizeLanguage(value) })} />
+              <EditableCompactSelect
+                label="Language"
+                value={draft.language}
+                options={withCurrentOption(languageOptions, draft.language)}
+                optionLabel={getLanguageLabel}
+                onChange={(value) => updateDraft({ language: normalizeLanguage(value) })}
+              />
               <CompactStatusButtons value={draft.status} onChange={updateStatus} />
             </div>
           </div>
@@ -2646,6 +2688,8 @@ function NewReservationModal({
   agencyOptions,
   representativesByAgency,
   vehicleGroups,
+  languageOptions,
+  getLanguageLabel,
   onChange,
   onClose,
   onSave,
@@ -2654,6 +2698,8 @@ function NewReservationModal({
   agencyOptions: string[];
   representativesByAgency: Record<string, string[]>;
   vehicleGroups: VehicleGroup[];
+  languageOptions: string[];
+  getLanguageLabel: (language: string) => string;
   onChange: (form: ReservationForm) => void;
   onClose: () => void;
   onSave: () => void;
@@ -2839,8 +2885,8 @@ function NewReservationModal({
             </Field>
             <Field label="Language">
               <select value={form.language} onChange={(event) => updateForm({ language: normalizeLanguage(event.target.value) })} className={modalFieldClass}>
-                {languageOptions.map((language) => (
-                  <option key={language} value={language}>{language}</option>
+                {withCurrentOption(languageOptions, form.language).map((language) => (
+                  <option key={language} value={language}>{getLanguageLabel(language)}</option>
                 ))}
               </select>
             </Field>
@@ -3303,6 +3349,8 @@ function EditReservationModal({
   agencyOptions,
   representativesByAgency,
   vehicleGroups,
+  languageOptions,
+  getLanguageLabel,
   onClose,
   onSave,
 }: {
@@ -3310,6 +3358,8 @@ function EditReservationModal({
   agencyOptions: string[];
   representativesByAgency: Record<string, string[]>;
   vehicleGroups: VehicleGroup[];
+  languageOptions: string[];
+  getLanguageLabel: (language: string) => string;
   onClose: () => void;
   onSave: (reservation: Reservation) => Promise<boolean>;
 }) {
@@ -3376,8 +3426,8 @@ function EditReservationModal({
               </Field>
               <Field label="Language">
                 <select value={draft.language} onChange={(event) => updateDraft({ language: normalizeLanguage(event.target.value) })} className={modalFieldClass}>
-                  {languageOptions.map((language) => (
-                    <option key={language} value={language}>{language}</option>
+                  {withCurrentOption(languageOptions, draft.language).map((language) => (
+                    <option key={language} value={language}>{getLanguageLabel(language)}</option>
                   ))}
                 </select>
               </Field>
@@ -4003,18 +4053,33 @@ function StatusBadge({ status }: { status: ReservationStatus }) {
   return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black tracking-wide ${statusActiveClasses[status]}`}>{status}</span>;
 }
 
-function LanguageBadge({ language }: { language: ReservationLanguage }) {
-  const languageClassName: Record<ReservationLanguage, string> = {
+function LanguageBadge({
+  language,
+  getLanguageLabel = (value) => getReservationLanguageLabel(value),
+}: {
+  language: ReservationLanguage;
+  getLanguageLabel?: (language: string) => string;
+}) {
+  const normalizedLanguage = normalizeLanguage(language);
+  const languageClassName: Record<string, string> = {
+    en: 'border-sky-300 bg-sky-100 text-sky-900',
     English: 'border-sky-300 bg-sky-100 text-sky-900',
+    fr: 'border-indigo-300 bg-indigo-100 text-indigo-900',
     French: 'border-indigo-300 bg-indigo-100 text-indigo-900',
+    it: 'border-emerald-300 bg-emerald-100 text-emerald-900',
     Italian: 'border-emerald-300 bg-emerald-100 text-emerald-900',
+    de: 'border-amber-300 bg-amber-100 text-amber-900',
     German: 'border-amber-300 bg-amber-100 text-amber-900',
+    el: 'border-blue-300 bg-blue-100 text-blue-900',
+    Greek: 'border-blue-300 bg-blue-100 text-blue-900',
+    cs: 'border-fuchsia-300 bg-fuchsia-100 text-fuchsia-900',
     Czech: 'border-fuchsia-300 bg-fuchsia-100 text-fuchsia-900',
+    pl: 'border-rose-300 bg-rose-100 text-rose-900',
   };
 
   return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black tracking-wide ${languageClassName[language]}`}>
-      {language}
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-black tracking-wide ${languageClassName[language] || languageClassName[normalizedLanguage] || 'border-slate-300 bg-slate-100 text-slate-800'}`}>
+      {getLanguageLabel(language)}
     </span>
   );
 }
@@ -4128,6 +4193,7 @@ function EditableCompactSelect({
   label,
   value,
   options,
+  optionLabel = (option) => option,
   onChange,
   disabled = false,
   inputClassName = '',
@@ -4135,6 +4201,7 @@ function EditableCompactSelect({
   label: string;
   value: string;
   options: string[];
+  optionLabel?: (option: string) => string;
   onChange: (value: string) => void;
   disabled?: boolean;
   inputClassName?: string;
@@ -4150,7 +4217,7 @@ function EditableCompactSelect({
     >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {optionLabel(option)}
           </option>
         ))}
       </select>

@@ -475,6 +475,7 @@ export default function AutoClubRhodesReservationsBoard() {
   const [emailReservationId, setEmailReservationId] = useState<string | null>(null);
   const [confirmingReservationId, setConfirmingReservationId] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState('All');
+  const [reservationSearch, setReservationSearch] = useState('');
   const [emailInitialTemplate, setEmailInitialTemplate] =
     useState<EmailTemplateId>('customer_confirmed_reservation');
   const [bookingEngineConfig, setBookingEngineConfig] = useState(() => loadBookingEngineConfig());
@@ -539,6 +540,7 @@ export default function AutoClubRhodesReservationsBoard() {
         siteSettings: {
           ...current.siteSettings,
           companyName: site.name || current.siteSettings.companyName || 'Booking site',
+          domain: site.domain || current.siteSettings.domain || '',
           adminEmail: site.admin_email || '',
           bookingNotificationEmail: site.booking_notification_email || site.admin_email || '',
           logoImage: site.logo_image || '',
@@ -596,22 +598,41 @@ export default function AutoClubRhodesReservationsBoard() {
         : reservations.filter((reservation) => (reservation.sourceSiteName || 'Unknown site') === sourceFilter),
     [reservations, sourceFilter],
   );
+  const filteredReservations = useMemo(() => {
+    const query = reservationSearch.trim().toLowerCase();
+    if (!query) return sourceFilteredReservations;
+
+    return sourceFilteredReservations.filter((reservation) =>
+      [
+        reservation.id,
+        reservation.customerName,
+        reservation.phone,
+        reservation.fullPhone,
+        reservation.email,
+        reservation.carName,
+        reservation.pickupLocation,
+        reservation.returnLocation,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
+    );
+  }, [reservationSearch, sourceFilteredReservations]);
 
   const newReservations = useMemo(
     () =>
       sortReservations(
-        sourceFilteredReservations.filter((reservation) => !reservation.processed),
+        filteredReservations.filter((reservation) => !reservation.processed),
         newRequestsSort,
       ),
-    [newRequestsSort, sourceFilteredReservations],
+    [filteredReservations, newRequestsSort],
   );
   const processedReservations = useMemo(
     () =>
       sortReservations(
-        sourceFilteredReservations.filter((reservation) => reservation.processed),
+        filteredReservations.filter((reservation) => reservation.processed),
         processedSort,
       ),
-    [processedSort, sourceFilteredReservations],
+    [filteredReservations, processedSort],
   );
 
   const summary = {
@@ -633,6 +654,7 @@ export default function AutoClubRhodesReservationsBoard() {
       site: {
         siteId: beSiteId,
         siteName: bookingEngineConfig.siteSettings.companyName || 'Booking site',
+        domain: bookingEngineConfig.siteSettings.domain,
         adminEmail:
           bookingEngineConfig.siteSettings.bookingNotificationEmail ||
           bookingEngineConfig.siteSettings.adminEmail ||
@@ -880,7 +902,7 @@ export default function AutoClubRhodesReservationsBoard() {
 
   return (
     <div className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden bg-slate-100 text-slate-900">
-      <header className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2">
+      <header className="flex flex-shrink-0 flex-col items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2 xl:flex-row xl:items-center">
         <div>
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] text-cyan-700">
             <Globe2 className="h-3.5 w-3.5" />
@@ -888,19 +910,25 @@ export default function AutoClubRhodesReservationsBoard() {
           </div>
           <h2 className="text-lg font-black text-slate-950">Website reservations</h2>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">
+        <div className="flex w-full flex-wrap items-center justify-start gap-2 xl:w-auto xl:justify-end">
+          <label className="flex shrink-0 items-center gap-2 rounded-full border border-emerald-300 bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-emerald-900 shadow-sm">
             Source
             <select
               value={sourceFilter}
               onChange={(event) => setSourceFilter(event.target.value)}
-              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs font-black normal-case tracking-normal text-slate-800"
+              className="h-8 rounded-lg border border-emerald-300 bg-white px-2 text-xs font-black normal-case tracking-normal text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
             >
               {sourceOptions.map((source) => (
                 <option key={source} value={source}>{source}</option>
               ))}
             </select>
           </label>
+          <input
+            value={reservationSearch}
+            onChange={(event) => setReservationSearch(event.target.value)}
+            placeholder="Search reservations..."
+            className="h-8 min-w-[220px] flex-1 rounded-lg border border-cyan-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100 sm:flex-none sm:w-[280px]"
+          />
           <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-cyan-800">
             Supabase live
           </span>
@@ -1140,6 +1168,9 @@ export default function AutoClubRhodesReservationsBoard() {
           templates={bookingEngineConfig.emailSettings.templates}
           siteName={bookingEngineConfig.siteSettings.companyName || 'Booking site'}
           logoImage={bookingEngineConfig.siteSettings.logoImage}
+          websiteUrl={bookingEngineConfig.siteSettings.websiteUrl}
+          domain={bookingEngineConfig.siteSettings.domain}
+          secondaryColor={bookingEngineConfig.siteSettings.secondaryColor}
           onClose={() => setEmailReservationId(null)}
           onSend={async ({ recipient, subject, message, templateId, paymentLink }) => {
             const eventType = getEmailEventTypeForTemplate(templateId);
@@ -1150,6 +1181,7 @@ export default function AutoClubRhodesReservationsBoard() {
             const siteContext = {
               siteId: beSiteId,
               siteName: bookingEngineConfig.siteSettings.companyName || 'Booking site',
+              domain: bookingEngineConfig.siteSettings.domain,
               adminEmail:
                 bookingEngineConfig.siteSettings.bookingNotificationEmail ||
                 bookingEngineConfig.siteSettings.adminEmail ||
@@ -2043,6 +2075,9 @@ function EmailComposerModal({
   templates,
   siteName,
   logoImage,
+  websiteUrl,
+  domain,
+  secondaryColor,
   onClose,
   onSend,
   onFeedback,
@@ -2052,6 +2087,9 @@ function EmailComposerModal({
   templates: ReturnType<typeof loadBookingEngineConfig>['emailSettings']['templates'];
   siteName: string;
   logoImage: string;
+  websiteUrl: string;
+  domain: string;
+  secondaryColor: string;
   onClose: () => void;
   onSend: (payload: {
     recipient: string;
@@ -2122,6 +2160,9 @@ function EmailComposerModal({
       siteName,
       adminEmail: '',
       logoImage,
+      websiteUrl,
+      domain,
+      secondaryColor,
     },
     reservation: emailContext,
     intro: getBookingEmailIntro(templateId),

@@ -62,6 +62,7 @@ export type BookingEngineEmailSiteContext = {
   siteId: string;
   siteName: string;
   adminEmail: string;
+  domain?: string;
   logoImage?: string;
   whatsappNumber?: string;
   primaryColor?: string;
@@ -69,6 +70,7 @@ export type BookingEngineEmailSiteContext = {
   supportEmail?: string;
   phone?: string;
   websiteUrl?: string;
+  website_url?: string;
   googleReviewUrl?: string;
   emailHeaderImage?: string;
   emailFooterText?: string;
@@ -313,6 +315,40 @@ const renderTextBlockHtml = (value: string, paymentLink = '') =>
     .map((paragraph) => renderTextParagraph(paragraph, paymentLink))
     .join('');
 
+const customerManageBookingTemplateIds = new Set<BookingEngineEmailTemplateId>([
+  'customer_confirmed_reservation',
+  'customer_onrequest_received',
+  'customer_confirmed_after_review',
+  'customer_cancellation',
+]);
+
+const buildManageBookingUrl = (
+  site: BookingEngineEmailSiteContext,
+  reservation: BookingEngineEmailReservationContext,
+) => {
+  const websiteUrl = normalizeWebsiteUrl(site.websiteUrl || site.website_url || site.domain || '');
+
+  if (!websiteUrl) {
+    // TODO: replace with the dedicated manage-booking URL once the public route is finalized.
+    return '';
+  }
+
+  try {
+    const url = new URL('/manage-booking', websiteUrl);
+    if (reservation.reservationId) url.searchParams.set('reservation', reservation.reservationId);
+    if (reservation.email) url.searchParams.set('email', reservation.email);
+    return url.toString();
+  } catch {
+    return '';
+  }
+};
+
+const normalizeWebsiteUrl = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
 export const buildBookingEmailHtml = ({
   site,
   reservation,
@@ -328,6 +364,7 @@ export const buildBookingEmailHtml = ({
 }) => {
   const primaryColor = site.primaryColor || '#073f5d';
   const secondaryColor = site.secondaryColor || '#059669';
+  const websiteUrl = normalizeWebsiteUrl(site.websiteUrl || site.website_url || site.domain || '');
   const footerText =
     site.emailFooterText ||
     `For urgent changes, contact us${site.whatsappNumber ? ` on WhatsApp ${site.whatsappNumber}` : site.phone ? ` on ${site.phone}` : ''}.`;
@@ -335,6 +372,20 @@ export const buildBookingEmailHtml = ({
   const isAdminNotification =
     templateId === 'admin_new_confirmed_reservation' ||
     templateId === 'admin_new_onrequest_reservation';
+  const isCustomerManageBookingEmail =
+    Boolean(templateId) && customerManageBookingTemplateIds.has(templateId as BookingEngineEmailTemplateId);
+  const manageBookingUrl = isCustomerManageBookingEmail
+    ? buildManageBookingUrl(site, reservation)
+    : '';
+  if (isCustomerManageBookingEmail && !manageBookingUrl) {
+    console.warn('EMAIL CTA SKIPPED', {
+      templateId,
+      reason: 'Missing or invalid websiteUrl / website_url / domain in site context.',
+      websiteUrl: site.websiteUrl || '',
+      website_url: site.website_url || '',
+      domain: site.domain || '',
+    });
+  }
   const isAdminOnRequest = templateId === 'admin_new_onrequest_reservation';
   const isCustomerOnRequest = templateId === 'customer_onrequest_received';
   const isOnRequest = isAdminOnRequest || isCustomerOnRequest;
@@ -448,12 +499,19 @@ export const buildBookingEmailHtml = ({
                 }
                 ${renderSection('Total and payment', paymentRows)}`
           }
+          ${
+            manageBookingUrl
+              ? `<div style="margin-top:14px;text-align:center;">
+                  ${renderEmailCta({ href: manageBookingUrl, label: 'Manage my booking', background: secondaryColor })}
+                </div>`
+              : ''
+          }
         </div>
         <div style="padding:12px 16px;background:#f8fafc;border-top:1px solid #d8e0ea;font-size:11px;line-height:1.5;color:#53657a;">
           <strong style="color:#102033;">${escapeHtml(site.siteName)}</strong><br />
           ${escapeHtml(footerText)}
           ${site.supportEmail ? `<br />Support: ${escapeHtml(site.supportEmail)}` : ''}
-          ${site.websiteUrl ? `<br /><a href="${escapeHtml(site.websiteUrl)}" style="color:${escapeHtml(secondaryColor)};font-weight:800;">${escapeHtml(site.websiteUrl)}</a>` : ''}
+          ${websiteUrl ? `<br /><a href="${escapeHtml(websiteUrl)}" style="color:${escapeHtml(secondaryColor)};font-weight:800;">${escapeHtml(websiteUrl)}</a>` : ''}
         </div>
       </div>
     </div>

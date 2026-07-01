@@ -5364,6 +5364,9 @@ function EmailsPanel({
           adminEmail={settings.adminEmail}
           siteName={siteSettings.companyName || 'Booking site'}
           logoImage={siteSettings.logoImage}
+          websiteUrl={siteSettings.websiteUrl}
+          domain={siteSettings.domain}
+          secondaryColor={siteSettings.secondaryColor}
           onClose={() => setPreviewTemplateId(null)}
           onSave={(subject, message) => {
             updateTemplate(previewTemplateId, { subject, message });
@@ -5424,6 +5427,9 @@ function EmailTemplatePreviewModal({
   adminEmail,
   siteName,
   logoImage,
+  websiteUrl,
+  domain,
+  secondaryColor,
   onClose,
   onSave,
 }: {
@@ -5431,6 +5437,9 @@ function EmailTemplatePreviewModal({
   adminEmail: string;
   siteName: string;
   logoImage: string;
+  websiteUrl: string;
+  domain: string;
+  secondaryColor: string;
   onClose: () => void;
   onSave: (subject: string, message: string) => void;
 }) {
@@ -5448,6 +5457,9 @@ function EmailTemplatePreviewModal({
       siteName,
       adminEmail,
       logoImage,
+      websiteUrl,
+      domain,
+      secondaryColor,
     },
     reservation: sampleEmailContext,
     intro: getBookingEmailIntro(template.id),

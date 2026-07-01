@@ -1604,6 +1604,7 @@ export default function PublicBookingPreview({
       site: {
         siteId: beSiteId,
         siteName: bookingEngineConfig.siteSettings.companyName || 'Booking site',
+        domain: bookingEngineConfig.siteSettings.domain,
         adminEmail:
           bookingEngineConfig.siteSettings.bookingNotificationEmail ||
           bookingEngineConfig.siteSettings.adminEmail ||
