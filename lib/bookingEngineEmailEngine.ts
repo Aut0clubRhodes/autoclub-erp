@@ -64,6 +64,15 @@ export type BookingEngineEmailSiteContext = {
   adminEmail: string;
   logoImage?: string;
   whatsappNumber?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  supportEmail?: string;
+  phone?: string;
+  websiteUrl?: string;
+  googleReviewUrl?: string;
+  emailHeaderImage?: string;
+  emailFooterText?: string;
+  currency?: string;
 };
 
 export const bookingEngineEmailTemplateOrder: BookingEngineEmailTemplateId[] = [
@@ -90,11 +99,11 @@ const normalizeTemplateMessage = (
   if (templateKey !== 'customer_reminder') return message;
 
   const cleaned = message
-    .replace(/A reminder for your upcoming AutoClub Rhodes booking\.?/gi, '')
-    .replace(/upcoming AutoClub Rhodes booking\.?/gi, '')
+    .replace(/A reminder for your upcoming booking\.?/gi, '')
+    .replace(/upcoming booking\.?/gi, '')
     .trim();
   const fallback =
-    'Hello {{customer_name}},\n\nThank you for choosing AutoClub Rhodes.\n\nWe hope you enjoyed your rental.\nWe would really appreciate your review and feedback.';
+    'Hello {{customer_name}},\n\nThank you for choosing us.\n\nWe hope you enjoyed your rental.\nWe would really appreciate your review and feedback.';
   const withReviewWording = cleaned || fallback;
 
   return withReviewWording.includes(GOOGLE_REVIEW_URL)
@@ -226,11 +235,11 @@ export const getBookingEmailIntro = (templateId: BookingEngineEmailTemplateId) =
     case 'customer_payment_request':
       return 'Your payment request is ready.';
     case 'customer_reminder':
-      return 'Thank you for choosing AutoClub Rhodes. We hope you enjoyed your rental. We would really appreciate your review and feedback.';
+      return 'Thank you for choosing us. We hope you enjoyed your rental. We would really appreciate your review and feedback.';
     case 'customer_cancellation':
       return 'Your reservation has been cancelled.';
     default:
-      return 'An update about your AutoClub Rhodes reservation.';
+      return 'An update about your reservation.';
   }
 };
 
@@ -317,6 +326,12 @@ export const buildBookingEmailHtml = ({
   templateId?: BookingEngineEmailTemplateId;
   manualMessage?: string;
 }) => {
+  const primaryColor = site.primaryColor || '#073f5d';
+  const secondaryColor = site.secondaryColor || '#059669';
+  const footerText =
+    site.emailFooterText ||
+    `For urgent changes, contact us${site.whatsappNumber ? ` on WhatsApp ${site.whatsappNumber}` : site.phone ? ` on ${site.phone}` : ''}.`;
+  const logoImage = site.emailHeaderImage || site.logoImage;
   const isAdminNotification =
     templateId === 'admin_new_confirmed_reservation' ||
     templateId === 'admin_new_onrequest_reservation';
@@ -383,16 +398,16 @@ export const buildBookingEmailHtml = ({
   <body style="margin:0;background:#eef2f7;font-family:Arial,Helvetica,sans-serif;color:#102033;">
     <div style="max-width:640px;margin:0 auto;padding:12px 8px;">
       <div style="background:#ffffff;border:1px solid #d8e0ea;border-radius:14px;overflow:hidden;box-shadow:0 12px 32px rgba(15,23,42,0.09);">
-        <div style="padding:14px 16px;background:#073f5d;color:#ffffff;">
+        <div style="padding:14px 16px;background:${escapeHtml(primaryColor)};color:#ffffff;">
           <div style="display:flex;align-items:center;gap:11px;">
             ${
-              site.logoImage
-                ? `<img src="${escapeHtml(site.logoImage)}" alt="${escapeHtml(site.siteName)}" style="width:44px;height:44px;border-radius:10px;background:#ffffff;object-fit:contain;padding:3px;" />`
-                : `<div style="width:44px;height:44px;border-radius:10px;background:#ffffff;color:#073f5d;display:inline-flex;align-items:center;justify-content:center;font-weight:900;">AC</div>`
+              logoImage
+                ? `<img src="${escapeHtml(logoImage)}" alt="${escapeHtml(site.siteName)}" style="width:44px;height:44px;border-radius:10px;background:#ffffff;object-fit:contain;padding:3px;" />`
+                : `<div style="width:44px;height:44px;border-radius:10px;background:#ffffff;color:${escapeHtml(primaryColor)};display:inline-flex;align-items:center;justify-content:center;font-weight:900;">${escapeHtml(site.siteName.slice(0, 2).toUpperCase() || 'BE')}</div>`
             }
             <div>
               <div style="font-size:18px;font-weight:900;line-height:1.1;">${escapeHtml(site.siteName)}</div>
-              <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9ee7f5;margin-top:3px;">Car rental in Rhodes</div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9ee7f5;margin-top:3px;">Car rental</div>
             </div>
           </div>
         </div>
@@ -435,8 +450,10 @@ export const buildBookingEmailHtml = ({
           }
         </div>
         <div style="padding:12px 16px;background:#f8fafc;border-top:1px solid #d8e0ea;font-size:11px;line-height:1.5;color:#53657a;">
-          <strong style="color:#102033;">AutoClub Rhodes</strong><br />
-          For urgent changes, contact us on WhatsApp +306948202397.
+          <strong style="color:#102033;">${escapeHtml(site.siteName)}</strong><br />
+          ${escapeHtml(footerText)}
+          ${site.supportEmail ? `<br />Support: ${escapeHtml(site.supportEmail)}` : ''}
+          ${site.websiteUrl ? `<br /><a href="${escapeHtml(site.websiteUrl)}" style="color:${escapeHtml(secondaryColor)};font-weight:800;">${escapeHtml(site.websiteUrl)}</a>` : ''}
         </div>
       </div>
     </div>

@@ -43,6 +43,15 @@ export type BookingEngineSiteSettings = {
   domain: string;
   adminEmail: string;
   bookingNotificationEmail: string;
+  primaryColor: string;
+  secondaryColor: string;
+  supportEmail: string;
+  phone: string;
+  whatsapp: string;
+  websiteUrl: string;
+  googleReviewUrl: string;
+  emailHeaderImage: string;
+  emailFooterText: string;
   currency: string;
   timezone: string;
   defaultLanguage: string;
@@ -226,10 +235,19 @@ export type BookingEngineLocalConfig = {
 
 export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
   siteSettings: {
-    companyName: 'AutoClub Rhodes',
+    companyName: 'Booking Site',
     domain: '',
     adminEmail: '',
     bookingNotificationEmail: '',
+    primaryColor: '#073f5d',
+    secondaryColor: '#059669',
+    supportEmail: '',
+    phone: '',
+    whatsapp: '',
+    websiteUrl: '',
+    googleReviewUrl: 'https://g.page/r/CYOr9zt3_-KVEBM/review',
+    emailHeaderImage: '',
+    emailFooterText: 'For urgent changes, contact us using the support details above.',
     currency: 'EUR',
     timezone: 'Europe/Athens',
     defaultLanguage: 'English',
@@ -459,7 +477,7 @@ export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
         id: 'customer_confirmed_reservation',
         label: 'Customer Booking Confirmed',
         active: true,
-        subject: 'Your AutoClub Rhodes booking is confirmed',
+        subject: 'Your booking is confirmed',
         message:
           'Hello {{customer_name}},\n\nYour booking {{reservation_id}} for {{car_name}} is confirmed.\n\nPickup: {{pickup_date}} at {{pickup_time}}, {{pickup_location}}\nReturn: {{return_date}} at {{return_time}}, {{return_location}}\nTotal: {{total_price}}\nPayment method: {{payment_method}}',
       },
@@ -475,7 +493,7 @@ export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
         id: 'customer_onrequest_received',
         label: 'Customer On Request Received',
         active: true,
-        subject: 'Your AutoClub Rhodes on-request reservation was received',
+        subject: 'Your reservation request was received',
         message:
           'Hello {{customer_name}},\n\nYour on-request reservation for {{car_name}} (Group {{group}}) has been received.\n\nPickup: {{pickup_date}} at {{pickup_time}}, {{pickup_location}}\nReturn: {{return_date}} at {{return_time}}, {{return_location}}\n\nWe will check availability and contact you shortly.',
       },
@@ -483,7 +501,7 @@ export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
         id: 'customer_confirmed_after_review',
         label: 'Customer Confirmed After Review',
         active: true,
-        subject: 'Your AutoClub Rhodes request is confirmed',
+        subject: 'Your reservation request is confirmed',
         message:
           'Hello {{customer_name}},\n\nGood news - your request {{reservation_id}} is now confirmed.\n\nCar: {{car_name}} (Group {{group}})\nPickup: {{pickup_date}} at {{pickup_time}}, {{pickup_location}}\nReturn: {{return_date}} at {{return_time}}, {{return_location}}\nTotal: {{total_price}}\nPayment method: {{payment_method}}',
       },
@@ -493,23 +511,23 @@ export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
         active: true,
         subject: 'Payment request for reservation {{reservation_id}}',
         message:
-          'Hello {{customer_name}},\n\nPlease complete payment for reservation {{reservation_id}}.\n\nCar: {{car_name}} (Group {{group}})\nPickup: {{pickup_date}} at {{pickup_time}}, {{pickup_location}}\nReturn: {{return_date}} at {{return_time}}, {{return_location}}\nFinal total: {{total_price}}\nPayment method: {{payment_method}}\n\nPayment link: {{payment_link}}\n\nThank you, AutoClub Rhodes',
+          'Hello {{customer_name}},\n\nPlease complete payment for reservation {{reservation_id}}.\n\nCar: {{car_name}} (Group {{group}})\nPickup: {{pickup_date}} at {{pickup_time}}, {{pickup_location}}\nReturn: {{return_date}} at {{return_time}}, {{return_location}}\nFinal total: {{total_price}}\nPayment method: {{payment_method}}\n\nPayment link: {{payment_link}}\n\nThank you',
       },
       customer_reminder: {
         id: 'customer_reminder',
         label: 'Review Request',
         active: true,
-        subject: 'How was your AutoClub Rhodes rental?',
+        subject: 'How was your rental?',
         message:
-          'Hello {{customer_name}},\n\nThank you for choosing AutoClub Rhodes for reservation {{reservation_id}}.\n\nWe hope you enjoyed your rental with {{car_name}}. We would really appreciate your review and feedback:\nhttps://g.page/r/CYOr9zt3_-KVEBM/review',
+          'Hello {{customer_name}},\n\nThank you for choosing us for reservation {{reservation_id}}.\n\nWe hope you enjoyed your rental with {{car_name}}. We would really appreciate your review and feedback:\nhttps://g.page/r/CYOr9zt3_-KVEBM/review',
       },
       customer_cancellation: {
         id: 'customer_cancellation',
         label: 'Cancellation',
         active: true,
-        subject: 'Your AutoClub Rhodes reservation {{reservation_id}} was cancelled',
+        subject: 'Your reservation {{reservation_id}} was cancelled',
         message:
-          'Hello {{customer_name}},\n\nYour reservation {{reservation_id}} has been cancelled.\n\nIf this was not expected, please contact AutoClub Rhodes.',
+          'Hello {{customer_name}},\n\nYour reservation {{reservation_id}} has been cancelled.\n\nIf this was not expected, please contact us.',
       },
       customEmail: {
         id: 'customEmail',

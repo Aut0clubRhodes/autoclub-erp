@@ -73,6 +73,15 @@ type BeSiteRow = {
   domain?: string | null;
   admin_email?: string | null;
   booking_notification_email?: string | null;
+  primary_color?: string | null;
+  secondary_color?: string | null;
+  support_email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  website_url?: string | null;
+  google_review_url?: string | null;
+  email_header_image?: string | null;
+  email_footer_text?: string | null;
   currency?: string | null;
   timezone?: string | null;
   default_language?: string | null;
@@ -338,6 +347,15 @@ const mapSiteSettings = (row: BeSiteRow): BookingEngineSiteSettings => ({
   domain: (row.domain || '').trim(),
   adminEmail: row.admin_email || '',
   bookingNotificationEmail: row.booking_notification_email || '',
+  primaryColor: row.primary_color || '#073f5d',
+  secondaryColor: row.secondary_color || '#059669',
+  supportEmail: row.support_email || row.admin_email || '',
+  phone: row.phone || '',
+  whatsapp: row.whatsapp || row.whatsapp_number || '',
+  websiteUrl: row.website_url || '',
+  googleReviewUrl: row.google_review_url || 'https://g.page/r/CYOr9zt3_-KVEBM/review',
+  emailHeaderImage: row.email_header_image || '',
+  emailFooterText: row.email_footer_text || '',
   currency: row.currency || 'EUR',
   timezone: row.timezone || 'Europe/Athens',
   defaultLanguage: row.default_language || 'English',
@@ -348,6 +366,24 @@ const mapSiteSettings = (row: BeSiteRow): BookingEngineSiteSettings => ({
   status: row.status === 'Inactive' ? 'Inactive' : 'Active',
   internalNotes: row.internal_notes || '',
 });
+
+const normalizeSiteHost = (value?: string | null) =>
+  (value || '')
+    .replace(/^https?:\/\//i, '')
+    .replace(/^www\./i, '')
+    .split('/')[0]
+    .toLowerCase()
+    .trim();
+
+const selectPublicBookingSite = (sites: BeSiteRow[]) => {
+  const currentHost =
+    typeof window !== 'undefined' ? normalizeSiteHost(window.location.hostname) : '';
+  return (
+    sites.find((site) => normalizeSiteHost(site.domain) === currentHost) ||
+    sites.find((site) => site.status !== 'Inactive') ||
+    sites[0]
+  );
+};
 
 const mapGroup = (row: BeGroupRow): BookingEngineGroup => ({
   id: String(row.id),
@@ -605,9 +641,7 @@ export function HomeBookingSearch({ layout = 'stackedCard' }: { layout?: Booking
         return;
       }
 
-      const site = ((sites || []) as BeSiteRow[]).find(
-        (item) => item.domain === 'autoclub-rhodes.com',
-      );
+      const site = selectPublicBookingSite((sites || []) as BeSiteRow[]);
       if (!site?.id) return;
 
       const [groupsResult, locationsResult, bookingSettingsResult] = await Promise.all([
@@ -854,12 +888,10 @@ export default function PublicBookingPreview({
         return;
       }
 
-      const site = ((sites || []) as BeSiteRow[]).find(
-        (item) => item.domain === 'autoclub-rhodes.com',
-      );
+      const site = selectPublicBookingSite((sites || []) as BeSiteRow[]);
       if (!site?.id) {
         if (!cancelled) {
-          setConfigError('No Booking Engine site found for autoclub-rhodes.com.');
+          setConfigError('No active Booking Engine site found.');
           setLoadingConfig(false);
         }
         return;
@@ -1305,7 +1337,7 @@ export default function PublicBookingPreview({
       bookingEngineConfig.siteSettings.bookingNotificationEmail ||
       bookingEngineConfig.siteSettings.adminEmail ||
       bookingEngineConfig.emailSettings.adminEmail;
-    const companyName = bookingEngineConfig.siteSettings.companyName || 'AutoClub Rhodes';
+    const companyName = bookingEngineConfig.siteSettings.companyName || 'Booking site';
     const reservationCode = submittedReservationId;
     const customerName = customer.fullName.trim();
     const customerEmail = customer.email.trim();
@@ -1552,13 +1584,22 @@ export default function PublicBookingPreview({
       templates: bookingEngineConfig.emailSettings.templates,
       site: {
         siteId: beSiteId,
-        siteName: bookingEngineConfig.siteSettings.companyName || 'AutoClub Rhodes',
+        siteName: bookingEngineConfig.siteSettings.companyName || 'Booking site',
         adminEmail:
           bookingEngineConfig.siteSettings.bookingNotificationEmail ||
           bookingEngineConfig.siteSettings.adminEmail ||
           bookingEngineConfig.emailSettings.adminEmail,
         logoImage: bookingEngineConfig.siteSettings.logoImage,
         whatsappNumber: bookingEngineConfig.siteSettings.whatsappNumber,
+        primaryColor: bookingEngineConfig.siteSettings.primaryColor,
+        secondaryColor: bookingEngineConfig.siteSettings.secondaryColor,
+        supportEmail: bookingEngineConfig.siteSettings.supportEmail,
+        phone: bookingEngineConfig.siteSettings.phone,
+        websiteUrl: bookingEngineConfig.siteSettings.websiteUrl,
+        googleReviewUrl: bookingEngineConfig.siteSettings.googleReviewUrl,
+        emailHeaderImage: bookingEngineConfig.siteSettings.emailHeaderImage,
+        emailFooterText: bookingEngineConfig.siteSettings.emailFooterText,
+        currency: bookingEngineConfig.siteSettings.currency,
       },
       reservation: {
         reservationId: savedReservationId,
@@ -1615,7 +1656,7 @@ export default function PublicBookingPreview({
             </div>
             <div>
               <p className="text-lg font-black text-[#073f5d]">
-                {bookingEngineConfig.siteSettings.companyName || 'AUTOCLUB RHODES'}
+                {bookingEngineConfig.siteSettings.companyName || 'BOOKING SITE'}
               </p>
               <p className="text-xs font-semibold text-slate-500">Premium car rental in Rhodes</p>
             </div>
@@ -2143,7 +2184,7 @@ export default function PublicBookingPreview({
                   </label>
                   <label className="grid cursor-pointer grid-cols-[20px_1fr] items-start gap-3 text-sm font-semibold leading-5 text-slate-700">
                     <input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} className="mt-0.5 h-5 w-5 accent-emerald-600" />
-                    <span>I would like to receive AutoClub Rhodes offers.</span>
+                    <span>I would like to receive {bookingEngineConfig.siteSettings.companyName || 'this rental company'} offers.</span>
                   </label>
                 </div>
                 {submitAttempted && !acceptTerms && (
@@ -2182,7 +2223,7 @@ export default function PublicBookingPreview({
               <p className="mt-4 text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Reservation Received</p>
               <h1 className="mt-2 text-3xl font-black tracking-tight text-[#073f5d]">Your reservation is received</h1>
               <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-600">
-                Thank you for choosing AutoClub Rhodes. Your reservation request has been received and you will receive confirmation by email.
+                Thank you for choosing {bookingEngineConfig.siteSettings.companyName || 'us'}. Your reservation request has been received and you will receive confirmation by email.
               </p>
               <div className="mx-auto mt-5 max-w-md rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Reservation Code</p>
@@ -2235,8 +2276,8 @@ export default function PublicBookingPreview({
                   <p className="font-black text-[#073f5d]">Need an urgent change?</p>
                   <p className="mt-1 text-sm leading-6 text-slate-600">
                     For urgent changes, contact us on{' '}
-                    <a href="https://wa.me/306948202397" target="_blank" rel="noreferrer" className="font-black text-emerald-700 underline decoration-emerald-300 underline-offset-2">
-                      WhatsApp +306948202397
+                    <a href={`https://wa.me/${(bookingEngineConfig.siteSettings.whatsapp || bookingEngineConfig.siteSettings.whatsappNumber || '+306948202397').replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="font-black text-emerald-700 underline decoration-emerald-300 underline-offset-2">
+                      WhatsApp {bookingEngineConfig.siteSettings.whatsapp || bookingEngineConfig.siteSettings.whatsappNumber || '+306948202397'}
                     </a>.
                   </p>
                 </div>

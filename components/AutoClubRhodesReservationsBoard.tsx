@@ -57,6 +57,8 @@ type WebsiteReservation = BookingEngineWebsiteReservation & {
   supabaseId: string;
   rawStatus: string;
   paymentLink?: string;
+  sourceSiteId?: string;
+  sourceSiteName?: string;
 };
 
 type BeReservationRow = {
@@ -170,7 +172,7 @@ const printReservationDetails = (reservation: WebsiteReservation) => {
   printWindow.document.write(`<!doctype html>
     <html>
       <head>
-        <title>${escapePrintHtml(reservation.id)} - AutoClub Rhodes</title>
+        <title>${escapePrintHtml(reservation.id)} - ${escapePrintHtml(reservation.sourceSiteName || 'Booking site')}</title>
         <style>
           body { margin: 0; padding: 32px; background: #f8fafc; color: #102033; font-family: Arial, sans-serif; }
           .sheet { max-width: 820px; margin: 0 auto; background: #fff; border: 1px solid #cbd5e1; border-radius: 16px; padding: 28px; }
@@ -186,7 +188,7 @@ const printReservationDetails = (reservation: WebsiteReservation) => {
       </head>
       <body>
         <main class="sheet">
-          <h1>AutoClub Rhodes Reservation</h1>
+          <h1>${escapePrintHtml(reservation.sourceSiteName || 'Booking site')} Reservation</h1>
           <p class="code">${escapePrintHtml(reservation.id)}</p>
           <table><tbody>
             ${rows.map(([label, value]) => `<tr><td>${escapePrintHtml(label)}</td><td>${escapePrintHtml(value)}</td></tr>`).join('')}
@@ -267,7 +269,7 @@ const reservationPayload = (reservation: WebsiteReservation, status = reservatio
   ).trim(),
 });
 
-const mapBeReservation = (row: BeReservationRow): WebsiteReservation => {
+const mapBeReservation = (row: BeReservationRow, siteName = ''): WebsiteReservation => {
   const status = row.status || 'PENDING';
   const boardStatus = mapDbStatusToBoardStatus(status);
   const processed = isProcessedDbStatus(status);
@@ -277,6 +279,8 @@ const mapBeReservation = (row: BeReservationRow): WebsiteReservation => {
 
   return {
     supabaseId: row.id,
+    sourceSiteId: row.site_id,
+    sourceSiteName: siteName || 'Unknown site',
     rawStatus: status,
     id: row.reservation_id || row.reservation_code || row.id,
     customerName: row.customer_name || '',
@@ -468,6 +472,7 @@ export default function AutoClubRhodesReservationsBoard() {
   const [emailFeedback, setEmailFeedback] = useState('');
   const [emailReservationId, setEmailReservationId] = useState<string | null>(null);
   const [confirmingReservationId, setConfirmingReservationId] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState('All');
   const [emailInitialTemplate, setEmailInitialTemplate] =
     useState<EmailTemplateId>('customer_confirmed_reservation');
   const [bookingEngineConfig, setBookingEngineConfig] = useState(() => loadBookingEngineConfig());
@@ -501,12 +506,12 @@ export default function AutoClubRhodesReservationsBoard() {
       return;
     }
 
-    const site = ((sites || []) as Array<Record<string, string | null>>).find(
-      (item) => item.domain === 'autoclub-rhodes.com',
-    );
+    const siteRows = (sites || []) as Array<Record<string, string | null>>;
+    const siteById = new Map(siteRows.map((item) => [String(item.id), item.name || item.domain || 'Unknown site']));
+    const site = siteRows[0];
 
     if (!site?.id) {
-      setReservationsError('No Booking Engine site found for autoclub-rhodes.com.');
+      setReservationsError('No Booking Engine site found.');
       setReservationsLoading(false);
       return;
     }
@@ -531,11 +536,20 @@ export default function AutoClubRhodesReservationsBoard() {
         ...current,
         siteSettings: {
           ...current.siteSettings,
-          companyName: site.name || current.siteSettings.companyName || 'AutoClub Rhodes',
+          companyName: site.name || current.siteSettings.companyName || 'Booking site',
           adminEmail: site.admin_email || '',
           bookingNotificationEmail: site.booking_notification_email || site.admin_email || '',
           logoImage: site.logo_image || '',
           whatsappNumber: site.whatsapp_number || '',
+          primaryColor: site.primary_color || current.siteSettings.primaryColor,
+          secondaryColor: site.secondary_color || current.siteSettings.secondaryColor,
+          supportEmail: site.support_email || site.admin_email || '',
+          phone: site.phone || '',
+          whatsapp: site.whatsapp || site.whatsapp_number || '',
+          websiteUrl: site.website_url || '',
+          googleReviewUrl: site.google_review_url || current.siteSettings.googleReviewUrl,
+          emailHeaderImage: site.email_header_image || '',
+          emailFooterText: site.email_footer_text || current.siteSettings.emailFooterText,
         },
         emailSettings: normalizeSupabaseEmailTemplates(
           (emailRows || []) as BookingEngineEmailTemplateRow[],
@@ -547,7 +561,6 @@ export default function AutoClubRhodesReservationsBoard() {
     const { data, error } = await supabase
       .from('be_reservations')
       .select('*')
-      .eq('site_id', site.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -562,7 +575,7 @@ export default function AutoClubRhodesReservationsBoard() {
       return;
     }
 
-    setReservations(((data || []) as BeReservationRow[]).map(mapBeReservation));
+    setReservations(((data || []) as BeReservationRow[]).map((row) => mapBeReservation(row, siteById.get(String(row.site_id)) || 'Unknown site')));
     setReservationsLoading(false);
   };
 
@@ -570,21 +583,33 @@ export default function AutoClubRhodesReservationsBoard() {
     void loadSupabaseReservations();
   }, []);
 
+  const sourceOptions = useMemo(
+    () => ['All', ...Array.from(new Set(reservations.map((reservation) => reservation.sourceSiteName || 'Unknown site'))).sort()],
+    [reservations],
+  );
+  const sourceFilteredReservations = useMemo(
+    () =>
+      sourceFilter === 'All'
+        ? reservations
+        : reservations.filter((reservation) => (reservation.sourceSiteName || 'Unknown site') === sourceFilter),
+    [reservations, sourceFilter],
+  );
+
   const newReservations = useMemo(
     () =>
       sortReservations(
-        reservations.filter((reservation) => !reservation.processed),
+        sourceFilteredReservations.filter((reservation) => !reservation.processed),
         newRequestsSort,
       ),
-    [newRequestsSort, reservations],
+    [newRequestsSort, sourceFilteredReservations],
   );
   const processedReservations = useMemo(
     () =>
       sortReservations(
-        reservations.filter((reservation) => reservation.processed),
+        sourceFilteredReservations.filter((reservation) => reservation.processed),
         processedSort,
       ),
-    [processedSort, reservations],
+    [processedSort, sourceFilteredReservations],
   );
 
   const summary = {
@@ -605,13 +630,22 @@ export default function AutoClubRhodesReservationsBoard() {
       templates: bookingEngineConfig.emailSettings.templates,
       site: {
         siteId: beSiteId,
-        siteName: bookingEngineConfig.siteSettings.companyName || 'AutoClub Rhodes',
+        siteName: bookingEngineConfig.siteSettings.companyName || 'Booking site',
         adminEmail:
           bookingEngineConfig.siteSettings.bookingNotificationEmail ||
           bookingEngineConfig.siteSettings.adminEmail ||
           bookingEngineConfig.emailSettings.adminEmail,
         logoImage: bookingEngineConfig.siteSettings.logoImage,
         whatsappNumber: bookingEngineConfig.siteSettings.whatsappNumber,
+        primaryColor: bookingEngineConfig.siteSettings.primaryColor,
+        secondaryColor: bookingEngineConfig.siteSettings.secondaryColor,
+        supportEmail: bookingEngineConfig.siteSettings.supportEmail,
+        phone: bookingEngineConfig.siteSettings.phone,
+        websiteUrl: bookingEngineConfig.siteSettings.websiteUrl,
+        googleReviewUrl: bookingEngineConfig.siteSettings.googleReviewUrl,
+        emailHeaderImage: bookingEngineConfig.siteSettings.emailHeaderImage,
+        emailFooterText: bookingEngineConfig.siteSettings.emailFooterText,
+        currency: bookingEngineConfig.siteSettings.currency,
       },
       reservation: toEmailReservationContext(reservation),
     });
@@ -848,13 +882,27 @@ export default function AutoClubRhodesReservationsBoard() {
         <div>
           <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] text-cyan-700">
             <Globe2 className="h-3.5 w-3.5" />
-            AUTOCLUB-RHODES
+            BOOKING ENGINE
           </div>
           <h2 className="text-lg font-black text-slate-950">Website reservations</h2>
         </div>
-        <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-cyan-800">
-          Supabase live
-        </span>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">
+            Source
+            <select
+              value={sourceFilter}
+              onChange={(event) => setSourceFilter(event.target.value)}
+              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs font-black normal-case tracking-normal text-slate-800"
+            >
+              {sourceOptions.map((source) => (
+                <option key={source} value={source}>{source}</option>
+              ))}
+            </select>
+          </label>
+          <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-cyan-800">
+            Supabase live
+          </span>
+        </div>
       </header>
 
       <div className="grid flex-shrink-0 grid-cols-4 gap-1.5 border-b border-slate-200 bg-slate-50 px-4 py-1.5">
@@ -907,9 +955,10 @@ export default function AutoClubRhodesReservationsBoard() {
           />
 
           <div className="overflow-x-auto">
-            <div className="min-w-[1410px]">
-              <div className="grid grid-cols-[170px_135px_210px_145px_145px_130px_110px_360px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
+            <div className="min-w-[1530px]">
+              <div className="grid grid-cols-[170px_120px_135px_210px_145px_145px_130px_110px_360px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
                 <SortHeader label="Customer" sortKey="customer" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
+                <span>Source</span>
                 <SortHeader label="Phone" sortKey="phone" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <SortHeader label="Car / Group" sortKey="car" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <SortHeader label="Pickup" sortKey="pickup" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
@@ -922,7 +971,7 @@ export default function AutoClubRhodesReservationsBoard() {
                 newReservations.map((reservation) => (
                   <div
                     key={reservation.id}
-                    className="grid grid-cols-[170px_135px_210px_145px_145px_130px_110px_360px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
+                    className="grid grid-cols-[170px_120px_135px_210px_145px_145px_130px_110px_360px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
                   >
                     <div className="min-w-0 pr-3">
                       <p className="truncate font-black text-slate-900">{reservation.customerName}</p>
@@ -930,6 +979,7 @@ export default function AutoClubRhodesReservationsBoard() {
                       <LicenceStatusBadge reservation={reservation} />
                       <CancellationStatusBadge reservation={reservation} />
                     </div>
+                    <SourceCell reservation={reservation} />
                     <span className="truncate pr-3 text-xs font-semibold text-slate-700">
                       {reservation.fullPhone || reservation.phone}
                     </span>
@@ -995,10 +1045,11 @@ export default function AutoClubRhodesReservationsBoard() {
           />
 
           <div className="overflow-x-auto">
-            <div className="min-w-[1550px]">
-              <div className="grid grid-cols-[135px_170px_135px_210px_145px_145px_130px_110px_360px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
+            <div className="min-w-[1670px]">
+              <div className="grid grid-cols-[135px_170px_120px_135px_210px_145px_145px_130px_110px_360px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
                 <SortHeader label="ID" sortKey="id" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Customer" sortKey="customer" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
+                <span>Source</span>
                 <SortHeader label="Phone" sortKey="phone" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Car / Group" sortKey="car" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Pickup" sortKey="pickup" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
@@ -1011,7 +1062,7 @@ export default function AutoClubRhodesReservationsBoard() {
                 processedReservations.map((reservation) => (
                   <div
                     key={reservation.id}
-                    className="grid grid-cols-[135px_170px_135px_210px_145px_145px_130px_110px_360px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
+                    className="grid grid-cols-[135px_170px_120px_135px_210px_145px_145px_130px_110px_360px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
                   >
                     <span className="font-mono text-[11px] font-black text-cyan-700">
                       {reservation.id}
@@ -1021,6 +1072,7 @@ export default function AutoClubRhodesReservationsBoard() {
                       <LicenceStatusBadge reservation={reservation} />
                       <CancellationStatusBadge reservation={reservation} />
                     </span>
+                    <SourceCell reservation={reservation} />
                     <span className="truncate pr-3 text-xs font-semibold text-slate-700">
                       {reservation.fullPhone || reservation.phone}
                     </span>
@@ -1084,7 +1136,7 @@ export default function AutoClubRhodesReservationsBoard() {
           reservation={emailReservation}
           initialTemplate={emailInitialTemplate}
           templates={bookingEngineConfig.emailSettings.templates}
-          siteName={bookingEngineConfig.siteSettings.companyName || 'AutoClub Rhodes'}
+          siteName={bookingEngineConfig.siteSettings.companyName || 'Booking site'}
           logoImage={bookingEngineConfig.siteSettings.logoImage}
           onClose={() => setEmailReservationId(null)}
           onSend={async ({ recipient, subject, message, templateId, paymentLink }) => {
@@ -1095,13 +1147,22 @@ export default function AutoClubRhodesReservationsBoard() {
             };
             const siteContext = {
               siteId: beSiteId,
-              siteName: bookingEngineConfig.siteSettings.companyName || 'AutoClub Rhodes',
+              siteName: bookingEngineConfig.siteSettings.companyName || 'Booking site',
               adminEmail:
                 bookingEngineConfig.siteSettings.bookingNotificationEmail ||
                 bookingEngineConfig.siteSettings.adminEmail ||
                 bookingEngineConfig.emailSettings.adminEmail,
               logoImage: bookingEngineConfig.siteSettings.logoImage,
               whatsappNumber: bookingEngineConfig.siteSettings.whatsappNumber,
+              primaryColor: bookingEngineConfig.siteSettings.primaryColor,
+              secondaryColor: bookingEngineConfig.siteSettings.secondaryColor,
+              supportEmail: bookingEngineConfig.siteSettings.supportEmail,
+              phone: bookingEngineConfig.siteSettings.phone,
+              websiteUrl: bookingEngineConfig.siteSettings.websiteUrl,
+              googleReviewUrl: bookingEngineConfig.siteSettings.googleReviewUrl,
+              emailHeaderImage: bookingEngineConfig.siteSettings.emailHeaderImage,
+              emailFooterText: bookingEngineConfig.siteSettings.emailFooterText,
+              currency: bookingEngineConfig.siteSettings.currency,
             };
             const renderedSubject = renderBookingEmailTemplate(subject, emailContext);
             const renderedMessage = renderBookingEmailTemplate(message, emailContext);
@@ -1770,6 +1831,14 @@ function CarCell({ reservation }: { reservation: WebsiteReservation }) {
   );
 }
 
+function SourceCell({ reservation }: { reservation: WebsiteReservation }) {
+  return (
+    <span className="mr-3 w-fit truncate rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-black text-cyan-800">
+      {reservation.sourceSiteName || 'Unknown site'}
+    </span>
+  );
+}
+
 function LicenceStatusBadge({ reservation }: { reservation: WebsiteReservation }) {
   const uploaded = Boolean(reservation.licenceFrontUrl || reservation.licenceBackUrl || reservation.licenceUploadedAt);
   return (
@@ -2010,7 +2079,7 @@ function EmailComposerModal({
               <p className="font-mono text-xs font-black text-cyan-700">{reservation.id}</p>
               <h3 className="mt-1 text-xl font-black text-slate-950">Email composer</h3>
               <p className="mt-1 text-xs text-slate-500">
-                {siteName} - Car rental in Rhodes - Internal SMTP
+                {siteName} - Car rental - Internal SMTP
               </p>
             </div>
           </div>

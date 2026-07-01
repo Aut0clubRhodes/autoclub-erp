@@ -84,6 +84,15 @@ type BeSiteRow = {
   domain: string | null;
   admin_email?: string | null;
   booking_notification_email?: string | null;
+  primary_color?: string | null;
+  secondary_color?: string | null;
+  support_email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  website_url?: string | null;
+  google_review_url?: string | null;
+  email_header_image?: string | null;
+  email_footer_text?: string | null;
   currency?: string | null;
   timezone?: string | null;
   default_language?: BookingDefaultLanguage | string | null;
@@ -355,6 +364,15 @@ type SiteSettings = {
   domain: string;
   adminEmail: string;
   bookingNotificationEmail: string;
+  primaryColor: string;
+  secondaryColor: string;
+  supportEmail: string;
+  phone: string;
+  whatsapp: string;
+  websiteUrl: string;
+  googleReviewUrl: string;
+  emailHeaderImage: string;
+  emailFooterText: string;
   currency: string;
   timezone: string;
   defaultLanguage: BookingDefaultLanguage;
@@ -502,10 +520,19 @@ const initialBookingEngineSettings: BookingEngineSettings = {
 };
 
 const initialSiteSettings: SiteSettings = {
-  companyName: 'AutoClub Rhodes',
+  companyName: 'Booking Site',
   domain: '',
   adminEmail: '',
   bookingNotificationEmail: '',
+  primaryColor: '#073f5d',
+  secondaryColor: '#059669',
+  supportEmail: '',
+  phone: '',
+  whatsapp: '',
+  websiteUrl: '',
+  googleReviewUrl: 'https://g.page/r/CYOr9zt3_-KVEBM/review',
+  emailHeaderImage: '',
+  emailFooterText: 'For urgent changes, contact us using the support details above.',
   currency: 'EUR',
   timezone: 'Europe/Athens',
   defaultLanguage: 'English',
@@ -1211,6 +1238,15 @@ export default function BookingEngineAdmin() {
       domain: (row.domain || '').trim(),
       adminEmail: row.admin_email || '',
       bookingNotificationEmail: row.booking_notification_email || '',
+      primaryColor: row.primary_color || '#073f5d',
+      secondaryColor: row.secondary_color || '#059669',
+      supportEmail: row.support_email || row.admin_email || '',
+      phone: row.phone || '',
+      whatsapp: row.whatsapp || row.whatsapp_number || '',
+      websiteUrl: row.website_url || '',
+      googleReviewUrl: row.google_review_url || 'https://g.page/r/CYOr9zt3_-KVEBM/review',
+      emailHeaderImage: row.email_header_image || '',
+      emailFooterText: row.email_footer_text || '',
       currency: row.currency || 'EUR',
       timezone: row.timezone || 'Europe/Athens',
       defaultLanguage:
@@ -1580,16 +1616,14 @@ export default function BookingEngineAdmin() {
       return;
     }
 
-    const site = ((sites || []) as BeSiteRow[]).find(
-      (item) => item.domain === 'autoclub-rhodes.com',
-    ) || null;
+    const site = ((sites || []) as BeSiteRow[]).find((item) => item.id === beSiteId) || ((sites || []) as BeSiteRow[])[0] || null;
 
     console.log('MATCHED SITE', site);
 
     if (!site?.id) {
-      console.warn('Site domain mismatch', sites);
+      console.warn('No Booking Engine site could be selected', sites);
       setBeSiteId(null);
-      setGroupsError('Site domain mismatch');
+      setGroupsError('No Booking Engine site could be selected');
       setGroups([]);
       setGroupsLoading(false);
       return;
@@ -2809,6 +2843,15 @@ export default function BookingEngineAdmin() {
     domain: settings.domain.trim(),
     admin_email: settings.adminEmail.trim(),
     booking_notification_email: settings.bookingNotificationEmail.trim(),
+    primary_color: settings.primaryColor.trim(),
+    secondary_color: settings.secondaryColor.trim(),
+    support_email: settings.supportEmail.trim(),
+    phone: settings.phone.trim(),
+    whatsapp: settings.whatsapp.trim(),
+    website_url: settings.websiteUrl.trim(),
+    google_review_url: settings.googleReviewUrl.trim(),
+    email_header_image: settings.emailHeaderImage,
+    email_footer_text: settings.emailFooterText.trim(),
     currency: settings.currency.trim(),
     timezone: settings.timezone.trim(),
     default_language: settings.defaultLanguage,
@@ -2820,6 +2863,45 @@ export default function BookingEngineAdmin() {
     internal_notes: settings.internalNotes.trim(),
   });
 
+  const optionalBeSiteBrandingColumns = [
+    'primary_color',
+    'secondary_color',
+    'support_email',
+    'phone',
+    'whatsapp',
+    'website_url',
+    'google_review_url',
+    'email_header_image',
+    'email_footer_text',
+  ] as const;
+
+  const isMissingBeSiteColumnError = (error: {
+    code?: string;
+    message?: string;
+    details?: string;
+    hint?: string;
+  }) => {
+    const errorText = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`.toLowerCase();
+    return (
+      error.code === 'PGRST204' ||
+      error.code === '42703' ||
+      errorText.includes('schema cache') ||
+      errorText.includes('could not find') ||
+      errorText.includes('column')
+    );
+  };
+
+  const removeMissingBeSiteColumns = (
+    payload: ReturnType<typeof siteSettingsPayload>,
+    missingColumns: Set<string>,
+  ) => {
+    const writablePayload: Record<string, unknown> = { ...payload };
+    missingColumns.forEach((column) => {
+      delete writablePayload[column];
+    });
+    return writablePayload;
+  };
+
   const saveSiteSettings = async () => {
     if (!beSiteId) {
       setSiteSettingsError('Failed to load site settings from Supabase');
@@ -2829,12 +2911,48 @@ export default function BookingEngineAdmin() {
     const payload = siteSettingsPayload(siteSettings);
     setSiteSettingsLoading(true);
     setSiteSettingsError('');
-    console.log('SITE SETTINGS SAVE PAYLOAD', payload);
     console.log('SITE SETTINGS SAVE SITE ID', beSiteId);
+
+    const missingOptionalColumns = new Set<string>();
+    await Promise.all(
+      optionalBeSiteBrandingColumns.map(async (column) => {
+        const { error } = await supabase
+          .from('be_sites')
+          .select(`id, ${column}`)
+          .eq('id', beSiteId)
+          .limit(1);
+
+        if (!error) {
+          return;
+        }
+
+        console.error('SITE SETTINGS COLUMN CHECK ERROR', {
+          column,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+
+        if (isMissingBeSiteColumnError(error)) {
+          missingOptionalColumns.add(column);
+        }
+      }),
+    );
+
+    if (missingOptionalColumns.size > 0) {
+      console.warn(
+        'SITE SETTINGS MISSING OPTIONAL COLUMNS - saving existing be_sites columns only',
+        Array.from(missingOptionalColumns),
+      );
+    }
+
+    const writablePayload = removeMissingBeSiteColumns(payload, missingOptionalColumns);
+    console.log('SITE SETTINGS SAVE PAYLOAD', writablePayload);
 
     const { data, error } = await supabase
       .from('be_sites')
-      .update(payload)
+      .update(writablePayload)
       .eq('id', beSiteId)
       .select('*')
       .maybeSingle();
@@ -2867,7 +2985,11 @@ export default function BookingEngineAdmin() {
     }
 
     setSiteSettingsError('');
-    setSiteSettingsMessage('Site settings saved to Supabase.');
+    setSiteSettingsMessage(
+      missingOptionalColumns.size > 0
+        ? `Site settings saved. Apply the required SQL to persist: ${Array.from(missingOptionalColumns).join(', ')}.`
+        : 'Site settings saved to Supabase.',
+    );
     await loadSupabaseSiteSettings(beSiteId);
   };
 
@@ -4351,7 +4473,7 @@ function BookingSettingsPanel({
             <TextField
               label="Admin email address"
               value={adminEmail}
-              placeholder="reservations@autoclub-rhodes.com"
+              placeholder="reservations@example.com"
               onChange={onAdminEmailChange}
             />
           </div>
@@ -4633,7 +4755,7 @@ function SiteSettingsPanel({
             <TextField
               label="Site / Company Name"
               value={settings.companyName}
-              placeholder="AutoClub Rhodes"
+              placeholder="Booking Site"
               onChange={(companyName) => updateSettings({ companyName })}
             />
             <TextField
@@ -4641,6 +4763,32 @@ function SiteSettingsPanel({
               value={settings.domain}
               placeholder="https://example.com"
               onChange={(domain) => updateSettings({ domain })}
+            />
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <TextField
+              label="Primary Color"
+              value={settings.primaryColor}
+              placeholder="#073f5d"
+              onChange={(primaryColor) => updateSettings({ primaryColor })}
+            />
+            <TextField
+              label="Secondary Color"
+              value={settings.secondaryColor}
+              placeholder="#059669"
+              onChange={(secondaryColor) => updateSettings({ secondaryColor })}
+            />
+            <TextField
+              label="Website URL"
+              value={settings.websiteUrl}
+              placeholder="https://example.com"
+              onChange={(websiteUrl) => updateSettings({ websiteUrl })}
+            />
+            <TextField
+              label="Email Header Image"
+              value={settings.emailHeaderImage}
+              placeholder="https://example.com/header.jpg"
+              onChange={(emailHeaderImage) => updateSettings({ emailHeaderImage })}
             />
           </div>
           <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
@@ -4702,10 +4850,34 @@ function SiteSettingsPanel({
               onChange={(bookingNotificationEmail) => updateSettings({ bookingNotificationEmail })}
             />
             <TextField
+              label="Support Email"
+              value={settings.supportEmail}
+              placeholder="support@example.com"
+              onChange={(supportEmail) => updateSettings({ supportEmail })}
+            />
+            <TextField
+              label="Phone"
+              value={settings.phone}
+              placeholder="+30..."
+              onChange={(phone) => updateSettings({ phone })}
+            />
+            <TextField
               label="WhatsApp Number"
               value={settings.whatsappNumber}
               placeholder="+30..."
               onChange={(whatsappNumber) => updateSettings({ whatsappNumber })}
+            />
+            <TextField
+              label="White-label WhatsApp"
+              value={settings.whatsapp}
+              placeholder="+30..."
+              onChange={(whatsapp) => updateSettings({ whatsapp })}
+            />
+            <TextField
+              label="Google Review URL"
+              value={settings.googleReviewUrl}
+              placeholder="https://g.page/..."
+              onChange={(googleReviewUrl) => updateSettings({ googleReviewUrl })}
               className="sm:col-span-2"
             />
           </div>
@@ -4778,6 +4950,13 @@ function SiteSettingsPanel({
               value={settings.privacyPolicyUrl}
               placeholder="https://example.com/privacy"
               onChange={(privacyPolicyUrl) => updateSettings({ privacyPolicyUrl })}
+            />
+            <TextField
+              label="Email Footer Text"
+              value={settings.emailFooterText}
+              placeholder="For urgent changes, contact us..."
+              onChange={(emailFooterText) => updateSettings({ emailFooterText })}
+              className="sm:col-span-2"
             />
             <label className="block sm:col-span-2">
               <FieldLabel>Site Status</FieldLabel>
@@ -5183,7 +5362,7 @@ function EmailsPanel({
         <EmailTemplatePreviewModal
           template={settings.templates[previewTemplateId]}
           adminEmail={settings.adminEmail}
-          siteName={siteSettings.companyName || 'AutoClub Rhodes'}
+          siteName={siteSettings.companyName || 'Booking site'}
           logoImage={siteSettings.logoImage}
           onClose={() => setPreviewTemplateId(null)}
           onSave={(subject, message) => {
@@ -5261,7 +5440,7 @@ function EmailTemplatePreviewModal({
   const usesManualBody = adminManualPreviewTemplateIds.has(template.id);
   const recipient =
     template.id === 'admin_new_confirmed_reservation' || template.id === 'admin_new_onrequest_reservation'
-      ? adminEmail || 'reservations@autoclub-rhodes.com'
+      ? adminEmail || 'reservations@example.com'
       : 'maria.demo@example.com';
   const previewHtml = buildBookingEmailHtml({
     site: {
@@ -5315,7 +5494,7 @@ function EmailTemplatePreviewModal({
                 <div>
                   <p className="text-lg font-black text-slate-950">{siteName}</p>
                   <p className="text-xs font-bold uppercase tracking-[0.12em] text-cyan-700">
-                    Car rental in Rhodes
+                    Car rental
                   </p>
                 </div>
               </div>

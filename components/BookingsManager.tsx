@@ -35,6 +35,7 @@ const SEND_REMINDER_WEBHOOK_URL = 'https://hook.eu1.make.com/8hq66ccdrcx0aa56ui4
 const WHATSAPP_SEND_WEBHOOK_URL = 'https://hook.eu1.make.com/d2vag9sqf3q6akb9iwk4jx8rbuo84tx2';
 const REMINDER_SEND_DELAY_MS = 5000;
 const BULK_REMINDER_DELAY_MS = 10000;
+const RESERVATIONS_AUTO_REFRESH_MS = 4 * 60 * 1000;
 
 type ReservationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'RETURN';
 type LicenceState = 'uploaded' | 'empty';
@@ -289,6 +290,13 @@ const formatDate = (value: string) => {
 };
 
 const formatDateTime = (value: string) => (value ? new Date(value).toLocaleString('el-GR') : '-');
+const formatTime = (value: string) =>
+  value
+    ? new Date(value).toLocaleTimeString('el-GR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '-';
 const formatCompactDateTime = (value: string) => {
   if (!value) return '-';
   const date = new Date(value);
@@ -669,9 +677,12 @@ export default function BookingsManager({
   const pendingReminderIdsRef = useRef<Set<string>>(new Set());
   const rateLimitedReminderIdsRef = useRef<Set<string>>(new Set());
   const isBulkSendingRemindersRef = useRef(false);
+  const shouldSkipAutoRefreshRef = useRef(false);
+  const autoRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isBulkSendingReminders, setIsBulkSendingReminders] = useState(false);
   const [reminderFeedback, setReminderFeedback] = useState('');
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
+  const [lastReservationsUpdatedAt, setLastReservationsUpdatedAt] = useState('');
   const [mobileReservationId, setMobileReservationId] = useState('');
   const [detailPanelHeight, setDetailPanelHeight] = useState(330);
   const [isResizingDetails, setIsResizingDetails] = useState(false);
@@ -727,6 +738,10 @@ export default function BookingsManager({
       window.removeEventListener('pointercancel', stopResizing);
     };
   }, [isResizingDetails]);
+
+  useEffect(() => {
+    shouldSkipAutoRefreshRef.current = Boolean(editingReservation || showNewModal);
+  }, [editingReservation, showNewModal]);
 
   const notifyBookingEventOnce = async (
     reservation: Pick<Reservation, 'id' | 'hotelRoom' | 'name'>,
@@ -852,6 +867,7 @@ export default function BookingsManager({
         : nextReservations[0]?.id || '';
     });
     setIsLoadingReservations(false);
+    setLastReservationsUpdatedAt(new Date().toISOString());
     void ensureReservationNotifications(nextReservations);
     return nextReservations;
   };
@@ -859,6 +875,28 @@ export default function BookingsManager({
   useEffect(() => {
     void Promise.resolve().then(() => loadReservations());
     void Promise.resolve().then(() => loadUnreadWhatsappReservations());
+  }, []);
+
+  useEffect(() => {
+    autoRefreshTimerRef.current = setInterval(() => {
+      if (shouldSkipAutoRefreshRef.current) {
+        console.log('Reservations auto-refresh skipped: reservation form is open.');
+        return;
+      }
+
+      void Promise.resolve()
+        .then(() => loadReservations())
+        .then(() => loadUnreadWhatsappReservations())
+        .catch((error) => {
+          console.warn('Reservations auto-refresh failed', error);
+        });
+    }, RESERVATIONS_AUTO_REFRESH_MS);
+
+    return () => {
+      if (autoRefreshTimerRef.current) {
+        clearInterval(autoRefreshTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -1900,6 +1938,11 @@ export default function BookingsManager({
         >
           + Νέα Κράτηση
         </button>
+        <div className="flex h-[26px] shrink-0 items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold text-slate-500">
+          <span>Auto-refresh: 4 min</span>
+          <span className="h-3 w-px bg-slate-300" />
+          <span>Last updated: {formatTime(lastReservationsUpdatedAt)}</span>
+        </div>
       </div>
 
       <div className="flex flex-shrink-0 flex-wrap items-center gap-x-2 gap-y-px rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[9px] font-bold text-slate-700">
