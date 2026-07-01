@@ -107,6 +107,8 @@ const statusStyles: Record<ReservationStatus, string> = {
   Cancelled: 'border-rose-200 bg-rose-50 text-rose-700',
 };
 
+const DRIVER_LICENCE_STORAGE_BUCKET = 'be-licences';
+
 const emailVariables = [
   '{{customer_name}}',
   '{{reservation_id}}',
@@ -955,8 +957,8 @@ export default function AutoClubRhodesReservationsBoard() {
           />
 
           <div className="overflow-x-auto">
-            <div className="min-w-[1530px]">
-              <div className="grid grid-cols-[170px_120px_135px_210px_145px_145px_130px_110px_360px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
+            <div className="min-w-[1620px]">
+              <div className="grid grid-cols-[170px_120px_135px_210px_145px_145px_130px_130px_430px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
                 <SortHeader label="Customer" sortKey="customer" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
                 <span>Source</span>
                 <SortHeader label="Phone" sortKey="phone" sort={newRequestsSort} onSort={(key) => toggleSort(key, setNewRequestsSort)} />
@@ -971,7 +973,7 @@ export default function AutoClubRhodesReservationsBoard() {
                 newReservations.map((reservation) => (
                   <div
                     key={reservation.id}
-                    className="grid grid-cols-[170px_120px_135px_210px_145px_145px_130px_110px_360px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
+                    className="grid grid-cols-[170px_120px_135px_210px_145px_145px_130px_130px_430px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
                   >
                     <div className="min-w-0 pr-3">
                       <p className="truncate font-black text-slate-900">{reservation.customerName}</p>
@@ -987,8 +989,8 @@ export default function AutoClubRhodesReservationsBoard() {
                     <DateCell date={reservation.pickupDate} time={reservation.pickupTime} />
                     <DateCell date={reservation.returnDate} time={reservation.returnTime} />
                     <StatusBadge status={reservation.status} />
-                    <span className="font-black text-slate-900">{formatMoney(reservation.total)}</span>
-                    <div className="actions-cell flex w-full flex-nowrap items-center justify-end gap-2 justify-self-end whitespace-nowrap">
+                    <span className="min-w-[130px] pr-4 font-black text-slate-900">{formatMoney(reservation.total)}</span>
+                    <div className="actions-cell flex min-w-[430px] w-full flex-nowrap items-center justify-end gap-2 justify-self-end whitespace-nowrap">
                       <TextAction
                         label="View"
                         icon={Eye}
@@ -1045,8 +1047,8 @@ export default function AutoClubRhodesReservationsBoard() {
           />
 
           <div className="overflow-x-auto">
-            <div className="min-w-[1670px]">
-              <div className="grid grid-cols-[135px_170px_120px_135px_210px_145px_145px_130px_110px_360px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
+            <div className="min-w-[1760px]">
+              <div className="grid grid-cols-[135px_170px_120px_135px_210px_145px_145px_130px_130px_430px] border-y border-slate-200 bg-slate-100 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.05em] text-slate-600">
                 <SortHeader label="ID" sortKey="id" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <SortHeader label="Customer" sortKey="customer" sort={processedSort} onSort={(key) => toggleSort(key, setProcessedSort)} />
                 <span>Source</span>
@@ -1062,7 +1064,7 @@ export default function AutoClubRhodesReservationsBoard() {
                 processedReservations.map((reservation) => (
                   <div
                     key={reservation.id}
-                    className="grid grid-cols-[135px_170px_120px_135px_210px_145px_145px_130px_110px_360px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
+                    className="grid grid-cols-[135px_170px_120px_135px_210px_145px_145px_130px_130px_430px] items-center border-b border-slate-200 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
                   >
                     <span className="font-mono text-[11px] font-black text-cyan-700">
                       {reservation.id}
@@ -1080,8 +1082,8 @@ export default function AutoClubRhodesReservationsBoard() {
                     <DateCell date={reservation.pickupDate} time={reservation.pickupTime} />
                     <DateCell date={reservation.returnDate} time={reservation.returnTime} />
                     <StatusBadge status={reservation.status} />
-                    <span className="font-black text-slate-900">{formatMoney(reservation.total)}</span>
-                    <div className="actions-cell flex w-full flex-nowrap items-center justify-end gap-2 justify-self-end whitespace-nowrap">
+                    <span className="min-w-[130px] pr-4 font-black text-slate-900">{formatMoney(reservation.total)}</span>
+                    <div className="actions-cell flex min-w-[430px] w-full flex-nowrap items-center justify-end gap-2 justify-self-end whitespace-nowrap">
                       <TextAction
                         label="View"
                         icon={Eye}
@@ -1280,15 +1282,25 @@ function ReservationEditor({
     onDraftChange({ ...draft, ...patch });
   };
 
+  const openLicenceFiles = async () => {
+    const urls = [draft.licenceFrontUrl, draft.licenceBackUrl].filter(Boolean) as string[];
+    const resolvedUrls = await Promise.all(urls.map(resolveLicencePreviewUrl));
+    resolvedUrls.forEach((resolvedUrl) => window.open(resolvedUrl, '_blank', 'noopener,noreferrer'));
+  };
+
+  const actionButtonClass =
+    'inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-black transition';
+
   return (
-    <aside className="absolute inset-y-0 right-0 z-30 flex w-full max-w-[860px] flex-col border-l border-slate-200 bg-white shadow-[-24px_0_70px_rgba(15,23,42,0.2)]">
-      <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4">
-        <div>
+    <aside className="absolute inset-y-0 right-0 z-30 flex w-full max-w-[980px] flex-col border-l border-slate-200 bg-white shadow-[-24px_0_70px_rgba(15,23,42,0.2)]">
+      <header className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
           <p className="font-mono text-xs font-black text-cyan-700">{draft.id}</p>
           <h3 className="mt-1 text-xl font-black text-slate-950">View / Edit reservation</h3>
           <p className="mt-1 text-xs text-slate-500">Loaded from Supabase.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={onClose}
@@ -1298,138 +1310,134 @@ function ReservationEditor({
             <X className="h-4 w-4" />
           </button>
         </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => printReservationDetails(draft)}
+            className={`${actionButtonClass} border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}
+          >
+            <Printer className="h-3.5 w-3.5" />
+            Print
+          </button>
+          {(draft.licenceFrontUrl || draft.licenceBackUrl) && (
+            <button
+              type="button"
+              onClick={openLicenceFiles}
+              className={`${actionButtonClass} border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800`}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              View Licence
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              const firstInput = document.querySelector('aside input') as HTMLElement | null;
+              firstInput?.focus();
+            }}
+            className={`${actionButtonClass} border-cyan-700 bg-cyan-700 text-white hover:bg-cyan-800`}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Edit Reservation
+          </button>
+          <button
+            type="button"
+            onClick={() => onEmail(draft.customerEmailTemplateId || 'customer_confirmed_reservation')}
+            className={`${actionButtonClass} border-cyan-700 bg-white text-cyan-800 hover:bg-cyan-50`}
+          >
+            <Mail className="h-3.5 w-3.5" />
+            Send Email
+          </button>
+          {draft.status !== 'Cancelled' && (
+            <button
+              type="button"
+              onClick={onCancelReservation}
+              className={`${actionButtonClass} border-amber-600 bg-amber-600 text-white hover:bg-amber-700`}
+            >
+              <X className="h-3.5 w-3.5" />
+              Cancel Reservation
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onDelete}
+            className={`${actionButtonClass} border-rose-600 bg-rose-600 text-white hover:bg-rose-700`}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete Reservation
+          </button>
+        </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <section className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-black text-slate-900">Reservation controls</p>
-              <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                Use these actions for email, cancellation, print and testing delete.
-              </p>
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="grid gap-3 lg:grid-cols-3">
+          <EditorSection title="Customer details">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <EditorField
+                label="Customer name"
+                value={draft.customerName}
+                onChange={(customerName) => updateDraft({ customerName })}
+                className="sm:col-span-2"
+              />
+              <EditorField
+                label="Country"
+                value={draft.country || ''}
+                onChange={(country) => updateDraft({ country })}
+              />
+              <EditorField
+                label="Country code"
+                value={draft.countryCode || ''}
+                onChange={(countryCode) =>
+                  updateDraft({
+                    countryCode,
+                    fullPhone: `${countryCode} ${draft.phone}`.trim(),
+                  })
+                }
+              />
+              <EditorField
+                label="Phone"
+                value={draft.phone}
+                onChange={(phone) => updateDraft({ phone, fullPhone: `${draft.countryCode || ''} ${phone}`.trim() })}
+              />
+              <EditorField
+                label="Full phone"
+                value={draft.fullPhone || draft.phone}
+                onChange={(fullPhone) => updateDraft({ fullPhone })}
+              />
+              <EditorField
+                label="Email"
+                value={draft.email}
+                onChange={(email) => updateDraft({ email })}
+                className="sm:col-span-2"
+              />
+              <EditorField
+                label="Date of Birth"
+                type="date"
+                value={draft.dateOfBirth || ''}
+                onChange={(dateOfBirth) => updateDraft({ dateOfBirth })}
+              />
+              <EditorField
+                label="Flight Number"
+                value={draft.flightNumber}
+                onChange={(flightNumber) => updateDraft({ flightNumber })}
+              />
+              <EditorField
+                label="Hotel / Villa / Apartment"
+                value={draft.accommodationName || draft.hotelVillaApartment || draft.hotelRoom}
+                onChange={(accommodationName) =>
+                  updateDraft({
+                    accommodationName,
+                    hotelVillaApartment: accommodationName,
+                    hotelRoom: accommodationName,
+                  })
+                }
+                className="sm:col-span-2"
+              />
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const firstInput = document.querySelector('aside input') as HTMLElement | null;
-                  firstInput?.focus();
-                }}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-cyan-700 bg-cyan-700 px-3 text-xs font-black text-white transition hover:bg-cyan-800"
-              >
-                <Pencil className="h-4 w-4" />
-                Edit Reservation
-              </button>
-              <button
-                type="button"
-                onClick={() => onEmail(draft.customerEmailTemplateId || 'customer_confirmed_reservation')}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-cyan-700 bg-white px-3 text-xs font-black text-cyan-800 transition hover:bg-cyan-50"
-              >
-                <Mail className="h-4 w-4" />
-                Send Email
-              </button>
-              {draft.status !== 'Cancelled' && (
-                <button
-                  type="button"
-                  onClick={onCancelReservation}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-amber-600 bg-amber-600 px-3 text-xs font-black text-white transition hover:bg-amber-700"
-                >
-                  <X className="h-4 w-4" />
-                  Cancel Reservation
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onDelete}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-rose-600 bg-rose-600 px-3 text-xs font-black text-white transition hover:bg-rose-700"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete Reservation
-              </button>
-              <button
-                type="button"
-                onClick={() => printReservationDetails(draft)}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-100"
-              >
-                <Printer className="h-4 w-4" />
-                Print
-              </button>
-              {(draft.licenceFrontUrl || draft.licenceBackUrl) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (draft.licenceFrontUrl) window.open(draft.licenceFrontUrl, '_blank', 'noopener,noreferrer');
-                    if (draft.licenceBackUrl) window.open(draft.licenceBackUrl, '_blank', 'noopener,noreferrer');
-                  }}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-700 bg-emerald-700 px-3 text-xs font-black text-white transition hover:bg-emerald-800"
-                >
-                  <Eye className="h-4 w-4" />
-                  View licence
-                </button>
-              )}
-            </div>
-          </div>
-        </section>
-        <div className="grid gap-3 md:grid-cols-2">
-          <EditorField
-            label="Customer name"
-            value={draft.customerName}
-            onChange={(customerName) => updateDraft({ customerName })}
-            className="md:col-span-2"
-          />
-          <EditorField
-            label="Country"
-            value={draft.country || ''}
-            onChange={(country) => updateDraft({ country })}
-          />
-          <EditorField
-            label="Phone"
-            value={draft.phone}
-            onChange={(phone) => updateDraft({ phone, fullPhone: `${draft.countryCode || ''} ${phone}`.trim() })}
-          />
-          <EditorField
-            label="Country code"
-            value={draft.countryCode || ''}
-            onChange={(countryCode) =>
-              updateDraft({
-                countryCode,
-                fullPhone: `${countryCode} ${draft.phone}`.trim(),
-              })
-            }
-          />
-          <EditorField
-            label="Full phone"
-            value={draft.fullPhone || draft.phone}
-            onChange={(fullPhone) => updateDraft({ fullPhone })}
-          />
-          <EditorField
-            label="Email"
-            value={draft.email}
-            onChange={(email) => updateDraft({ email })}
-          />
-          <EditorField
-            label="Date of Birth"
-            type="date"
-            value={draft.dateOfBirth || ''}
-            onChange={(dateOfBirth) => updateDraft({ dateOfBirth })}
-          />
-          <EditorField
-            label="Flight Number"
-            value={draft.flightNumber}
-            onChange={(flightNumber) => updateDraft({ flightNumber })}
-          />
-          <EditorField
-            label="Hotel / Villa / Apartment"
-            value={draft.accommodationName || draft.hotelVillaApartment || draft.hotelRoom}
-            onChange={(accommodationName) =>
-              updateDraft({
-                accommodationName,
-                hotelVillaApartment: accommodationName,
-                hotelRoom: accommodationName,
-              })
-            }
-          />
+          </EditorSection>
+          <EditorSection title="Booking details" className="lg:col-span-2">
+            <div className="grid gap-2 md:grid-cols-3">
           <EditorField
             label="Car"
             value={draft.carName}
@@ -1530,17 +1538,18 @@ function ReservationEditor({
               <option value="Cancelled">Cancelled</option>
             </select>
           </label>
-          <label className="block md:col-span-2">
-            <EditorLabel>Notes</EditorLabel>
+            </div>
+          </EditorSection>
+          <EditorSection title="Notes">
             <textarea
               value={draft.notes}
               onChange={(event) => updateDraft({ notes: event.target.value })}
-              rows={4}
+              rows={5}
               placeholder="Internal reservation notes"
-              className="mt-1.5 w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              className="w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
             />
-          </label>
-          <section id="driver-licence-section" className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 md:col-span-2">
+          </EditorSection>
+          <section id="driver-licence-section" className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 lg:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-black text-slate-900">Driver licence</p>
@@ -1580,7 +1589,7 @@ function ReservationEditor({
               </p>
             )}
           </section>
-          <section className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-black text-slate-900">Submitted extras</p>
@@ -1607,7 +1616,7 @@ function ReservationEditor({
               )}
             </div>
           </section>
-          <section className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-3 lg:col-span-2">
             <div>
               <p className="text-sm font-black text-slate-900">Custom checkout fields</p>
               <p className="mt-0.5 text-xs text-slate-500">Values submitted from Public Booking Preview.</p>
@@ -1629,7 +1638,7 @@ function ReservationEditor({
               )}
             </div>
           </section>
-          <section className="rounded-xl border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+          <section className="rounded-xl border border-slate-200 bg-slate-50 p-3 lg:col-span-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-black text-slate-900">Email preview flow</p>
@@ -1706,6 +1715,23 @@ function ReservationEditor({
         </div>
       </footer>
     </aside>
+  );
+}
+
+function EditorSection({
+  title,
+  className = '',
+  children,
+}: {
+  title: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={`rounded-xl border border-slate-200 bg-slate-50 p-3 ${className}`}>
+      <p className="mb-2 text-sm font-black text-slate-900">{title}</p>
+      {children}
+    </section>
   );
 }
 
@@ -1863,13 +1889,80 @@ function CancellationStatusBadge({ reservation }: { reservation: WebsiteReservat
   );
 }
 
+const extractLicenceStoragePath = (url: string) => {
+  const cleanUrl = url.trim();
+  const bucketMarker = `${DRIVER_LICENCE_STORAGE_BUCKET}/`;
+
+  try {
+    const parsedUrl = new URL(cleanUrl);
+    const publicMarker = `/storage/v1/object/public/${bucketMarker}`;
+    const signedMarker = `/storage/v1/object/sign/${bucketMarker}`;
+    const rawMarker = `/storage/v1/object/${bucketMarker}`;
+    const matchingMarker = [publicMarker, signedMarker, rawMarker].find((marker) =>
+      parsedUrl.pathname.includes(marker),
+    );
+
+    if (matchingMarker) {
+      return decodeURIComponent(parsedUrl.pathname.split(matchingMarker)[1] || '');
+    }
+  } catch {
+    // Stored value may already be a bucket-relative object path.
+  }
+
+  return cleanUrl
+    .replace(/^\/+/, '')
+    .replace(/^public\//, '')
+    .replace(new RegExp(`^${DRIVER_LICENCE_STORAGE_BUCKET}/`), '')
+    .replace(new RegExp(`^storage/v1/object/public/${DRIVER_LICENCE_STORAGE_BUCKET}/`), '');
+};
+
+const resolveLicencePreviewUrl = async (url: string) => {
+  const storagePath = extractLicenceStoragePath(url);
+  if (!storagePath) return url;
+
+  const { data, error } = await supabase.storage
+    .from(DRIVER_LICENCE_STORAGE_BUCKET)
+    .createSignedUrl(storagePath, 60 * 60);
+
+  if (!error && data?.signedUrl) {
+    return data.signedUrl;
+  }
+
+  console.warn('Licence preview signed URL warning', {
+    bucket: DRIVER_LICENCE_STORAGE_BUCKET,
+    storagePath,
+    error,
+  });
+
+  return url.startsWith('http')
+    ? url
+    : supabase.storage.from(DRIVER_LICENCE_STORAGE_BUCKET).getPublicUrl(storagePath).data.publicUrl;
+};
+
 function LicencePreview({ label, url }: { label: string; url: string }) {
-  const isPdf = url.toLowerCase().includes('.pdf');
+  const [previewUrl, setPreviewUrl] = useState(url);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const storagePath = extractLicenceStoragePath(url);
+  const isPdf = storagePath.toLowerCase().endsWith('.pdf') || url.toLowerCase().includes('.pdf');
+  const isImage = /\.(png|jpe?g|webp|gif|bmp)$/i.test(storagePath.split('?')[0] || url.split('?')[0]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void resolveLicencePreviewUrl(url).then((resolvedUrl) => {
+      if (!cancelled) setPreviewUrl(resolvedUrl);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [storagePath, url]);
+
   return (
     <div className="rounded-lg border border-emerald-100 bg-white p-2">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-[0.07em] text-slate-500">Licence {label}</p>
-        <a href={url} target="_blank" rel="noreferrer" className="text-xs font-black text-emerald-700 underline">
+        <a href={previewUrl || url} target="_blank" rel="noreferrer" className="text-xs font-black text-emerald-700 underline">
           Open
         </a>
       </div>
@@ -1877,8 +1970,18 @@ function LicencePreview({ label, url }: { label: string; url: string }) {
         <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-xs font-bold text-slate-500">
           PDF uploaded
         </div>
+      ) : isImage && !previewFailed ? (
+        <img
+          src={previewUrl || url}
+          alt={`Licence ${label}`}
+          onError={() => setPreviewFailed(true)}
+          className="h-36 w-full rounded-lg border border-slate-100 object-contain"
+        />
       ) : (
-        <img src={url} alt={`Licence ${label}`} className="h-32 w-full rounded-lg object-cover" />
+        <div className="flex h-36 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 text-center text-xs font-bold text-slate-500">
+          <span>Preview unavailable</span>
+          <span className="mt-1 text-[10px] font-semibold text-slate-400">Use Open to view the uploaded file.</span>
+        </div>
       )}
     </div>
   );

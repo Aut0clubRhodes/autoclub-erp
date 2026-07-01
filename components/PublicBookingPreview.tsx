@@ -219,6 +219,8 @@ const STEP_INDEX: Record<PreviewStep, number> = {
   success: 4,
 };
 
+const DRIVER_LICENCE_STORAGE_BUCKET = 'be-licences';
+
 const CUSTOMER_FIELD_TYPES: Partial<Record<CheckoutFieldId, 'text' | 'email' | 'tel'>> = {
   email: 'email',
   phone: 'tel',
@@ -1293,12 +1295,29 @@ export default function PublicBookingPreview({
     if (!beSiteId || !submittedReservationDbId) throw new Error('Reservation is not ready for licence upload.');
     const extension = file.name.split('.').pop()?.toLowerCase() || 'file';
     const path = `${beSiteId}/${submittedReservationDbId}/${side}.${extension}`;
-    const { error } = await supabase.storage.from('be-licences').upload(path, file, {
+    console.log('LICENCE STORAGE UPLOAD START', {
+      bucket: DRIVER_LICENCE_STORAGE_BUCKET,
+      path,
+      reservationId: submittedReservationDbId,
+      siteId: beSiteId,
+      side,
+    });
+    const { error } = await supabase.storage.from(DRIVER_LICENCE_STORAGE_BUCKET).upload(path, file, {
       cacheControl: '3600',
       upsert: true,
     });
-    if (error) throw error;
-    const { data } = supabase.storage.from('be-licences').getPublicUrl(path);
+    if (error) {
+      console.error('LICENCE STORAGE UPLOAD ERROR', {
+        bucket: DRIVER_LICENCE_STORAGE_BUCKET,
+        path,
+        reservationId: submittedReservationDbId,
+        siteId: beSiteId,
+        side,
+        error,
+      });
+      throw error;
+    }
+    const { data } = supabase.storage.from(DRIVER_LICENCE_STORAGE_BUCKET).getPublicUrl(path);
     return data.publicUrl;
   };
 
