@@ -84,6 +84,13 @@ type BeSiteRow = {
   email_footer_text?: string | null;
   currency?: string | null;
   timezone?: string | null;
+  default_pickup_time?: string | null;
+  default_return_time?: string | null;
+  review_enabled?: boolean | null;
+  review_delay_days?: string | number | null;
+  theme_layout?: string | null;
+  custom_css?: string | null;
+  reservation_destination?: string | null;
   default_language?: string | null;
   whatsapp_number?: string | null;
   terms_url?: string | null;
@@ -360,6 +367,13 @@ const mapSiteSettings = (row: BeSiteRow): BookingEngineSiteSettings => ({
   emailFooterText: row.email_footer_text || '',
   currency: row.currency || 'EUR',
   timezone: row.timezone || 'Europe/Athens',
+  defaultPickupTime: row.default_pickup_time || '10:00',
+  defaultReturnTime: row.default_return_time || '10:00',
+  reviewEnabled: row.review_enabled !== false,
+  reviewDelayDays: String(row.review_delay_days ?? '1'),
+  themeLayout: row.theme_layout || 'Default',
+  customCss: row.custom_css || '',
+  reservationDestination: row.reservation_destination || 'main_board',
   defaultLanguage: row.default_language || 'English',
   whatsappNumber: row.whatsapp_number || '',
   termsUrl: row.terms_url || '',
@@ -377,10 +391,11 @@ const normalizeSiteHost = (value?: string | null) =>
     .toLowerCase()
     .trim();
 
-const selectPublicBookingSite = (sites: BeSiteRow[]) => {
+const selectPublicBookingSite = (sites: BeSiteRow[], selectedSiteId = '') => {
   const currentHost =
     typeof window !== 'undefined' ? normalizeSiteHost(window.location.hostname) : '';
   return (
+    sites.find((site) => site.id === selectedSiteId) ||
     sites.find((site) => normalizeSiteHost(site.domain) === currentHost) ||
     sites.find((site) => site.status !== 'Inactive') ||
     sites[0]
@@ -586,22 +601,23 @@ function getCouponDiscount(coupon: BookingEngineCoupon | undefined, subtotal: nu
 type PublicBookingPreviewProps = {
   variant?: PublicBookingPreviewVariant;
   embedLayout?: BookingSearchLayout;
+  selectedSiteId?: string;
 };
 
-export function HomepageSearchEmbedPreview() {
+export function HomepageSearchEmbedPreview({ selectedSiteId = '' }: { selectedSiteId?: string }) {
   return (
     <div className="h-full min-h-0 overflow-y-auto bg-slate-100 text-slate-950">
       <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center justify-center px-4 py-8 sm:px-6">
         <p className="mb-4 text-center text-xs font-black uppercase tracking-[0.18em] text-slate-600">
           HOMEPAGE SEARCH EMBED PREVIEW
         </p>
-        <HomeBookingSearch />
+        <HomeBookingSearch selectedSiteId={selectedSiteId} />
       </div>
     </div>
   );
 }
 
-export function HomeBookingSearch({ layout = 'stackedCard' }: { layout?: BookingSearchLayout }) {
+export function HomeBookingSearch({ layout = 'stackedCard', selectedSiteId = '' }: { layout?: BookingSearchLayout; selectedSiteId?: string }) {
   const [locationOptions, setLocationOptions] = useState<string[]>(['Rhodes Airport']);
   const [categoryOptions, setCategoryOptions] = useState<string[]>(['All categories']);
   const [minimumRentalDays, setMinimumRentalDays] = useState(3);
@@ -643,7 +659,7 @@ export function HomeBookingSearch({ layout = 'stackedCard' }: { layout?: Booking
         return;
       }
 
-      const site = selectPublicBookingSite((sites || []) as BeSiteRow[]);
+      const site = selectPublicBookingSite((sites || []) as BeSiteRow[], selectedSiteId);
       if (!site?.id) return;
 
       const [groupsResult, locationsResult, bookingSettingsResult] = await Promise.all([
@@ -681,10 +697,17 @@ export function HomeBookingSearch({ layout = 'stackedCard' }: { layout?: Booking
         .map(mapGroup)
         .map((group) => `${group.code} - ${group.name}`);
       const bookingSettings = bookingSettingsResult.data as BeBookingSettingsRow | null;
+      const defaultPickupTime = site.default_pickup_time || '10:00';
+      const defaultReturnTime = site.default_return_time || '10:00';
 
       setLocationOptions(nextLocations.length ? nextLocations : ['Rhodes Airport']);
       setCategoryOptions(['All categories', ...nextCategories]);
       setMinimumRentalDays(Math.max(1, Number(bookingSettings?.minimum_rental_days) || 3));
+      setSearch((current) => ({
+        ...current,
+        pickupTime: current.pickupTime === '10:00' ? defaultPickupTime : current.pickupTime,
+        returnTime: current.returnTime === '10:00' ? defaultReturnTime : current.returnTime,
+      }));
     };
 
     void loadHomepageSearchData();
@@ -692,7 +715,7 @@ export function HomeBookingSearch({ layout = 'stackedCard' }: { layout?: Booking
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedSiteId]);
 
   useEffect(() => {
     if (!locationOptions.length) return;
@@ -775,6 +798,7 @@ export function HomeBookingSearch({ layout = 'stackedCard' }: { layout?: Booking
 export default function PublicBookingPreview({
   variant = 'fullFlow',
   embedLayout = 'stackedCard',
+  selectedSiteId = '',
 }: PublicBookingPreviewProps = {}) {
   const isHomepageEmbed = variant === 'homepageEmbed';
   const [step, setStep] = useState<PreviewStep>('search');
@@ -890,7 +914,7 @@ export default function PublicBookingPreview({
         return;
       }
 
-      const site = selectPublicBookingSite((sites || []) as BeSiteRow[]);
+      const site = selectPublicBookingSite((sites || []) as BeSiteRow[], selectedSiteId);
       if (!site?.id) {
         if (!cancelled) {
           setConfigError('No active Booking Engine site found.');
@@ -967,6 +991,11 @@ export default function PublicBookingPreview({
         setMinimumRentalDays(
           Math.max(1, Number(bookingSettings?.minimum_rental_days) || 3),
         );
+        setSearch((current) => ({
+          ...current,
+          pickupTime: current.pickupTime === '10:00' ? site.default_pickup_time || '10:00' : current.pickupTime,
+          returnTime: current.returnTime === '10:00' ? site.default_return_time || '10:00' : current.returnTime,
+        }));
         setBeSiteId(site.id);
         setBookingEngineConfig({
           ...emptySupabaseBookingEngineConfig,
@@ -998,7 +1027,7 @@ export default function PublicBookingPreview({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedSiteId]);
 
   useEffect(() => {
     if (!locationOptions.length) return;

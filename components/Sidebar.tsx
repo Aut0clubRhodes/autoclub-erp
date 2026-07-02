@@ -3,25 +3,16 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import {
-  Activity,
-  BarChart3,
   CalendarDays,
   Car,
   ChevronLeft,
   ChevronRight,
   FileText,
-  FolderArchive,
   Gauge,
   Globe2,
   LayoutDashboard,
-  Megaphone,
-  ReceiptText,
-  SlidersHorizontal,
-  TrendingDown,
-  TrendingUp,
-  Wallet,
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
@@ -32,6 +23,12 @@ import {
   updateVehicleGroup,
   type VehicleGroupRecord,
 } from '@/lib/vehicleGroupsApi';
+import {
+  BOOKING_ENGINE_SITES_CHANGED_EVENT,
+  fetchBookingEngineSites,
+  setSelectedBookingEngineSiteId,
+  type BookingEngineSiteSummary,
+} from '@/lib/bookingEngineSites';
 
 interface NavItem {
   label: string;
@@ -41,6 +38,7 @@ interface NavItem {
   tone: string;
   chip: string;
   children?: NavItem[];
+  bookingSiteId?: string;
 }
 
 interface NavSection {
@@ -71,49 +69,24 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: 'AUTOCLUB-RHODES',
+    title: 'ΚΡΑΤΗΣΕΙΣ SITE',
     collapsible: true,
     items: [
       {
         label: 'Πίνακας',
-        displayLabel: 'ΚΡΑΤΗΣΕΙΣ AUTOCLUB-RHODES',
+        displayLabel: 'Όλες οι κρατήσεις site',
         href: '/dashboard',
         icon: LayoutDashboard,
         tone: 'text-sky-300',
         chip: 'border-sky-400/25 bg-sky-400/10',
       },
-      { label: 'Booking Engine Admin', href: '/booking-engine-admin', icon: Gauge, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
-      { label: 'Public Booking Preview', href: '/public-booking-preview', icon: Globe2, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
-      { label: 'Homepage Search Embed Preview', href: '/homepage-search-embed-preview', icon: Globe2, tone: 'text-lime-300', chip: 'border-lime-400/25 bg-lime-400/10' },
-    ],
-  },
-  {
-    title: 'ΟΙΚΟΝΟΜΙΚΑ',
-    items: [
-      {
-        label: 'Ταμείο',
-        displayLabel: 'Σύνολα Ταμείου',
-        href: '/finance',
-        icon: Wallet,
-        tone: 'text-cyan-300',
-        chip: 'border-cyan-400/25 bg-cyan-400/10',
-        children: [
-          { label: 'Έσοδα', displayLabel: 'Καταχώρηση Εσόδων', href: '/finance/income', icon: TrendingUp, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10' },
-          { label: 'Έξοδα', displayLabel: 'Καταχώρηση Εξόδων', href: '/finance/expenses', icon: TrendingDown, tone: 'text-rose-300', chip: 'border-rose-400/25 bg-rose-400/10' },
-          { label: 'Γραμμάτια', href: '/finance/debts', icon: ReceiptText, tone: 'text-fuchsia-300', chip: 'border-fuchsia-400/25 bg-fuchsia-400/10' },
-        ],
-      },
-      { label: 'Financial Engine', href: '/financial-engine', icon: Activity, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
-      { label: 'Αναφορές', href: '/reports', icon: BarChart3, tone: 'text-amber-300', chip: 'border-amber-400/25 bg-amber-400/10' },
     ],
   },
   {
     title: 'ΣΥΣΤΗΜΑ',
     collapsible: true,
     items: [
-      { label: 'Έγγραφα', href: '/vehicle-documents', icon: FolderArchive, tone: 'text-sky-300', chip: 'border-sky-400/25 bg-sky-400/10' },
-      { label: 'Marketing', href: '/marketing', icon: Megaphone, tone: 'text-rose-300', chip: 'border-rose-400/25 bg-rose-400/10' },
-      { label: 'Ρυθμίσεις', href: '/settings', icon: SlidersHorizontal, tone: 'text-slate-300', chip: 'border-slate-400/20 bg-slate-400/10' },
+      { label: 'Site Manager', href: '/site-manager', icon: Globe2, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10' },
     ],
   },
 ];
@@ -135,6 +108,7 @@ const WINDOW_ITEMS = [
   'Έγγραφα',
   'Κατηγορίες Εξόδων',
   'Marketing',
+  'Site Manager',
   'Booking Engine Admin',
   'Public Booking Preview',
   'Homepage Search Embed Preview',
@@ -144,27 +118,77 @@ const WINDOW_ITEMS = [
 export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRole, onLogout, onCollapsedChange, onNavigate, forceExpanded }: SidebarProps) {
   const pathname = usePathname();
   const [systemOpen, setSystemOpen] = useState(true);
-  const [autoClubRhodesOpen, setAutoClubRhodesOpen] = useState(true);
-  const [financeOpen, setFinanceOpen] = useState(true);
+  const [bookingSitesOpen, setBookingSitesOpen] = useState(true);
+  const [activeSiteFlyout, setActiveSiteFlyout] = useState<{ siteId: string; top: number; left: number } | null>(null);
   const [showVehicleGroupsPanel, setShowVehicleGroupsPanel] = useState(false);
+  const [bookingSites, setBookingSites] = useState<BookingEngineSiteSummary[]>([]);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem('autoclub-sidebar-collapsed') === 'true';
   });
   const displayCollapsed = forceExpanded ? false : isCollapsed;
+  useEffect(() => {
+    let cancelled = false;
+    const loadSites = async () => {
+      try {
+        const sites = await fetchBookingEngineSites();
+        if (!cancelled) {
+          setBookingSites(sites.filter((site) => site.status !== 'Inactive'));
+        }
+      } catch (error) {
+        console.error('Sidebar Booking Engine sites load failed:', error);
+      }
+    };
+
+    void loadSites();
+    window.addEventListener(BOOKING_ENGINE_SITES_CHANGED_EVENT, loadSites);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(BOOKING_ENGINE_SITES_CHANGED_EVENT, loadSites);
+    };
+  }, []);
+
+  const bookingSiteNavItems: NavItem[] = bookingSites.map((site) => ({
+    label: site.name,
+    displayLabel: `${site.name} ▶`,
+    href: `/booking-sites/${site.id}`,
+    icon: Globe2,
+    tone: 'text-cyan-300',
+    chip: 'border-cyan-400/25 bg-cyan-400/10',
+    bookingSiteId: site.id,
+    children: [
+      { label: 'Booking Engine Admin', displayLabel: 'Booking Engine', href: '/booking-engine-admin', icon: Gauge, tone: 'text-cyan-300', chip: 'border-cyan-400/25 bg-cyan-400/10', bookingSiteId: site.id },
+      { label: 'Public Booking Preview', href: '/public-booking-preview', icon: Globe2, tone: 'text-emerald-300', chip: 'border-emerald-400/25 bg-emerald-400/10', bookingSiteId: site.id },
+      { label: 'Homepage Search Embed Preview', href: '/homepage-search-embed-preview', icon: Globe2, tone: 'text-lime-300', chip: 'border-lime-400/25 bg-lime-400/10', bookingSiteId: site.id },
+    ],
+  }));
+  const activeFlyoutItem = bookingSiteNavItems.find((site) => site.bookingSiteId === activeSiteFlyout?.siteId);
+  const hydratedNavSections = NAV_SECTIONS.map((section) =>
+    section.title === 'ΚΡΑΤΗΣΕΙΣ SITE'
+      ? { ...section, items: [...section.items, ...bookingSiteNavItems] }
+      : section,
+  );
   const visibleNavSections =
     userRole === 'bookings'
-      ? NAV_SECTIONS.map((section) => ({
+      ? hydratedNavSections.map((section) => ({
           ...section,
           collapsible: false,
           items: section.items.filter((item) => item.href === '/dashboard' || item.href === '/bookings'),
         })).filter((section) => section.items.length > 0)
-      : NAV_SECTIONS;
+      : hydratedNavSections;
 
   useEffect(() => {
     window.localStorage.setItem('autoclub-sidebar-collapsed', String(isCollapsed));
     document.documentElement.style.setProperty('--autoclub-sidebar-width', isCollapsed ? '72px' : '250px');
   }, [isCollapsed]);
+
+  useEffect(() => {
+    if (!activeSiteFlyout) return;
+
+    const closeFlyout = () => setActiveSiteFlyout(null);
+    window.addEventListener('click', closeFlyout);
+    return () => window.removeEventListener('click', closeFlyout);
+  }, [activeSiteFlyout]);
 
   const toggleCollapsed = () => {
     const next = !isCollapsed;
@@ -181,9 +205,30 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
       return;
     }
 
+    if (item.bookingSiteId) {
+      setSelectedBookingEngineSiteId(item.bookingSiteId);
+    }
+
     if (WINDOW_ITEMS.includes(item.label) && onWindowOpen) {
       onWindowOpen(item.label);
     }
+  };
+
+  const openSiteFlyout = (event: ReactMouseEvent<HTMLButtonElement>, item: NavItem) => {
+    event.stopPropagation();
+    if (!item.bookingSiteId) return;
+
+    const bounds = event.currentTarget.getBoundingClientRect();
+    setSelectedBookingEngineSiteId(item.bookingSiteId);
+    setActiveSiteFlyout((current) =>
+      current?.siteId === item.bookingSiteId
+        ? null
+        : {
+            siteId: item.bookingSiteId || '',
+            top: Math.max(12, bounds.top),
+            left: bounds.right + 10,
+          },
+    );
   };
 
   const renderItem = (item: NavItem, nested = false) => {
@@ -236,6 +281,23 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
       </>
     );
 
+    if (hasChildren && item.bookingSiteId) {
+      const isFlyoutOpen = activeSiteFlyout?.siteId === item.bookingSiteId;
+
+      return (
+        <button
+          key={item.href}
+          type="button"
+          onClick={(event) => openSiteFlyout(event, item)}
+          className={`${className} ${isFlyoutOpen ? 'border-cyan-300/25 bg-cyan-300/[0.08] text-white' : ''}`}
+          title={displayCollapsed ? item.label : undefined}
+          aria-expanded={isFlyoutOpen}
+        >
+          {content}
+        </button>
+      );
+    }
+
     if (hasChildren) {
       return (
         <div key={item.href} className="space-y-1">
@@ -253,18 +315,21 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
                 type="button"
                 onClick={(event) => {
                 event.stopPropagation();
-                setFinanceOpen((current) => !current);
+                if (item.bookingSiteId) {
+                  setSelectedBookingEngineSiteId(item.bookingSiteId);
+                  return;
+                }
               }}
               className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg border border-white/[0.04] bg-white/[0.016] text-[11px] text-zinc-500 transition hover:border-sky-300/18 hover:bg-sky-300/[0.07] hover:text-white"
               aria-label="Toggle finance menu"
             >
-              <span className={`transition ${financeOpen ? 'rotate-180' : ''}`}>⌄</span>
+              <span className="transition">⌄</span>
               </button>
             )}
           </div>
           <div
             className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
-              displayCollapsed || financeOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+              displayCollapsed || item.bookingSiteId ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
             }`}
           >
             <div className="min-h-0 overflow-hidden">
@@ -342,11 +407,11 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
       <nav className={`autoclub-sidebar-scroll flex-1 overflow-y-auto ${displayCollapsed ? 'space-y-1 px-2 py-2' : 'space-y-2 px-2.5 py-2.5 sm:px-3'}`}>
         {visibleNavSections.map((section) => {
           const isCollapsible = section.collapsible;
-          const isAutoClubRhodes = section.title === 'AUTOCLUB-RHODES';
-          const isOpen = !isCollapsible || (isAutoClubRhodes ? autoClubRhodesOpen : systemOpen);
+          const isBookingSites = section.title === 'ΚΡΑΤΗΣΕΙΣ SITE';
+          const isOpen = !isCollapsible || (isBookingSites ? bookingSitesOpen : systemOpen);
           const toggleSection = () => {
-            if (isAutoClubRhodes) {
-              setAutoClubRhodesOpen((current) => !current);
+            if (isBookingSites) {
+              setBookingSitesOpen((current) => !current);
               return;
             }
             setSystemOpen((current) => !current);
@@ -398,6 +463,40 @@ export default function Sidebar({ onWindowOpen, activeWindow, userEmail, userRol
         {!displayCollapsed && <p className="mt-2 text-center text-[9px] uppercase tracking-[0.14em] text-zinc-600">v1.0.0</p>}
       </div>
     </aside>
+    {activeSiteFlyout && activeFlyoutItem?.children?.length ? (
+      <div
+        className="fixed z-[9100] w-[238px] rounded-2xl border border-cyan-300/15 bg-[#07101a]/95 p-2 text-white shadow-[0_22px_60px_rgba(0,0,0,0.42),0_0_28px_rgba(34,211,238,0.08)] backdrop-blur-xl"
+        style={{ top: activeSiteFlyout.top, left: activeSiteFlyout.left }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <p className="mb-1 truncate px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-100/55">
+          {activeFlyoutItem.label}
+        </p>
+        <div className="space-y-1">
+          {activeFlyoutItem.children.map((child) => {
+            const Icon = child.icon;
+            const visibleLabel = child.displayLabel || child.label;
+            return (
+              <button
+                key={`${activeFlyoutItem.bookingSiteId}-${child.label}`}
+                type="button"
+                onClick={() => {
+                  handleItemClick(child);
+                  setActiveSiteFlyout(null);
+                  onNavigate?.();
+                }}
+                className="group flex min-h-[34px] w-full items-center gap-2 rounded-xl border border-transparent px-2 py-1 text-left text-[11px] font-semibold text-zinc-200 transition hover:border-cyan-300/15 hover:bg-cyan-300/[0.07] hover:text-white"
+              >
+                <span className={`flex h-7 w-7 items-center justify-center rounded-lg border ${child.chip}`}>
+                  <Icon className={`h-3.5 w-3.5 ${child.tone}`} strokeWidth={1.9} />
+                </span>
+                <span>{visibleLabel}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    ) : null}
     {showVehicleGroupsPanel && <VehicleGroupsPanel onClose={() => setShowVehicleGroupsPanel(false)} />}
     </>
   );

@@ -32,6 +32,7 @@ import SettingsManager from '@/components/SettingsManager';
 import MarketingManager from '@/components/MarketingManager';
 import BookingEngineAdmin from '@/components/BookingEngineAdmin';
 import PublicBookingPreview, { HomepageSearchEmbedPreview } from '@/components/PublicBookingPreview';
+import BookingEngineSiteManager from '@/components/BookingEngineSiteManager';
 import ServicesManager from '@/components/ServicesManager';
 import VehicleDocumentsManager from '@/components/VehicleDocumentsManager';
 import AutoClubRhodesReservationsBoard from '@/components/AutoClubRhodesReservationsBoard';
@@ -64,6 +65,14 @@ import {
   markNotificationRead,
   type NotificationRecord,
 } from '@/lib/notificationsApi';
+import {
+  BOOKING_ENGINE_SITES_CHANGED_EVENT,
+  BOOKING_ENGINE_SELECTED_SITE_CHANGED_EVENT,
+  fetchBookingEngineSites,
+  getSelectedBookingEngineSiteId,
+  setSelectedBookingEngineSiteId,
+  type BookingEngineSiteSummary,
+} from '@/lib/bookingEngineSites';
 type WindowType =
   | 'Πίνακας'
   | 'Αυτοκίνητα'
@@ -83,6 +92,7 @@ type WindowType =
   | 'Αναφορές'
   | 'Πρακτορεία'
   | 'Marketing'
+  | 'Site Manager'
   | 'Booking Engine Admin'
   | 'Public Booking Preview'
   | 'Homepage Search Embed Preview'
@@ -131,7 +141,7 @@ const isDefaultMaximizedWindow = (windowId: WindowId) =>
   windowId === 'Public Booking Preview' ||
   windowId === 'Homepage Search Embed Preview';
 
-type TopMenuItem = { label: string; windowId: string };
+type TopMenuItem = { label: string; windowId: string; siteId?: string; children?: TopMenuItem[] };
 type TopMenuEntry =
   | TopMenuItem
   | { label: string; items: TopMenuItem[] };
@@ -293,12 +303,9 @@ const topMenuEntries: TopMenuEntry[] = [
   },
   { label: 'LEASING', windowId: 'Leasing' },
   {
-    label: 'AUTOCLUB RHODES',
+    label: 'ΚΡΑΤΗΣΕΙΣ SITE',
     items: [
-      { label: 'ΚΡΑΤΗΣΕΙΣ AUTOCLUB-RHODES', windowId: 'Πίνακας' },
-      { label: 'Booking Engine Admin', windowId: 'Booking Engine Admin' },
-      { label: 'Public Booking Preview', windowId: 'Public Booking Preview' },
-      { label: 'Homepage Search Embed Preview', windowId: 'Homepage Search Embed Preview' },
+      { label: 'Όλες οι κρατήσεις site', windowId: 'Πίνακας' },
     ],
   },
   {
@@ -318,6 +325,7 @@ const topMenuEntries: TopMenuEntry[] = [
     items: [
       { label: 'Έγγραφα', windowId: 'Έγγραφα' },
       { label: 'Marketing', windowId: 'Marketing' },
+      { label: 'Site Manager', windowId: 'Site Manager' },
       { label: 'Ρυθμίσεις', windowId: 'Ρυθμίσεις' },
     ],
   },
@@ -327,6 +335,8 @@ function DesktopTopNavigation({
   activeWindow,
   userEmail,
   homeMode = false,
+  menuEntries,
+  selectedBookingSiteId,
   unreadCount,
   notifications,
   showNotifications,
@@ -340,6 +350,8 @@ function DesktopTopNavigation({
   activeWindow: WindowId | null;
   userEmail: string;
   homeMode?: boolean;
+  menuEntries: TopMenuEntry[];
+  selectedBookingSiteId: string;
   unreadCount: number;
   notifications: NotificationRecord[];
   showNotifications: boolean;
@@ -351,16 +363,30 @@ function DesktopTopNavigation({
   onMarkAllNotificationsRead: () => void;
 }) {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [openNestedDropdown, setOpenNestedDropdown] = useState<string | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
+  const isMenuItemActive = (item: TopMenuItem): boolean =>
+    (activeWindow === item.windowId && (!item.siteId || item.siteId === selectedBookingSiteId)) ||
+    Boolean(item.children?.some((child) => isMenuItemActive(child)));
   const isEntryActive = (entry: TopMenuEntry) =>
     'windowId' in entry
       ? activeWindow === entry.windowId
-      : entry.items.some((item) => activeWindow === item.windowId);
+      : entry.items.some((item) => isMenuItemActive(item));
+
+  const openMenuWindow = (item: TopMenuItem) => {
+    if (item.siteId) {
+      setSelectedBookingEngineSiteId(item.siteId);
+    }
+    setOpenDropdown(null);
+    setOpenNestedDropdown(null);
+    onWindowOpen(item.windowId);
+  };
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       if (!navRef.current?.contains(event.target as Node)) {
         setOpenDropdown(null);
+        setOpenNestedDropdown(null);
       }
     };
 
@@ -378,7 +404,7 @@ function DesktopTopNavigation({
         </button>
 
         <nav ref={navRef} className="flex min-w-0 flex-1 items-center gap-1 overflow-visible">
-          {topMenuEntries.map((entry) => {
+          {menuEntries.map((entry) => {
             const active = isEntryActive(entry);
 
             if ('windowId' in entry) {
@@ -387,8 +413,7 @@ function DesktopTopNavigation({
                   key={entry.label}
                   type="button"
                   onClick={() => {
-                    setOpenDropdown(null);
-                    onWindowOpen(entry.windowId);
+                    openMenuWindow(entry);
                   }}
                   className={`h-10 rounded-xl px-3 text-[15px] font-black transition ${active ? 'bg-sky-800 text-white shadow-[0_8px_18px_rgba(7,89,133,0.28)]' : homeMode ? 'text-slate-100 hover:bg-white/10 hover:text-white' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
                 >
@@ -403,26 +428,58 @@ function DesktopTopNavigation({
               <div key={entry.label} className="relative">
                 <button
                   type="button"
-                  onClick={() => setOpenDropdown((current) => (current === entry.label ? null : entry.label))}
+                  onClick={() => {
+                    setOpenDropdown((current) => (current === entry.label ? null : entry.label));
+                    setOpenNestedDropdown(null);
+                  }}
                   className={`flex h-10 items-center gap-1 rounded-xl px-3 text-[15px] font-black transition ${active ? 'bg-sky-800 text-white shadow-[0_8px_18px_rgba(7,89,133,0.28)]' : homeMode ? 'text-slate-100 hover:bg-white/10 hover:text-white' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
                 >
                   {entry.label}
                   <ChevronDown className="h-4 w-4" />
                 </button>
                 <div className={`${isOpen ? 'visible translate-y-1 opacity-100' : 'invisible translate-y-2 opacity-0'} absolute left-0 top-full z-[9300] min-w-[250px] rounded-2xl border p-2 shadow-[0_22px_60px_rgba(15,23,42,0.2)] transition ${homeMode ? 'border-white/10 bg-slate-950/94 shadow-[0_22px_60px_rgba(0,0,0,0.46)] backdrop-blur-xl' : 'border-slate-300 bg-white'}`}>
-                  {entry.items.map((item) => (
-                    <button
-                      key={item.label}
-                      type="button"
-                      onClick={() => {
-                        setOpenDropdown(null);
-                        onWindowOpen(item.windowId);
-                      }}
-                      className={`flex h-10 w-full items-center rounded-xl px-3 text-left text-[15px] font-black transition ${activeWindow === item.windowId ? 'bg-sky-800 text-white' : homeMode ? 'text-slate-100 hover:bg-white/10 hover:text-white' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
+                  {entry.items.map((item) => {
+                    const itemActive = isMenuItemActive(item);
+                    const hasNestedItems = Boolean(item.children?.length);
+                    const isNestedOpen = openNestedDropdown === item.label;
+
+                    return (
+                      <div key={item.label} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (hasNestedItems) {
+                              if (item.siteId) {
+                                setSelectedBookingEngineSiteId(item.siteId);
+                              }
+                              setOpenNestedDropdown((current) => (current === item.label ? null : item.label));
+                              return;
+                            }
+                            openMenuWindow(item);
+                          }}
+                          className={`flex h-10 w-full items-center justify-between rounded-xl px-3 text-left text-[15px] font-black transition ${itemActive ? 'bg-sky-800 text-white' : homeMode ? 'text-slate-100 hover:bg-white/10 hover:text-white' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
+                          aria-expanded={hasNestedItems ? isNestedOpen : undefined}
+                        >
+                          <span>{item.label}</span>
+                          {hasNestedItems && <span className="pl-4 text-xs">▶</span>}
+                        </button>
+                        {hasNestedItems && (
+                          <div className={`${isNestedOpen ? 'visible translate-x-1 opacity-100' : 'invisible translate-x-0 opacity-0'} absolute left-full top-0 z-[9400] ml-2 min-w-[270px] rounded-2xl border p-2 shadow-[0_22px_60px_rgba(15,23,42,0.2)] transition ${homeMode ? 'border-white/10 bg-slate-950/94 shadow-[0_22px_60px_rgba(0,0,0,0.46)] backdrop-blur-xl' : 'border-slate-300 bg-white'}`}>
+                            {item.children?.map((child) => (
+                              <button
+                                key={`${item.label}-${child.label}`}
+                                type="button"
+                                onClick={() => openMenuWindow(child)}
+                                className={`flex h-10 w-full items-center rounded-xl px-3 text-left text-[15px] font-black transition ${activeWindow === child.windowId ? 'bg-sky-800 text-white' : homeMode ? 'text-slate-100 hover:bg-white/10 hover:text-white' : 'text-slate-800 hover:bg-slate-200/80 hover:text-slate-950'}`}
+                              >
+                                {child.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -466,6 +523,8 @@ export default function Home() {
   const [openWindows, setOpenWindows] = useState<OpenWindow[]>([]);
   const [topZIndex, setTopZIndex] = useState(50);
   const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
+  const [selectedBookingSiteId, setSelectedBookingSiteId] = useState(() => getSelectedBookingEngineSiteId());
+  const [bookingSites, setBookingSites] = useState<BookingEngineSiteSummary[]>([]);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const sidebarWidth = isPhoneViewport ? (isSidebarCollapsed ? 72 : 250) : 0;
@@ -476,6 +535,58 @@ export default function Home() {
   const hasOpenWindow = (windowId: WindowId) => openWindows.some((windowItem) => windowItem.id === windowId);
   const canOpenWindow = (windowId: WindowId | string) =>
     userRole === 'admin' || windowId === 'Κρατήσεις' || windowId === 'Πίνακας';
+
+  useEffect(() => {
+    const handleSelectedSiteChanged = (event: Event) => {
+      const siteId = (event as CustomEvent<{ siteId?: string }>).detail?.siteId || getSelectedBookingEngineSiteId();
+      setSelectedBookingSiteId(siteId);
+    };
+    window.addEventListener(BOOKING_ENGINE_SELECTED_SITE_CHANGED_EVENT, handleSelectedSiteChanged);
+    return () => window.removeEventListener(BOOKING_ENGINE_SELECTED_SITE_CHANGED_EVENT, handleSelectedSiteChanged);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBookingSites = async () => {
+      try {
+        const sites = await fetchBookingEngineSites();
+        if (!cancelled) {
+          setBookingSites(sites.filter((site) => site.status !== 'Inactive'));
+        }
+      } catch (error) {
+        console.error('Top navbar Booking Engine sites load failed:', error);
+      }
+    };
+
+    void loadBookingSites();
+    window.addEventListener(BOOKING_ENGINE_SITES_CHANGED_EVENT, loadBookingSites);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(BOOKING_ENGINE_SITES_CHANGED_EVENT, loadBookingSites);
+    };
+  }, []);
+
+  const dynamicTopMenuEntries: TopMenuEntry[] = topMenuEntries.map((entry) => {
+    if ('windowId' in entry || entry.label !== 'ΚΡΑΤΗΣΕΙΣ SITE') return entry;
+
+    return {
+      ...entry,
+      items: [
+        { label: 'Όλες οι κρατήσεις site', windowId: 'Πίνακας' },
+        ...bookingSites.map((site) => ({
+          label: site.name,
+          windowId: 'Πίνακας',
+          siteId: site.id,
+          children: [
+            { label: 'Booking Engine Admin', windowId: 'Booking Engine Admin', siteId: site.id },
+            { label: 'Public Booking Preview', windowId: 'Public Booking Preview', siteId: site.id },
+            { label: 'Homepage Search Embed Preview', windowId: 'Homepage Search Embed Preview', siteId: site.id },
+          ],
+        })),
+      ],
+    };
+  });
 
   const goToHome = () => {
     setOpenWindows((currentWindows) =>
@@ -2018,6 +2129,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
       'ΚΤΕΟ',
       'Πρακτορεία',
       'Marketing',
+      'Site Manager',
       'Booking Engine Admin',
       'Public Booking Preview',
       'Homepage Search Embed Preview',
@@ -2206,12 +2318,14 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
         return <ExpenseCategoriesManager />;
       case 'Marketing':
         return <MarketingManager />;
+      case 'Site Manager':
+        return <BookingEngineSiteManager />;
       case 'Booking Engine Admin':
-        return <BookingEngineAdmin />;
+        return <BookingEngineAdmin selectedSiteId={selectedBookingSiteId} />;
       case 'Public Booking Preview':
-        return <PublicBookingPreview />;
+        return <PublicBookingPreview selectedSiteId={selectedBookingSiteId} />;
       case 'Homepage Search Embed Preview':
-        return <HomepageSearchEmbedPreview />;
+        return <HomepageSearchEmbedPreview selectedSiteId={selectedBookingSiteId} />;
       case 'Ρυθμίσεις':
         return <SettingsManager onSuppliersChange={setSuppliers} />;
       case 'ΚΤΕΟ': {
@@ -2300,6 +2414,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
   return 'Πρακτορεία';
       case 'Marketing':
         return 'Marketing / Promotions';
+      case 'Site Manager':
+        return 'Site Manager';
       case 'Booking Engine Admin':
         return 'Booking Engine Admin';
       case 'Public Booking Preview':
@@ -2442,6 +2558,8 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
           activeWindow={activeWindow}
           userEmail={userEmail}
           homeMode={visibleWindows.length === 0}
+          menuEntries={dynamicTopMenuEntries}
+          selectedBookingSiteId={selectedBookingSiteId}
           unreadCount={unreadNotificationsCount}
           notifications={notifications}
           showNotifications={showNotifications}
@@ -3023,7 +3141,7 @@ road_tax_expiry: newVehicle.road_tax_expiry || undefined,
               initialWidth={windowItem.id === 'Αναφορές' ? 1320 : undefined}
               initialHeight={windowItem.id === 'Αναφορές' ? 792 : windowItem.id === 'Πίνακας' ? 760 : undefined}
               financeDashboard={windowItem.id === 'Ταμείο'}
-              wide={windowItem.id === 'Πίνακας' || windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Γραμμάτια' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα' || windowItem.id === 'Marketing' || windowItem.id === 'Booking Engine Admin' || windowItem.id === 'Public Booking Preview' || windowItem.id === 'Homepage Search Embed Preview' || windowItem.id === 'Ρυθμίσεις'}
+              wide={windowItem.id === 'Πίνακας' || windowItem.id === 'Αυτοκίνητα' || windowItem.id === 'Ταμείο' || windowItem.id === 'Έσοδα' || windowItem.id === 'Έξοδα' || windowItem.id === 'Γραμμάτια' || windowItem.id === 'Financial Engine' || windowItem.id === 'Service' || windowItem.id === 'Leasing' || windowItem.id === 'Έγγραφα' || windowItem.id === 'Marketing' || windowItem.id === 'Site Manager' || windowItem.id === 'Booking Engine Admin' || windowItem.id === 'Public Booking Preview' || windowItem.id === 'Homepage Search Embed Preview' || windowItem.id === 'Ρυθμίσεις'}
             >
               {renderWindowContent(windowItem.id)}
             </Window>

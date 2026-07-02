@@ -39,6 +39,7 @@ import {
   renderBookingEmailTemplate,
 } from '@/lib/bookingEngineEmailEngine';
 import { supabase } from '@/lib/supabaseClient';
+import { notifyBookingEngineSitesChanged } from '@/lib/bookingEngineSites';
 
 type AdminTabId =
   | 'groups'
@@ -95,6 +96,13 @@ type BeSiteRow = {
   email_footer_text?: string | null;
   currency?: string | null;
   timezone?: string | null;
+  default_pickup_time?: string | null;
+  default_return_time?: string | null;
+  review_enabled?: boolean | null;
+  review_delay_days?: string | number | null;
+  theme_layout?: string | null;
+  custom_css?: string | null;
+  reservation_destination?: string | null;
   default_language?: BookingDefaultLanguage | string | null;
   whatsapp_number?: string | null;
   terms_url?: string | null;
@@ -375,6 +383,13 @@ type SiteSettings = {
   emailFooterText: string;
   currency: string;
   timezone: string;
+  defaultPickupTime: string;
+  defaultReturnTime: string;
+  reviewEnabled: boolean;
+  reviewDelayDays: string;
+  themeLayout: string;
+  customCss: string;
+  reservationDestination: string;
   defaultLanguage: BookingDefaultLanguage;
   whatsappNumber: string;
   termsUrl: string;
@@ -535,6 +550,13 @@ const initialSiteSettings: SiteSettings = {
   emailFooterText: 'For urgent changes, contact us using the support details above.',
   currency: 'EUR',
   timezone: 'Europe/Athens',
+  defaultPickupTime: '10:00',
+  defaultReturnTime: '10:00',
+  reviewEnabled: true,
+  reviewDelayDays: '1',
+  themeLayout: 'Default',
+  customCss: '',
+  reservationDestination: 'main_board',
   defaultLanguage: 'English',
   whatsappNumber: '',
   termsUrl: '',
@@ -820,10 +842,10 @@ const formatDateOnly = (value: string) => {
   return year && month && day ? `${day}/${month}/${year}` : value;
 };
 
-export default function BookingEngineAdmin() {
+export default function BookingEngineAdmin({ selectedSiteId = '' }: { selectedSiteId?: string }) {
   const [activeTab, setActiveTab] = useState<AdminTabId>(getStoredBookingEngineActiveTab);
   const [groups, setGroups] = useState<BookingGroup[]>([]);
-  const [beSiteId, setBeSiteId] = useState<string | null>(null);
+  const [beSiteId, setBeSiteId] = useState<string | null>(selectedSiteId || null);
   const [groupsLoading, setGroupsLoading] = useState(true);
   const [groupsError, setGroupsError] = useState('');
   const [cars, setCars] = useState<BookingEngineCar[]>([]);
@@ -1249,6 +1271,13 @@ export default function BookingEngineAdmin() {
       emailFooterText: row.email_footer_text || '',
       currency: row.currency || 'EUR',
       timezone: row.timezone || 'Europe/Athens',
+      defaultPickupTime: row.default_pickup_time || '10:00',
+      defaultReturnTime: row.default_return_time || '10:00',
+      reviewEnabled: row.review_enabled !== false,
+      reviewDelayDays: String(row.review_delay_days ?? '1'),
+      themeLayout: row.theme_layout || 'Default',
+      customCss: row.custom_css || '',
+      reservationDestination: row.reservation_destination || 'main_board',
       defaultLanguage:
         defaultLanguage === 'English' ||
         defaultLanguage === 'Italian' ||
@@ -1616,7 +1645,12 @@ export default function BookingEngineAdmin() {
       return;
     }
 
-    const site = ((sites || []) as BeSiteRow[]).find((item) => item.id === beSiteId) || ((sites || []) as BeSiteRow[])[0] || null;
+    const siteRows = (sites || []) as BeSiteRow[];
+    const site =
+      siteRows.find((item) => item.id === selectedSiteId) ||
+      siteRows.find((item) => item.id === beSiteId) ||
+      siteRows[0] ||
+      null;
 
     console.log('MATCHED SITE', site);
 
@@ -1659,7 +1693,7 @@ export default function BookingEngineAdmin() {
 
   useEffect(() => {
     void loadSupabaseGroups();
-  }, []);
+  }, [selectedSiteId]);
 
   useEffect(() => {
     if (!beSiteId) {
@@ -2854,6 +2888,13 @@ export default function BookingEngineAdmin() {
     email_footer_text: settings.emailFooterText.trim(),
     currency: settings.currency.trim(),
     timezone: settings.timezone.trim(),
+    default_pickup_time: settings.defaultPickupTime,
+    default_return_time: settings.defaultReturnTime,
+    review_enabled: settings.reviewEnabled,
+    review_delay_days: Math.max(1, Number(settings.reviewDelayDays) || 1),
+    theme_layout: settings.themeLayout,
+    custom_css: settings.customCss,
+    reservation_destination: settings.reservationDestination,
     default_language: settings.defaultLanguage,
     whatsapp_number: settings.whatsappNumber.trim(),
     terms_url: settings.termsUrl.trim(),
@@ -2873,6 +2914,13 @@ export default function BookingEngineAdmin() {
     'google_review_url',
     'email_header_image',
     'email_footer_text',
+    'default_pickup_time',
+    'default_return_time',
+    'review_enabled',
+    'review_delay_days',
+    'theme_layout',
+    'custom_css',
+    'reservation_destination',
   ] as const;
 
   const isMissingBeSiteColumnError = (error: {
@@ -2926,7 +2974,7 @@ export default function BookingEngineAdmin() {
           return;
         }
 
-        console.error('SITE SETTINGS COLUMN CHECK ERROR', {
+        console.warn('SITE SETTINGS OPTIONAL COLUMN MISSING', {
           column,
           code: error.code,
           message: error.message,
@@ -2990,6 +3038,7 @@ export default function BookingEngineAdmin() {
         ? `Site settings saved. Apply the required SQL to persist: ${Array.from(missingOptionalColumns).join(', ')}.`
         : 'Site settings saved to Supabase.',
     );
+    notifyBookingEngineSitesChanged();
     await loadSupabaseSiteSettings(beSiteId);
   };
 
@@ -4930,6 +4979,98 @@ function SiteSettingsPanel({
                   </option>
                 ))}
               </select>
+            </label>
+          </div>
+        </BookingSettingCard>
+
+        <BookingSettingCard
+          title="Booking Defaults"
+          description="Default times and reservation routing for this Booking Engine site."
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextField
+              label="Default Pickup Time"
+              value={settings.defaultPickupTime}
+              placeholder="10:00"
+              onChange={(defaultPickupTime) => updateSettings({ defaultPickupTime })}
+            />
+            <TextField
+              label="Default Return Time"
+              value={settings.defaultReturnTime}
+              placeholder="10:00"
+              onChange={(defaultReturnTime) => updateSettings({ defaultReturnTime })}
+            />
+            <label className="block sm:col-span-2">
+              <FieldLabel>Reservation Destination</FieldLabel>
+              <select
+                value={settings.reservationDestination}
+                onChange={(event) => updateSettings({ reservationDestination: event.target.value })}
+                className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              >
+                <option value="main_board">Main reservations board</option>
+                <option value="separate_board">Separate board (future)</option>
+                <option value="external_api">External API (future)</option>
+              </select>
+            </label>
+          </div>
+        </BookingSettingCard>
+
+        <BookingSettingCard
+          title="Review Automation"
+          description="Per-site post-rental review timing and Google Review settings."
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+              <input
+                type="checkbox"
+                checked={settings.reviewEnabled}
+                onChange={(event) => updateSettings({ reviewEnabled: event.target.checked })}
+                className="h-4 w-4 rounded border-slate-300 text-cyan-700 focus:ring-cyan-500"
+              />
+              <span className="text-sm font-black text-slate-800">Review Enabled</span>
+            </label>
+            <TextField
+              label="Review Delay (days)"
+              value={settings.reviewDelayDays}
+              placeholder="1"
+              onChange={(reviewDelayDays) => updateSettings({ reviewDelayDays })}
+            />
+            <TextField
+              label="Google Review URL"
+              value={settings.googleReviewUrl}
+              placeholder="https://g.page/..."
+              onChange={(googleReviewUrl) => updateSettings({ googleReviewUrl })}
+              className="sm:col-span-2"
+            />
+          </div>
+        </BookingSettingCard>
+
+        <BookingSettingCard
+          title="Theme / Layout"
+          description="Layout mode and custom CSS scoped only to this site."
+        >
+          <div className="grid gap-3">
+            <label className="block">
+              <FieldLabel>Theme / Layout</FieldLabel>
+              <select
+                value={settings.themeLayout}
+                onChange={(event) => updateSettings({ themeLayout: event.target.value })}
+                className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              >
+                {['Default', 'Compact', 'Horizontal', 'Vertical', 'Premium'].map((layout) => (
+                  <option key={layout} value={layout}>{layout}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <FieldLabel>Custom CSS</FieldLabel>
+              <textarea
+                value={settings.customCss}
+                onChange={(event) => updateSettings({ customCss: event.target.value })}
+                rows={4}
+                placeholder="/* CSS scoped to this Booking Engine site */"
+                className="mt-2 w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2.5 font-mono text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              />
             </label>
           </div>
         </BookingSettingCard>

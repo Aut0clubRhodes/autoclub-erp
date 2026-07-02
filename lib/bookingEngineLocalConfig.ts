@@ -54,6 +54,13 @@ export type BookingEngineSiteSettings = {
   emailFooterText: string;
   currency: string;
   timezone: string;
+  defaultPickupTime: string;
+  defaultReturnTime: string;
+  reviewEnabled: boolean;
+  reviewDelayDays: string;
+  themeLayout: string;
+  customCss: string;
+  reservationDestination: string;
   defaultLanguage: string;
   whatsappNumber: string;
   termsUrl: string;
@@ -250,6 +257,13 @@ export const bookingEngineLocalConfig: BookingEngineLocalConfig = {
     emailFooterText: 'For urgent changes, contact us using the support details above.',
     currency: 'EUR',
     timezone: 'Europe/Athens',
+    defaultPickupTime: '10:00',
+    defaultReturnTime: '10:00',
+    reviewEnabled: true,
+    reviewDelayDays: '1',
+    themeLayout: 'Default',
+    customCss: '',
+    reservationDestination: 'main_board',
     defaultLanguage: 'English',
     whatsappNumber: '',
     termsUrl: '',

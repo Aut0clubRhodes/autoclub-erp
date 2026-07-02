@@ -272,8 +272,9 @@ const stripEmptyPaymentLinkLines = (value: string) =>
     .filter((line) => !/^payment link:\s*$/i.test(line.trim()))
     .join('\n');
 
-const renderTextParagraph = (paragraph: string, paymentLink = '') => {
-  const reviewUrlPattern = new RegExp(GOOGLE_REVIEW_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+const renderTextParagraph = (paragraph: string, paymentLink = '', reviewUrl = GOOGLE_REVIEW_URL) => {
+  const normalizedReviewUrl = reviewUrl || GOOGLE_REVIEW_URL;
+  const reviewUrlPattern = new RegExp(normalizedReviewUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
   const paymentLinkPattern = paymentLink
     ? new RegExp(paymentLink.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
     : null;
@@ -282,14 +283,14 @@ const renderTextParagraph = (paragraph: string, paymentLink = '') => {
 
   if (!working) return '';
 
-  if (working.includes(GOOGLE_REVIEW_URL)) {
+  if (working.includes(normalizedReviewUrl)) {
     working = working.replace(reviewUrlPattern, '').replace(/Review link:\s*/gi, '').trim();
     if (working) {
       pieces.push(
         `<p style="margin:0 0 10px;font-size:14px;line-height:1.55;font-weight:650;color:#26384d;">${escapeHtml(working).replace(/\n/g, '<br />')}</p>`,
       );
     }
-    pieces.push(renderEmailCta({ href: GOOGLE_REVIEW_URL, label: '&#11088; Leave a Google Review' }));
+    pieces.push(renderEmailCta({ href: normalizedReviewUrl, label: '&#11088; Leave a Google Review' }));
     return pieces.join('');
   }
 
@@ -307,18 +308,19 @@ const renderTextParagraph = (paragraph: string, paymentLink = '') => {
   return `<p style="margin:0 0 10px;font-size:14px;line-height:1.55;font-weight:650;color:#26384d;">${escapeHtml(working).replace(/\n/g, '<br />')}</p>`;
 };
 
-const renderTextBlockHtml = (value: string, paymentLink = '') =>
+const renderTextBlockHtml = (value: string, paymentLink = '', reviewUrl = GOOGLE_REVIEW_URL) =>
   stripEmptyPaymentLinkLines(value || '')
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean)
-    .map((paragraph) => renderTextParagraph(paragraph, paymentLink))
+    .map((paragraph) => renderTextParagraph(paragraph, paymentLink, reviewUrl))
     .join('');
 
 const customerManageBookingTemplateIds = new Set<BookingEngineEmailTemplateId>([
   'customer_confirmed_reservation',
   'customer_onrequest_received',
   'customer_confirmed_after_review',
+  'customer_reminder',
   'customer_cancellation',
 ]);
 
@@ -364,6 +366,7 @@ export const buildBookingEmailHtml = ({
 }) => {
   const primaryColor = site.primaryColor || '#073f5d';
   const secondaryColor = site.secondaryColor || '#059669';
+  const googleReviewUrl = site.googleReviewUrl || GOOGLE_REVIEW_URL;
   const websiteUrl = normalizeWebsiteUrl(site.websiteUrl || site.website_url || site.domain || '');
   const footerText =
     site.emailFooterText ||
@@ -474,7 +477,7 @@ export const buildBookingEmailHtml = ({
           }
           ${
             hasManualMessage
-              ? `<div style="margin:0 0 4px;">${renderTextBlockHtml(manualMessage || '', reservation.paymentLink || '')}</div>
+              ? `<div style="margin:0 0 4px;">${renderTextBlockHtml(manualMessage || '', reservation.paymentLink || '', googleReviewUrl)}</div>
                 ${
                   reservation.extras?.length
                     ? `<div style="margin-top:12px;">
